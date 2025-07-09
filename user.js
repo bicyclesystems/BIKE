@@ -5,9 +5,7 @@ const supabase = window.supabase.createClient(window.SUPABASE_CONFIG.url, window
 class SessionManager {
   constructor() {
     this.SESSION_KEYS = {
-      LOGIN_PROCESS: 'bike_process_triggered',
-      GUEST_PROCESS: 'bike_guest_process_triggered',
-      LOGIN_TIME: 'bike_login_time'
+      LOGIN_PROCESS: 'bike_process_triggered'
     };
   }
 
@@ -17,37 +15,16 @@ class SessionManager {
     return sessionStorage.getItem(this.SESSION_KEYS.LOGIN_PROCESS) === 'true';
   }
 
-  hasTriggeredGuest() {
-    return sessionStorage.getItem(this.SESSION_KEYS.GUEST_PROCESS) === 'true';
-  }
-
   markLoginTriggered() {
     sessionStorage.setItem(this.SESSION_KEYS.LOGIN_PROCESS, 'true');
-    sessionStorage.setItem(this.SESSION_KEYS.LOGIN_TIME, new Date().toISOString());
-    this.clearGuestFlag();
-  }
-
-  markGuestTriggered() {
-    sessionStorage.setItem(this.SESSION_KEYS.GUEST_PROCESS, 'true');
   }
 
   clearLoginFlag() {
     sessionStorage.removeItem(this.SESSION_KEYS.LOGIN_PROCESS);
   }
 
-  clearGuestFlag() {
-    sessionStorage.removeItem(this.SESSION_KEYS.GUEST_PROCESS);
-  }
-
   clearAllFlags() {
     this.clearLoginFlag();
-    this.clearGuestFlag();
-    sessionStorage.removeItem(this.SESSION_KEYS.LOGIN_TIME);
-  }
-
-  getLoginTime() {
-    const loginTime = sessionStorage.getItem(this.SESSION_KEYS.LOGIN_TIME);
-    return loginTime ? new Date(loginTime) : null;
   }
 
   // =================== Process Triggering ===================
@@ -86,27 +63,13 @@ class SessionManager {
     return true;
   }
 
-  async handleGuestMode() {
-    // For guest mode, always trigger the process on every refresh
-    // Context initialization already created a fresh session with new chat
-    console.log('[SESSION] Handling guest mode - fresh session already initialized');
-    
-    // Clear any existing guest flag to ensure fresh process trigger
-    this.clearGuestFlag(); 
-    this.markGuestTriggered();
-    
-    // Trigger the guest process immediately
-    await this.triggerProcess('guest mode', 0);
-    return true;
-  }
+
 
   handleLogout() {
     this.clearAllFlags();
   }
 
-  handleSessionRestore() {
-    this.clearGuestFlag(); // User was already logged in
-  }
+
 }
 
 // Create global session manager instance
@@ -299,12 +262,37 @@ function renderIntroScreen() {
   const intro = window.utils.createElementWithClass('div', '');
   intro.id = 'intro';
   intro.style.cssText = INTRO_STYLES;
+  
+  // Add click handler to dismiss intro screen
+  intro.addEventListener('click', () => {
+    removeIntroScreen();
+  });
+  
+  // Add subtle cursor hint
+  intro.style.cursor = 'pointer';
+  
+  // Auto-dismiss after 5 seconds for better UX
+  setTimeout(() => {
+    if (document.getElementById('intro')) {
+      removeIntroScreen();
+    }
+  }, 5000);
+  
   document.body.appendChild(intro);
 }
 
 function removeIntroScreen() {
   const intro = document.getElementById('intro');
-  if (intro) blurFadeOut(intro, () => window.utils.removeElement(intro));
+  if (intro) {
+    blurFadeOut(intro, () => {
+      window.utils.removeElement(intro);
+      
+      // Immediately show the input "say something" animation after intro is gone
+      if (window.inputModule && window.inputModule.show) {
+        window.inputModule.show();
+      }
+    });
+  }
 }
 
 // =================== App Initialization ===================
@@ -332,7 +320,7 @@ function initializeMainApp() {
 }
 
 // =================== Authenticated State Handler ===================
-async function handleAuthenticatedState(shouldTriggerProcess = false) {
+async function handleAuthenticatedState() {
   removeIntroScreen();
   toggleUI(true);
   await initializeSync();
@@ -348,13 +336,8 @@ async function handleAuthenticatedState(shouldTriggerProcess = false) {
   
   initializeMainApp();
   
-  // Handle process triggering
-  if (shouldTriggerProcess) {
-    await window.sessionManager.handleFreshLogin();
-  } else {
-    console.log('[AUTH] Session restored - skipping auto-process');
-    window.sessionManager.handleSessionRestore();
-  }
+  // Skip auto-processing on login - let user initiate manually
+  console.log('[AUTH] Authentication complete - user can initiate processing manually');
 }
 
 // =================== Sync Integration ===================
@@ -403,16 +386,16 @@ function handleUnauthenticatedState() {
     });
   }
   
-  removeIntroScreen();
-  toggleUI(true);
+  // Keep intro screen visible for unauthenticated users
+  // removeIntroScreen(); // Don't remove intro screen immediately
+  toggleUI(true); // Enable UI so users can interact
   
   // Create chat BEFORE setting welcome view to ensure active chat exists
   window.context.createNewChat();
   window.context.setActiveView('welcome', {});
   window.views.renderCurrentView();
   
-  // Auto-trigger process for guest mode
-  window.sessionManager.handleGuestMode();
+  // Auto-processing for guest mode removed - users must initiate processing manually
 }
 
 // Track auth state to detect fresh logins
@@ -420,13 +403,9 @@ let lastAuthState = null;
 
 async function updateAuthState(session, forceNewLogin = false) {
   const isLoggedIn = !!session;
-  const wasLoggedIn = lastAuthState;
-  
-  const isNewLogin = forceNewLogin || (!wasLoggedIn && isLoggedIn);
-  const shouldTriggerProcess = isNewLogin && !window.sessionManager.hasTriggeredLogin();
   
   if (isLoggedIn) {
-    await handleAuthenticatedState(shouldTriggerProcess);
+    await handleAuthenticatedState();
   } else {
     handleUnauthenticatedState();
     window.sessionManager.handleLogout();

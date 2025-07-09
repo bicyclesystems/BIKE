@@ -176,18 +176,18 @@ function showLoadingIndicator() {
   // Generic breathing animation
   const container = messagesContainer.querySelector('.typewriter-container');
   if (container) {
-    const breathingClasses = [['blur-s'], ['blur-l', 'scale-125']];
+    const breathingClasses = [['blur-s'], ['blur-xl', 'scale-125']];
     let state = 0;
     
     const breathingInterval = setInterval(() => {
       if (!TypewriterState.isActive) {
         dom.removeEffectClasses(container);
-        container.classList.add('transition', ...breathingClasses[state]);
+        container.classList.add('transition-slow', ...breathingClasses[state]);
         state = 1 - state; // Toggle between 0 and 1
       } else {
         clearInterval(breathingInterval);
       }
-    }, 400);
+    }, 800);
     
     container._breathingInterval = breathingInterval;
   }
@@ -546,6 +546,17 @@ function setupMessageEventHandlers(isShowAllMode) {
   Array.from(messagesContainer.querySelectorAll('[data-msg-idx]')).forEach(el => {
     el.onclick = createToggleHandler(!isShowAllMode);
     el.classList.add('cursor-pointer', 'transition', 'hover-grow');
+    
+    // Add hover blur effect for single message mode
+    if (!isShowAllMode) {
+      el.onmouseenter = () => {
+        window.inputModule.blurViews();
+      };
+      
+      el.onmouseleave = () => {
+        window.inputModule.unblurViews();
+      };
+    }
   });
   
   setupContextWordHandlers();
@@ -557,11 +568,13 @@ function setupMessageBubbleHoverEffects() {
   
   // Generic distance-based effect calculator
   const calculateEffects = (distance) => {
-    const blurLevels = ['', 'blur-xs', 'blur-s', 'blur-m', 'blur-l'];
-    const opacityLevels = ['', 'opacity-xs', 'opacity-s', 'opacity-m', 'opacity-l'];
+    const blurLevels = ['', 'blur-xs', 'blur-s'];
+    const opacityLevels = ['', 'opacity-xs', 'opacity-s'];
     
-    const blurIntensity = Math.min(Math.max(distance - 1, 0), blurLevels.length - 1);
-    const opacityIntensity = Math.min(distance, opacityLevels.length - 1);
+    // Cap the maximum distance effect and make it more gradual
+    const cappedDistance = Math.min(distance, 3);
+    const blurIntensity = Math.min(Math.max(cappedDistance - 1, 0), blurLevels.length - 1);
+    const opacityIntensity = Math.min(Math.max(cappedDistance - 2, 0), opacityLevels.length - 1);
     
     return [blurLevels[blurIntensity], opacityLevels[opacityIntensity]].filter(Boolean);
   };
@@ -715,28 +728,12 @@ function checkHoverState(x, y) {
   const isCurrentlyHidden = !MessagesState.isVisible;
   
   if (isInMiddleArea && isCurrentlyHidden && MessagesState.hasMessages) {
-    // Trigger processing without input after delay instead of showing last message
-    if (window.process) {
-      // Clear any existing process timeout
-      if (window.centerHoverProcessTimeout) {
-        clearTimeout(window.centerHoverProcessTimeout);
-      }
-      
-      // Set 3.5 second delay before triggering process
-      window.centerHoverProcessTimeout = setTimeout(() => {
-        window.process();
-        window.centerHoverProcessTimeout = null;
-      }, 3500);
-    }
+    // Show last message instead of triggering processing
+    showMessagesWithEffect();
   } else if (!isInMiddleArea && !isCurrentlyHidden && !window.context?.getShowAllMessages()) {
     hideMessagesWithEffect();
   }
-  
-  // Clear process timeout if user moves away from center area
-  if (!isInMiddleArea && window.centerHoverProcessTimeout) {
-    clearTimeout(window.centerHoverProcessTimeout);
-    window.centerHoverProcessTimeout = null;
-  }
+
 }
 
 function showMessagesWithEffect() {
@@ -858,10 +855,7 @@ function removeMessagesUI() {
     hoverTimeout = null;
   }
   
-  if (window.centerHoverProcessTimeout) {
-    clearTimeout(window.centerHoverProcessTimeout);
-    window.centerHoverProcessTimeout = null;
-  }
+
   
   window.context.setMessagesContainer(null);
 }

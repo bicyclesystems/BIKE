@@ -125,8 +125,9 @@ function switchChat(id) {
   
   const messages = AppState.messagesByChat[id] || [];
   if (messages.length === 0) {
-    // Show input for new chats
-    if (window.inputModule) {
+    // Show input for new chats, but not if intro screen is active
+    const introScreen = document.getElementById('intro');
+    if (window.inputModule && !introScreen) {
       window.inputModule.show();
     }
   }
