@@ -316,7 +316,7 @@ function initializeMainApp() {
     window.context.loadChat();
   }
   
-  window.views.renderCurrentView();
+  window.views.renderCurrentView(false); // No transition during initialization
 }
 
 // =================== Authenticated State Handler ===================
@@ -331,7 +331,7 @@ async function handleAuthenticatedState() {
   // Show welcome view if no active view is set
   const currentView = window.context.getActiveView();
   if (window.context?.setActiveView && !currentView) {
-    window.context.setActiveView('welcome', {});
+    window.context.setActiveView('welcome', {}, { withTransition: false });
   }
   
   initializeMainApp();
@@ -392,8 +392,8 @@ function handleUnauthenticatedState() {
   
   // Create chat BEFORE setting welcome view to ensure active chat exists
   window.context.createNewChat();
-  window.context.setActiveView('welcome', {});
-  window.views.renderCurrentView();
+  window.context.setActiveView('welcome', {}, { withTransition: false });
+  window.views.renderCurrentView(false); // No transition during initialization
   
   // Auto-processing for guest mode removed - users must initiate processing manually
 }

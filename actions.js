@@ -96,19 +96,20 @@ const ACTIONS_REGISTRY = {
   'chat.create': {
     id: 'chat.create',
     name: 'Create New Chat',
-    description: 'Create a new chat conversation with optional custom title',
+    description: 'Create a new chat conversation with optional custom title and description',
     category: ACTION_CATEGORIES.CHAT,
     requiredParams: [],
-    optionalParams: ['timestamp', 'title'],
+    optionalParams: ['timestamp', 'title', 'description'],
     availableData: () => ({
       totalChats: window.context?.getChats().length || 0,
       maxChats: 50,
       defaultTitle: 'New Chat'
     }),
     handler: (params = {}) => {
-      const { timestamp, title } = params;
-      const chatId = window.context.createNewChat(timestamp, title);
+      const { timestamp, title, description } = params;
+      const chatId = window.context.createNewChat(timestamp, title, description);
       const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : 'New Chat';
+      const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : '';
       
       return createStandardizedResult(
         'chat.create',
@@ -116,12 +117,13 @@ const ACTIONS_REGISTRY = {
         true,
         { 
           chatId, 
-          chatTitle, 
+          chatTitle,
+          chatDescription, 
           action: 'Created new chat',
           type: 'chat'
         },
         null,
-        `Created new chat "${chatTitle}" with ID ${chatId}`
+        `Created new chat "${chatTitle}"${chatDescription ? ` with description "${chatDescription}"` : ''} with ID ${chatId}`
       );
     }
   },
@@ -296,20 +298,28 @@ const ACTIONS_REGISTRY = {
         );
       }
       
-      // Perform the rename
-      if (!window.context?.renameChat) {
-        return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
-          false,
-          {},
-          'Rename function not available',
-          'Chat rename functionality is not available'
-        );
-      }
-      
-      const success = window.context.renameChat(targetChatId, trimmedTitle);
-      if (success) {
+      // Update the chat directly
+      try {
+        const chats = window.context?.getChats() || [];
+        const chatIndex = chats.findIndex(c => c.id === targetChatId);
+        
+        const updatedChats = [...chats];
+        updatedChats[chatIndex] = {
+          ...updatedChats[chatIndex],
+          title: trimmedTitle
+        };
+        
+        // Update state
+        window.context?.setState({ chats: updatedChats });
+        
+        // Persist changes
+        window.memory?.saveAll();
+        
+        // Re-render views to reflect the change
+        if (window.views?.renderCurrentView) {
+          window.views.renderCurrentView();
+        }
+        
         return createStandardizedResult(
           'chat.rename',
           'Rename Chat',
@@ -324,14 +334,144 @@ const ACTIONS_REGISTRY = {
           null,
           `Renamed chat from "${oldTitle}" to "${trimmedTitle}"`
         );
-      } else {
+      } catch (error) {
         return createStandardizedResult(
           'chat.rename',
           'Rename Chat',
           false,
           {},
-          'Rename operation failed',
-          'Failed to rename chat - see console for details'
+          error.message,
+          `Failed to rename chat: ${error.message}`
+        );
+      }
+    }
+  },
+
+  'chat.setDescription': {
+    id: 'chat.setDescription',
+    name: 'Set Chat Description',
+    description: 'Set or update a chat conversation description',
+    category: ACTION_CATEGORIES.CHAT,
+    requiredParams: ['description'],
+    optionalParams: ['chatId'],
+    availableData: () => {
+      const activeChatId = window.context?.getActiveChatId();
+      const chats = window.context?.getChats() || [];
+      const currentChat = chats.find(c => c.id === activeChatId);
+      
+      return {
+        currentChatId: activeChatId,
+        currentChatTitle: currentChat?.title || 'Unknown',
+        currentChatDescription: currentChat?.description || '',
+        availableChats: chats.map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
+        totalChats: chats.length
+      };
+    },
+    handler: (params) => {
+      const { description, chatId = null } = params;
+      
+      // Validate description (allow empty string to clear description)
+      if (description !== null && typeof description !== 'string') {
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          false,
+          {},
+          'Description must be a string or null',
+          'Description must be a string or null'
+        );
+      }
+      
+      const trimmedDescription = description ? description.trim() : "";
+      
+      // Use provided chatId or current active chat
+      const targetChatId = chatId || window.context?.getActiveChatId();
+      if (!targetChatId) {
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          false,
+          {},
+          'No chat ID provided and no active chat',
+          'No chat to update - provide chatId or ensure there is an active chat'
+        );
+      }
+      
+      // Find the chat
+      const chats = window.context?.getChats() || [];
+      const chat = chats.find(c => c.id === targetChatId);
+      if (!chat) {
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          false,
+          {},
+          'Chat not found',
+          `Chat ${targetChatId} does not exist`
+        );
+      }
+      
+      const oldDescription = chat.description || "";
+      
+      // Check if the description is actually different
+      if (oldDescription === trimmedDescription) {
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          false,
+          {},
+          'Description unchanged',
+          `Chat description is already "${trimmedDescription}"`
+        );
+      }
+      
+      // Update the chat directly
+      try {
+        const chats = window.context?.getChats() || [];
+        const chatIndex = chats.findIndex(c => c.id === targetChatId);
+        
+        const updatedChats = [...chats];
+        updatedChats[chatIndex] = {
+          ...updatedChats[chatIndex],
+          description: trimmedDescription
+        };
+        
+        // Update state
+        window.context?.setState({ chats: updatedChats });
+        
+        // Persist changes
+        window.memory?.saveAll();
+        
+        // Re-render views to reflect the change
+        if (window.views?.renderCurrentView) {
+          window.views.renderCurrentView();
+        }
+        
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          true,
+          { 
+            chatId: targetChatId,
+            chatTitle: chat.title,
+            oldDescription,
+            newDescription: trimmedDescription,
+            action: 'Set chat description',
+            type: 'chat'
+          },
+          null,
+          trimmedDescription ? 
+            `Set chat "${chat.title}" description to "${trimmedDescription}"` :
+            `Cleared chat "${chat.title}" description`
+        );
+      } catch (error) {
+        return createStandardizedResult(
+          'chat.setDescription',
+          'Set Chat Description',
+          false,
+          {},
+          error.message,
+          `Failed to set chat description: ${error.message}`
         );
       }
     }

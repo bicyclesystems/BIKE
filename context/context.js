@@ -78,12 +78,13 @@ function setActiveMessages(messages) {
   window.memory?.saveAll();
 }
 
-function createNewChat(timestamp = null, title = null) {
+function createNewChat(timestamp = null, title = null, description = null) {
   resetAppStateForChat();
   const id = Date.now().toString();
   const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
+  const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
   const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-  const chat = { id, title: chatTitle, timestamp: chatTimestamp };
+  const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
   setState({
     chats: [...AppState.chats, chat],
     messagesByChat: { ...AppState.messagesByChat, [id]: [] }
@@ -134,76 +135,12 @@ function switchChat(id) {
   
   // Render the current view (welcome if activeView is null)
   if (window.views?.renderCurrentView) {
-    window.views.renderCurrentView();
+    window.views.renderCurrentView(false); // No transition when switching chats
   }
 }
 
-function renameChat(chatId, newTitle) {
-  console.log(`[CONTEXT] Attempting to rename chat: ${chatId} to "${newTitle}"`);
-  
-  // Validate inputs
-  if (!chatId || !newTitle || typeof newTitle !== 'string') {
-    console.error('[CONTEXT] Invalid parameters for chat rename');
-    return false;
-  }
-  
-  const trimmedTitle = newTitle.trim();
-  if (trimmedTitle.length === 0) {
-    console.error('[CONTEXT] Chat title cannot be empty');
-    return false;
-  }
-  
-  // Find the chat
-  const chatIndex = AppState.chats.findIndex(c => c.id === chatId);
-  if (chatIndex === -1) {
-    console.error(`[CONTEXT] Chat ${chatId} not found`);
-    return false;
-  }
-  
-  try {
-    const oldTitle = AppState.chats[chatIndex].title;
-    console.log(`[CONTEXT] Renaming chat "${oldTitle}" to "${trimmedTitle}"`);
-    
-    // Update the chat in the chats array
-    const updatedChats = [...AppState.chats];
-    updatedChats[chatIndex] = {
-      ...updatedChats[chatIndex],
-      title: trimmedTitle
-    };
-    
-    // Update state
-    setState({ chats: updatedChats });
-    
-    // Persist changes
-    window.memory?.saveAll();
-    
-    // Notify sync system about the change
-    if (window.memory?.events) {
-      window.memory.events.dispatchEvent(new CustomEvent('dataChanged', {
-        detail: { 
-          type: 'chatRenamed', 
-          data: { 
-            chatId, 
-            oldTitle,
-            newTitle: trimmedTitle
-          } 
-        }
-      }));
-    }
-    
-    // If views are available, re-render current view to reflect the change
-    if (window.views?.renderCurrentView) {
-      window.views.renderCurrentView();
-    }
-    
-    console.log(`[CONTEXT] Successfully renamed chat from "${oldTitle}" to "${trimmedTitle}"`);
-    return true;
-    
-  } catch (error) {
-    console.error('[CONTEXT] Error renaming chat:', error);
-    return false;
-  }
-}
+
+
 
 function deleteChat(chatIdToDelete) {
   console.log(`[CONTEXT] Attempting to delete chat: ${chatIdToDelete}`);
@@ -315,14 +252,16 @@ function loadChat() {
 
 // =================== View Management ===================
 
-function setActiveView(viewType, data = {}) {
+function setActiveView(viewType, data = {}, options = {}) {
+  const { withTransition = true } = options;
+  
   // Handle null viewType by setting activeView to null (shows welcome or empty state)
   if (viewType === null || viewType === undefined) {
     if (AppState.activeView === null) return; // Already null, no change needed
     setState({ activeView: null });
     window.memory?.saveActiveView(null);
     if (window.views?.renderCurrentView) {
-      window.views.renderCurrentView();
+      window.views.renderCurrentView(withTransition);
     }
     return;
   }
@@ -348,9 +287,9 @@ function setActiveView(viewType, data = {}) {
     }
   }
   
-  // Render the view
+  // Render the view with transition option
   if (window.views?.renderCurrentView) {
-    window.views.renderCurrentView();
+    window.views.renderCurrentView(withTransition);
   }
 }
 
@@ -515,7 +454,6 @@ window.context = {
   createNewChat,
   switchChat,
   setActiveChat,
-  renameChat,
   deleteChat,
   loadChat,
   setActiveMessages,

@@ -12,9 +12,12 @@ function renderWelcomeView() {
     <div class="column align-start justify-center padding-xl" style="min-height: 100vh;">
       <div class="column align-start" style="max-width: calc(var(--base-size) * 200); width: 100%;">
         <div class="column align-start gap-l">
-          <div class="row align-center gap-l">
+          <div class="column align-start gap-m">
             ${currentChatTitle ? `
               <h1 class="text-xxl" style="font-size: 3rem; font-weight: 300; margin: 0;">${currentChatTitle}</h1>
+              ${currentChat?.description ? `
+                <h3 class="text-l" style="font-weight: 400; margin: 0; color: var(--text-secondary, #6b7280);">${currentChat.description}</h3>
+              ` : ''}
             ` : `
               <h1 class="text-xxl" style="font-size: 3rem; font-weight: 300; margin: 0;">No active chat</h1>
             `}
