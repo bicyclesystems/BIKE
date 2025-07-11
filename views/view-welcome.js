@@ -8,18 +8,91 @@ function renderWelcomeView() {
   const currentChat = chats.find(c => c.id === activeChatId);
   const currentChatTitle = currentChat?.title;
 
+  // Get chat timeline info
+  let timelineInfo = '';
+  if (currentChat) {
+    const startTime = new Date(currentChat.timestamp);
+    const startFormatted = startTime.toLocaleDateString('en-US', { 
+      month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+    });
+
+    // Check if chat has explicit end time
+    if (currentChat.endTime) {
+      const endTime = new Date(currentChat.endTime);
+      const endFormatted = endTime.toLocaleDateString('en-US', { 
+        month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+      });
+      
+      // Calculate duration
+      const durationMs = endTime - startTime;
+      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+      const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+      let durationText = '';
+      if (durationHours > 0) {
+        durationText = `${durationHours}h ${durationMinutes}m`;
+      } else {
+        durationText = `${durationMinutes}m`;
+      }
+      
+      // Check if chat is in the future, current, or past
+      const now = new Date();
+      if (startTime > now) {
+        // Future scheduled chat
+        timelineInfo = `Scheduled ${startFormatted} - ${endFormatted} (${durationText})`;
+      } else if (endTime > now) {
+        // Currently active chat
+        timelineInfo = `Started ${startFormatted} • Ends ${endFormatted} (${durationText})`;
+      } else {
+        // Past chat with explicit duration
+        timelineInfo = `${startFormatted} - ${endFormatted} (${durationText})`;
+      }
+    } else {
+      // Original logic for chats without explicit end time
+      // Get last message time
+      const messages = window.context?.getMessagesByChat()[activeChatId] || [];
+      let lastMessageInfo = '';
+      if (messages.length > 0) {
+        const lastMessage = messages[messages.length - 1];
+        // Try to parse the timestamp - it might be just time like "2:30 PM" or full date
+        let lastTime;
+        if (lastMessage.timestamp) {
+          // If it's just time format, use today's date
+          if (lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')) {
+            lastTime = new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`);
+          } else {
+            lastTime = new Date(lastMessage.timestamp);
+          }
+          
+          if (!isNaN(lastTime)) {
+            const lastFormatted = lastTime.toLocaleDateString('en-US', { 
+              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
+            });
+            lastMessageInfo = ` • Last message ${lastFormatted}`;
+          }
+        }
+      }
+
+      timelineInfo = `Started ${startFormatted}${lastMessageInfo}`;
+    }
+  }
+
   return `
-    <div class="column align-start justify-center padding-xl" style="min-height: 100vh;">
-      <div class="column align-start" style="max-width: calc(var(--base-size) * 200); width: 100%;">
+    <div class="column align-start justify-center padding-xl">
+      <div class="column align-start">
         <div class="column align-start gap-l">
           <div class="column align-start gap-m">
             ${currentChatTitle ? `
-              <h1 class="text-xxl" style="font-size: 3rem; font-weight: 300; margin: 0;">${currentChatTitle}</h1>
-              ${currentChat?.description ? `
-                <h3 class="text-l" style="font-weight: 400; margin: 0; color: var(--text-secondary, #6b7280);">${currentChat.description}</h3>
+              <h1>${currentChatTitle}</h1>
+              <h3 class="${currentChat?.description ? 'opacity-full' : 'opacity-half'}">
+                ${currentChat?.description || 'No description'}
+              </h3>
+              ${timelineInfo ? `
+                <h3>
+                  ${timelineInfo}
+                </h3>
               ` : ''}
             ` : `
-              <h1 class="text-xxl" style="font-size: 3rem; font-weight: 300; margin: 0;">No active chat</h1>
+              <h1>No active chat</h1>
             `}
           </div>
         </div>

@@ -96,17 +96,17 @@ const ACTIONS_REGISTRY = {
   'chat.create': {
     id: 'chat.create',
     name: 'Create New Chat',
-    description: 'Create a new chat conversation with optional custom title and description',
+    description: 'Create a new chat conversation with optional custom title, description, and duration',
     category: ACTION_CATEGORIES.CHAT,
     requiredParams: [],
-    optionalParams: ['timestamp', 'title', 'description'],
+    optionalParams: ['timestamp', 'title', 'description', 'endTime'],
     availableData: () => ({
       totalChats: window.context?.getChats().length || 0,
       maxChats: 50,
       defaultTitle: 'New Chat'
     }),
     handler: async (params = {}) => {
-      const { timestamp, title, description } = params;
+      const { timestamp, title, description, endTime } = params;
       
       // Create new chat logic moved from context
       window.context?.setState({
@@ -120,7 +120,8 @@ const ACTIONS_REGISTRY = {
       const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
       const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
       const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
+      const chatEndTime = endTime ? new Date(endTime).toISOString() : null;
+      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp, endTime: chatEndTime };
       
       const currentChats = window.context?.getChats() || [];
       const currentMessagesByChat = window.context?.getMessagesByChat() || {};
@@ -548,6 +549,103 @@ const ACTIONS_REGISTRY = {
           {},
           error.message,
           `Failed to set chat description: ${error.message}`
+        );
+      }
+    }
+  },
+
+  'chat.schedule': {
+    id: 'chat.schedule',
+    name: 'Schedule Chat',
+    description: 'Schedule a new chat conversation with specific start and end times',
+    category: ACTION_CATEGORIES.CHAT,
+    requiredParams: ['startTime', 'endTime'],
+    optionalParams: ['title', 'description'],
+    availableData: () => ({
+      totalChats: window.context?.getChats().length || 0,
+      maxChats: 50,
+      defaultTitle: 'Scheduled Chat'
+    }),
+    handler: async (params = {}) => {
+      const { startTime, endTime, title, description } = params;
+      
+      // Validate required parameters
+      if (!startTime || !endTime) {
+        return createStandardizedResult(
+          'chat.schedule',
+          'Schedule Chat',
+          false,
+          {},
+          'startTime and endTime are required',
+          'Both startTime and endTime must be provided'
+        );
+      }
+      
+      // Parse and validate times
+      const start = new Date(startTime);
+      const end = new Date(endTime);
+      
+      if (isNaN(start) || isNaN(end)) {
+        return createStandardizedResult(
+          'chat.schedule',
+          'Schedule Chat',
+          false,
+          {},
+          'Invalid date format',
+          'startTime and endTime must be valid ISO date strings'
+        );
+      }
+      
+      if (end <= start) {
+        return createStandardizedResult(
+          'chat.schedule',
+          'Schedule Chat',
+          false,
+          {},
+          'End time must be after start time',
+          'The end time must be later than the start time'
+        );
+      }
+      
+      // Calculate duration for display
+      const durationMs = end - start;
+      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+      const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+      const durationText = durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes}m`;
+      
+      // Create the scheduled chat
+      const result = await window.actions.executeAction('chat.create', {
+        timestamp: start.toISOString(),
+        endTime: end.toISOString(),
+        title: title || 'Scheduled Chat',
+        description: description || ''
+      });
+      
+      if (result.success) {
+        return createStandardizedResult(
+          'chat.schedule',
+          'Schedule Chat',
+          true,
+          { 
+            chatId: result.result.chatId,
+            chatTitle: result.result.chatTitle,
+            startTime: start.toISOString(),
+            endTime: end.toISOString(),
+            duration: durationText,
+            action: 'Scheduled new chat',
+            type: 'chat'
+          },
+          null,
+          `Scheduled chat "${result.result.chatTitle}" for ${start.toLocaleString()} - ${end.toLocaleString()} (${durationText})`
+        );
+      } else {
+        return createStandardizedResult(
+          'chat.schedule',
+          'Schedule Chat',
+          false,
+          {},
+          result.error || 'Failed to create scheduled chat',
+          'Failed to create the scheduled chat'
         );
       }
     }
