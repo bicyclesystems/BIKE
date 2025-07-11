@@ -306,7 +306,7 @@ function initializeMainApp() {
   
   if (chats.length === 0) {
     console.log('[AUTH] Creating new chat');
-    window.context.createNewChat();
+    window.actions.executeAction('chat.create', {});
   } else if (!activeChatId) {
     console.log('[AUTH] Setting first chat as active');
     window.context.setActiveChat(chats[0].id);
@@ -391,7 +391,7 @@ function handleUnauthenticatedState() {
   toggleUI(true); // Enable UI so users can interact
   
   // Create chat BEFORE setting welcome view to ensure active chat exists
-  window.context.createNewChat();
+  window.actions.executeAction('chat.create', {});
   window.context.setActiveView('welcome', {}, { withTransition: false });
   window.views.renderCurrentView(false); // No transition during initialization
   

@@ -105,25 +105,48 @@ const ACTIONS_REGISTRY = {
       maxChats: 50,
       defaultTitle: 'New Chat'
     }),
-    handler: (params = {}) => {
+    handler: async (params = {}) => {
       const { timestamp, title, description } = params;
-      const chatId = window.context.createNewChat(timestamp, title, description);
-      const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : 'New Chat';
-      const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : '';
+      
+      // Create new chat logic moved from context
+      window.context?.setState({
+        activeVersionIdxByArtifact: {},
+        messages: [],
+        activeMessageIndex: -1,
+        activeView: null
+      });
+      
+      const id = Date.now().toString();
+      const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
+      const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
+      const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
+      
+      const currentChats = window.context?.getChats() || [];
+      const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+      
+      window.context?.setState({
+        chats: [...currentChats, chat],
+        messagesByChat: { ...currentMessagesByChat, [id]: [] }
+      });
+      window.memory?.saveAll();
+      
+      // Switch to the new chat
+      await window.actions.executeAction('chat.switch', { chatId: id });
       
       return createStandardizedResult(
         'chat.create',
         'Create New Chat',
         true,
         { 
-          chatId, 
+          chatId: id, 
           chatTitle,
           chatDescription, 
           action: 'Created new chat',
           type: 'chat'
         },
         null,
-        `Created new chat "${chatTitle}"${chatDescription ? ` with description "${chatDescription}"` : ''} with ID ${chatId}`
+        `Created new chat "${chatTitle}"${chatDescription ? ` with description "${chatDescription}"` : ''} with ID ${id}`
       );
     }
   },
@@ -136,10 +159,10 @@ const ACTIONS_REGISTRY = {
     requiredParams: ['chatId'],
     optionalParams: [],
     availableData: () => ({
-      availableChats: (window.context?.getChats() || []).map(c => ({ id: c.id, title: c.title, timestamp: c.timestamp })),
+      availableChats: (window.context?.getChats() || []).map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
       currentChatId: window.context?.getActiveChatId()
     }),
-    handler: (params) => {
+    handler: async (params) => {
       const { chatId } = params;
       const chat = (window.context?.getChats() || []).find(c => c.id === chatId);
       if (!chat) {
@@ -152,7 +175,60 @@ const ACTIONS_REGISTRY = {
           `Chat ${chatId} does not exist`
         );
       }
-      window.context.switchChat(chatId);
+      // Switch chat logic moved from context
+      if (window.context?.getActiveChatId()) {
+        window.memory?.saveActiveView(window.context?.getActiveView() || null);
+      }
+      
+      // Reset app state for chat
+      window.context?.setState({
+        activeVersionIdxByArtifact: {},
+        messages: [],
+        activeMessageIndex: -1,
+        activeView: null
+      });
+      
+      window.context?.setActiveChat(chatId);
+      
+      const restoredView = window.memory?.loadActiveView();
+      if (restoredView) {
+        // Validate the restored view
+        if (restoredView.type === 'artifact' && restoredView.data.artifactId) {
+          const artifacts = window.context?.getArtifacts() || [];
+          const artifact = artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === chatId);
+          if (artifact) {
+            window.context?.setState({ activeView: restoredView });
+          } else {
+            window.context?.setState({ activeView: null });
+          }
+        } else if (restoredView.type !== 'artifact') {
+          // System views (calendar, etc.) are always valid
+          window.context?.setState({ activeView: restoredView });
+        } else {
+          window.context?.setState({ activeView: null });
+        }
+      } else {
+        window.context?.setState({ activeView: null });
+      }
+      
+      window.context?.clearUI();
+      window.context?.loadChat();
+      
+      const messagesByChat = window.context?.getMessagesByChat() || {};
+      const messages = messagesByChat[chatId] || [];
+      if (messages.length === 0) {
+        // Show input for new chats, but not if intro screen is active
+        const introScreen = document.getElementById('intro');
+        if (window.inputModule && !introScreen) {
+          window.inputModule.show();
+        }
+      }
+      
+      // Render the current view (welcome if activeView is null)
+      if (window.views?.renderCurrentView) {
+        window.views.renderCurrentView(false); // No transition when switching chats
+      }
+      
       return createStandardizedResult(
         'chat.switch',
         'Switch Chat',
@@ -226,7 +302,7 @@ const ACTIONS_REGISTRY = {
       return {
         currentChatId: activeChatId,
         currentChatTitle: currentChat?.title || 'Unknown',
-        availableChats: chats.map(c => ({ id: c.id, title: c.title, timestamp: c.timestamp })),
+        availableChats: chats.map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
         totalChats: chats.length
       };
     },
@@ -495,7 +571,7 @@ const ACTIONS_REGISTRY = {
       currentChatId: window.context?.getActiveChatId(),
       totalChats: window.context?.getChats().length || 0
     }),
-    handler: (params) => {
+    handler: async (params) => {
       const { chatId, confirmDelete = false } = params;
       const chats = window.context?.getChats() || [];
       const chat = chats.find(c => c.id === chatId);
@@ -544,36 +620,97 @@ const ACTIONS_REGISTRY = {
         );
       }
 
-      // Perform the deletion
+      // Perform the deletion - logic moved from context
       try {
-        const success = window.context.deleteChat(chatId);
-        if (success) {
-          return createStandardizedResult(
-            'chat.delete',
-            'Delete Chat',
-            true,
-            { 
-              chatId,
-              chatTitle: chat.title,
-              deletedMessageCount: messages.length,
-              deletedArtifactCount: artifacts.length,
-              action: 'Deleted chat',
-              type: 'chat'
-            },
-            null,
-            `Deleted chat "${chat.title}" with ${messages.length} messages and ${artifacts.length} artifacts`
-          );
-        } else {
-          return createStandardizedResult(
-            'chat.delete',
-            'Delete Chat',
-            false,
-            {},
-            'Deletion failed',
-            'Failed to delete chat - see console for details'
-          );
+        console.log(`[ACTIONS] Deleting chat "${chat.title}" (${chatId})`);
+
+        // 1. Remove chat from chats array
+        const updatedChats = chats.filter(c => c.id !== chatId);
+        
+        // 2. Remove all messages for this chat
+        const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+        const updatedMessagesByChat = { ...currentMessagesByChat };
+        delete updatedMessagesByChat[chatId];
+        
+        // 3. Remove all artifacts for this chat
+        const currentArtifacts = window.context?.getArtifacts() || [];
+        const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
+        const deletedArtifactCount = currentArtifacts.length - updatedArtifacts.length;
+        
+        // 4. Clear action history for this chat
+        window.actions?.clearActionHistory?.(chatId);
+        
+        // 5. Update state
+        window.context?.setState({
+          chats: updatedChats,
+          messagesByChat: updatedMessagesByChat,
+          artifacts: updatedArtifacts
+        });
+        
+        // 6. Handle active chat switching
+        let newActiveChatId = null;
+        if (window.context?.getActiveChatId() === chatId) {
+          // Switch to the most recent chat or create a new one
+          if (updatedChats.length > 0) {
+            // Find the most recent chat by timestamp
+            const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            newActiveChatId = sortedChats[0].id;
+            console.log(`[ACTIONS] Switching to most recent chat: ${newActiveChatId}`);
+          } else {
+            // This shouldn't happen due to our check above, but handle gracefully
+            console.log('[ACTIONS] No chats remaining, creating new chat');
+            await window.actions.executeAction('chat.create', {});
+            return createStandardizedResult(
+              'chat.delete',
+              'Delete Chat',
+              true,
+              { 
+                chatId,
+                chatTitle: chat.title,
+                deletedMessageCount: messages.length,
+                deletedArtifactCount,
+                action: 'Deleted chat and created new one',
+                type: 'chat'
+              },
+              null,
+              `Deleted chat "${chat.title}" and created new chat (last one deleted)`
+            );
+          }
         }
+        
+        // 7. Persist changes
+        window.memory?.saveAll();
+        
+        // 8. Switch to new active chat if needed
+        if (newActiveChatId) {
+          await window.actions.executeAction('chat.switch', { chatId: newActiveChatId });
+        } else {
+          // If no chat to switch to, make sure view is updated
+          window.context?.setState({ activeView: null });
+          if (window.views?.renderCurrentView) {
+            window.views.renderCurrentView();
+          }
+        }
+        
+        console.log(`[ACTIONS] Successfully deleted chat "${chat.title}" and ${deletedArtifactCount} artifacts`);
+        
+        return createStandardizedResult(
+          'chat.delete',
+          'Delete Chat',
+          true,
+          { 
+            chatId,
+            chatTitle: chat.title,
+            deletedMessageCount: messages.length,
+            deletedArtifactCount,
+            action: 'Deleted chat',
+            type: 'chat'
+          },
+          null,
+          `Deleted chat "${chat.title}" with ${messages.length} messages and ${deletedArtifactCount} artifacts`
+        );
       } catch (error) {
+        console.error(`[ACTIONS] Error deleting chat:`, error);
         return createStandardizedResult(
           'chat.delete',
           'Delete Chat',
@@ -1524,6 +1661,8 @@ function createActionDisplayData(chatId = null) {
     lastAction: ACTION_HISTORY.lastExecutedAction
   };
 }
+
+
 
 // =================== Export API ===================
 

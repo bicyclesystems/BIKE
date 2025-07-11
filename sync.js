@@ -326,6 +326,7 @@ class SupabaseSync {
     const chat = {
       id: serverChat.id,
       title: serverChat.title,
+      description: serverChat.description || "",
       timestamp: serverChat.timestamp
     };
 
@@ -575,6 +576,7 @@ class SupabaseSync {
       mergedChats.set(serverChat.id, {
         id: serverChat.id,
         title: serverChat.title,
+        description: serverChat.description || "",
         timestamp: serverChat.timestamp
       });
     });
@@ -727,6 +729,7 @@ class SupabaseSync {
           id: chat.id,
           user_id: this.userId,
           title: chat.title,
+          description: chat.description || "",
           timestamp: chat.timestamp
         }]);
 
