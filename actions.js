@@ -120,8 +120,11 @@ const ACTIONS_REGISTRY = {
       const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
       const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
       const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-      const chatEndTime = endTime ? new Date(endTime).toISOString() : null;
-      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp, endTime: chatEndTime };
+      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
+      
+      if (endTime) {
+        chat.endTime = new Date(endTime).toISOString();
+      }
       
       const currentChats = window.context?.getChats() || [];
       const currentMessagesByChat = window.context?.getMessagesByChat() || {};
@@ -608,10 +611,13 @@ const ACTIONS_REGISTRY = {
       }
       
       // Calculate duration for display
-      const durationMs = end - start;
-      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-      const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-      const durationText = durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes}m`;
+      const durationText = window.welcomeView?.formatDuration?.(start, end) || 
+        (() => {
+          const durationMs = end - start;
+          const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+          const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+          return durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes}m`;
+        })();
       
       // Create the scheduled chat
       const result = await window.actions.executeAction('chat.create', {

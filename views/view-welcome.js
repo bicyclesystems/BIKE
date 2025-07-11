@@ -1,8 +1,38 @@
 // =================== Welcome View Rendering ===================
 
-function renderWelcomeView() {
+// Helper function to calculate duration display
+function formatDuration(startTime, endTime) {
+  const durationMs = endTime - startTime;
+  const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
+  const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
+  return durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes}m`;
+}
 
-  // Get current chat title
+// Helper function to get effective end time (explicit or inferred)
+function getEffectiveEndTime(chat, activeChatId) {
+  if (chat.endTime) {
+    return new Date(chat.endTime);
+  }
+  
+  // Infer from last message
+  const messages = window.context?.getMessagesByChat()[activeChatId] || [];
+  if (messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.timestamp) {
+      const lastTime = lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')
+        ? new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`)
+        : new Date(lastMessage.timestamp);
+      
+      if (!isNaN(lastTime)) {
+        return lastTime;
+      }
+    }
+  }
+  
+  return null; // No end time available
+}
+
+function renderWelcomeView() {
   const activeChatId = window.context?.getActiveChatId();
   const chats = window.context?.getChats() || [];
   const currentChat = chats.find(c => c.id === activeChatId);
@@ -16,63 +46,17 @@ function renderWelcomeView() {
       month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
     });
 
-    // Check if chat has explicit end time
-    if (currentChat.endTime) {
-      const endTime = new Date(currentChat.endTime);
+    const endTime = getEffectiveEndTime(currentChat, activeChatId);
+    
+    if (endTime) {
       const endFormatted = endTime.toLocaleDateString('en-US', { 
         month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
       });
       
-      // Calculate duration
-      const durationMs = endTime - startTime;
-      const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-      const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-      let durationText = '';
-      if (durationHours > 0) {
-        durationText = `${durationHours}h ${durationMinutes}m`;
-      } else {
-        durationText = `${durationMinutes}m`;
-      }
-      
-      // Check if chat is in the future, current, or past
-      const now = new Date();
-      if (startTime > now) {
-        // Future scheduled chat
-        timelineInfo = `Scheduled ${startFormatted} - ${endFormatted} (${durationText})`;
-      } else if (endTime > now) {
-        // Currently active chat
-        timelineInfo = `Started ${startFormatted} • Ends ${endFormatted} (${durationText})`;
-      } else {
-        // Past chat with explicit duration
-        timelineInfo = `${startFormatted} - ${endFormatted} (${durationText})`;
-      }
+      const durationText = formatDuration(startTime, endTime);
+      timelineInfo = `${startFormatted} - ${endFormatted} (${durationText})`;
     } else {
-      // Original logic for chats without explicit end time
-      // Get last message time
-      const messages = window.context?.getMessagesByChat()[activeChatId] || [];
-      let lastMessageInfo = '';
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        // Try to parse the timestamp - it might be just time like "2:30 PM" or full date
-        let lastTime;
-        if (lastMessage.timestamp) {
-          // If it's just time format, use today's date
-          if (lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')) {
-            lastTime = new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`);
-          } else {
-            lastTime = new Date(lastMessage.timestamp);
-          }
-          
-          if (!isNaN(lastTime)) {
-            const lastFormatted = lastTime.toLocaleDateString('en-US', { 
-              month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' 
-            });
-            lastMessageInfo = ` • Last message ${lastFormatted}`;
-          }
-        }
-      }
-
-      timelineInfo = `Started ${startFormatted}${lastMessageInfo}`;
+      timelineInfo = `${startFormatted} - ongoing`;
     }
   }
 
@@ -117,5 +101,7 @@ function init() {
 window.welcomeView = {
   renderWelcomeView,
   setupWelcomeHandlers,
-  init
+  init,
+  formatDuration, // Export for reuse
+  getEffectiveEndTime // Export for reuse
 }; 

@@ -1,52 +1,41 @@
 // =================== Minimal Calendar View ===================
 
+// Helper function to get effective end time for calendar (explicit, inferred, or default)
+function getCalendarEndTime(chat) {
+  if (chat.endTime) {
+    return new Date(chat.endTime);
+  }
+  
+  // Try to infer from last message
+  const messages = window.context?.getMessagesByChat()[chat.id] || [];
+  if (messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.timestamp) {
+      const lastTime = lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')
+        ? new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`)
+        : new Date(lastMessage.timestamp);
+      
+      if (!isNaN(lastTime) && lastTime > new Date(chat.timestamp)) {
+        return lastTime;
+      }
+    }
+  }
+  
+  // Default to 1 hour if no other duration available
+  const defaultEnd = new Date(chat.timestamp);
+  defaultEnd.setHours(defaultEnd.getHours() + 1);
+  return defaultEnd;
+}
+
 // Smart chat events generation with real durations
 const generateChatEvents = () => {
   const chats = window.context?.getChats() || [];
   
   return chats.map(chat => {
-    const chatDate = new Date(chat.timestamp);
+    const startTime = new Date(chat.timestamp);
+    const endTime = getCalendarEndTime(chat);
     const isActive = chat.id === window.context?.getActiveChatId();
     const color = isActive ? "#3b82f6" : "#9ca3af";
-    
-    const startTime = new Date(chatDate);
-    let endTime;
-    
-    if (chat.endTime) {
-      // Use explicit end time if available
-      endTime = new Date(chat.endTime);
-    } else {
-      // Fallback: infer duration from last message or default to 1 hour
-      const messages = window.context?.getMessagesByChat()[chat.id] || [];
-      if (messages.length > 0) {
-        const lastMessage = messages[messages.length - 1];
-        if (lastMessage.timestamp) {
-          // Try to parse the last message timestamp
-          let lastTime;
-          if (lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')) {
-            lastTime = new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`);
-          } else {
-            lastTime = new Date(lastMessage.timestamp);
-          }
-          
-          if (!isNaN(lastTime) && lastTime > startTime) {
-            endTime = lastTime;
-          } else {
-            // Default to 1 hour if we can't parse the timestamp
-            endTime = new Date(chatDate);
-            endTime.setHours(endTime.getHours() + 1);
-          }
-        } else {
-          // No message timestamp, default to 1 hour
-          endTime = new Date(chatDate);
-          endTime.setHours(endTime.getHours() + 1);
-        }
-      } else {
-        // No messages, default to 1 hour
-        endTime = new Date(chatDate);
-        endTime.setHours(endTime.getHours() + 1);
-      }
-    }
     
     return {
       id: chat.id,

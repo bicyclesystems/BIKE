@@ -328,7 +328,7 @@ class SupabaseSync {
       title: serverChat.title,
       description: serverChat.description || "",
       timestamp: serverChat.timestamp,
-      endTime: serverChat.endTime || null
+      endTime: serverChat.endTime
     };
 
     // Use memory module to save the chat
@@ -579,7 +579,7 @@ class SupabaseSync {
         title: serverChat.title,
         description: serverChat.description || "",
         timestamp: serverChat.timestamp,
-        endTime: serverChat.endTime || null
+        endTime: serverChat.endTime
       });
     });
 
@@ -733,7 +733,7 @@ class SupabaseSync {
           title: chat.title,
           description: chat.description || "",
           timestamp: chat.timestamp,
-          endTime: chat.endTime || null
+          endTime: chat.endTime
         }]);
 
       if (error) throw error;
