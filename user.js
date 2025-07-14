@@ -221,6 +221,7 @@ async function loginWithEmail(email) {
     if (error) throw error;
     return { success: true, message: `Magic link sent to ${trimmedEmail}` };
   } catch (error) {
+    console.log(error);
     throw new Error(`Failed to send magic link: ${error.message}`);
   }
 }
@@ -493,6 +494,91 @@ async function updateAuthState(session, forceNewLogin = false) {
 
   lastAuthState = isLoggedIn;
 }
+// =================== User Data Getters ===================
+
+/**
+ * Fetch the currently logged-in user's row from the "users" table.
+ */
+
+async function getUserData() {
+  const session = await getCurrentSession();
+  if (!session?.user?.id) return null;
+  const { data, error } = await supabase
+    .from("users")
+    .select("*")
+    .eq("id", session.user.id)
+    .single();
+
+  if (error) {
+    console.error("[DB] Failed to fetch user data:", error);
+    return null;
+  }
+
+  return data;
+}
+
+/**
+ * Fetch all artifacts that belong to the current user.
+ */
+async function getUserArtifacts() {
+  const session = await getCurrentSession();
+  if (!session?.user?.id) return [];
+
+  const { data, error } = await supabase
+    .from("artifacts")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[DB] Failed to fetch artifacts:", error);
+    return [];
+  }
+
+  return data;
+}
+
+/**
+ * Fetch all chats that belong to the current user.
+ */
+async function getUserChats() {
+  const session = await getCurrentSession();
+  if (!session?.user?.id) return [];
+
+  const { data, error } = await supabase
+    .from("chats")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("[DB] Failed to fetch chats:", error);
+    return [];
+  }
+
+  return data;
+}
+
+/**
+ * Fetch all messages for the current user's chats.
+ */
+async function getUserMessages() {
+  const session = await getCurrentSession();
+  if (!session?.user?.id) return [];
+  const { data, error } = await supabase
+    .from("messages")
+    .select("*")
+    .eq("user_id", session.user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.log(error);
+    console.error("[DB] Failed to fetch messages:", error);
+    return [];
+  }
+
+  return data;
+}
 
 // =================== Public API ===================
 window.user = {
@@ -502,4 +588,10 @@ window.user = {
   getActiveSession,
   updateAuthState,
   initializeMainApp,
+
+  // 👇 getters here
+  getUserData,
+  getUserArtifacts,
+  getUserChats,
+  getUserMessages,
 };

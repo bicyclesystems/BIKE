@@ -794,7 +794,6 @@ class SupabaseSync {
       this.queueOperation("uploadMessage", { chatId, message });
       return;
     }
-
     try {
       // ✅ Generate unique ID if not provided
       if (!message.message_id) {
