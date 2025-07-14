@@ -128,7 +128,7 @@ You MUST follow this response style in ALL your messages. This is the user's exp
       "content": "The actual content or prompt for the artifact"
     }
   ],
-  "recommendedView": "artifact", // Optional: "artifact", "artifacts", "calendar", "welcome", "memory", or null
+        "recommendedView": "artifact", // Optional: "artifact", "artifacts", "calendar", "chat", "memory", or null
   "actionsExecuted": [
     {
       "actionId": "views.switch",

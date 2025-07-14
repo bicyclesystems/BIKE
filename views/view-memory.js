@@ -111,10 +111,17 @@ function renderMemoryView() {
   const totalMessages = Object.values(messagesByChat).reduce((sum, messages) => sum + messages.length, 0);
   const totalArtifacts = artifacts.length;
   const totalChats = chats.length;
+  const totalActions = getAvailableActionsCount();
   
   // Get user information
   const session = window.user?.getActiveSession();
   const email = session?.user?.email || '';
+  
+  // Check if there's no meaningful memory yet
+  // This covers: logged out users (guest mode) OR users with minimal activity (1 empty chat)
+  const isLoggedOut = !session || !email;
+  const hasMinimalActivity = totalChats <= 1 && totalMessages === 0 && totalArtifacts === 0;
+  const hasNoMemory = isLoggedOut || hasMinimalActivity;
   
   // Get actual session signup time information
   let signupTimeText = '';
@@ -163,14 +170,14 @@ function renderMemoryView() {
   
   return `
     <div class="column gap-l padding-l view">
-
-      <!-- User Information Summary -->
       <div class="background-primary padding-l radius-l">
         <h1>
-          Hello ${createDataBadge(userPreferences.name || getNameFromEmail(email))}, you're logged in as ${createDataBadge(email || 'guest user')}${signupTimeText}${userPreferences.role ? ` with the role of ${createDataBadge(userPreferences.role)}` : ''}${userPreferences.usingFor ? ` using this for ${createDataBadge(userPreferences.usingFor)}` : ''}.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chat${totalChats === 1 ? '' : 's'} containing ${createDataBadge(totalMessages)} total message${totalMessages === 1 ? '' : 's'}. You've created ${createDataBadge(totalArtifacts)} artifact${totalArtifacts === 1 ? '' : 's'}.
+          Hello ${createDataBadge(userPreferences.name || getNameFromEmail(email))}.${hasNoMemory ? 
+            ' A moment of pure possibility. An invitation to discover. A celebration of the present moment before memory begins.' : 
+            ''
+          } You're logged in as ${createDataBadge(email || 'guest user')}${signupTimeText}${userPreferences.role ? ` with the role of ${createDataBadge(userPreferences.role)}` : ''}${userPreferences.usingFor ? ` using this for ${createDataBadge(userPreferences.usingFor)}` : ''}.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chat${totalChats === 1 ? '' : 's'} containing ${createDataBadge(totalMessages)} total message${totalMessages === 1 ? '' : 's'}. You've created ${createDataBadge(totalArtifacts)} artifact${totalArtifacts === 1 ? '' : 's'}. You've connected ${createDataBadge('0')} services. You have ${createDataBadge(totalActions)} available action${totalActions === 1 ? '' : 's'}.
         </h1>
       </div>
-
     </div>
   `;
 }
@@ -183,6 +190,15 @@ function refreshMemoryView() {
 }
 
 // =================== Helper Functions ===================
+
+function getAvailableActionsCount() {
+  // Get all actions from the actions registry
+  if (!window.actions?.ACTIONS_REGISTRY) {
+    return 0;
+  }
+  
+  return Object.keys(window.actions.ACTIONS_REGISTRY).length;
+}
 
 function escapeHtml(text) {
   if (window.utils?.escapeHtml) {

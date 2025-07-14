@@ -286,11 +286,6 @@ function removeIntroScreen() {
   if (intro) {
     blurFadeOut(intro, () => {
       window.utils.removeElement(intro);
-      
-      // Immediately show the input "say something" animation after intro is gone
-      if (window.inputModule && window.inputModule.show) {
-        window.inputModule.show();
-      }
     });
   }
 }
@@ -328,10 +323,10 @@ async function handleAuthenticatedState() {
   // Start smart session monitoring for authenticated users
   startSessionMonitoring();
   
-  // Show welcome view if no active view is set
+  // Show memory view if no active view is set
   const currentView = window.context.getActiveView();
   if (window.context?.setActiveView && !currentView) {
-    window.context.setActiveView('welcome', {}, { withTransition: false });
+    window.context.setActiveView('memory', {}, { withTransition: false });
   }
   
   initializeMainApp();
@@ -390,9 +385,9 @@ function handleUnauthenticatedState() {
   // removeIntroScreen(); // Don't remove intro screen immediately
   toggleUI(true); // Enable UI so users can interact
   
-  // Create chat BEFORE setting welcome view to ensure active chat exists
+  // Create chat BEFORE setting memory view to ensure active chat exists
   window.actions.executeAction('chat.create', {});
-  window.context.setActiveView('welcome', {}, { withTransition: false });
+  window.context.setActiveView('memory', {}, { withTransition: false });
   window.views.renderCurrentView(false); // No transition during initialization
   
   // Auto-processing for guest mode removed - users must initiate processing manually

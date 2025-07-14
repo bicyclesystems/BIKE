@@ -228,7 +228,7 @@ const ACTIONS_REGISTRY = {
         }
       }
       
-      // Render the current view (welcome if activeView is null)
+      // Render the current view (memory if activeView is null)
       if (window.views?.renderCurrentView) {
         window.views.renderCurrentView(false); // No transition when switching chats
       }
@@ -611,7 +611,7 @@ const ACTIONS_REGISTRY = {
       }
       
       // Calculate duration for display
-      const durationText = window.welcomeView?.formatDuration?.(start, end) || 
+      const durationText = window.chatView?.formatDuration?.(start, end) || 
         (() => {
           const durationMs = end - start;
           const durationHours = Math.floor(durationMs / (1000 * 60 * 60));

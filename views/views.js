@@ -1,18 +1,18 @@
 // =================== Views Registry ===================
 
 const VIEWS_REGISTRY = {
-  'welcome': {
-    id: 'welcome',
-    name: 'Welcome',
-    description: 'Show the welcome/home view',
-    type: 'welcome',
+  'chat': {
+    id: 'chat',
+    name: 'Chat',
+    description: 'Show the chat view',
+    type: 'chat',
     requiredParams: [],
     optionalParams: [],
     availableData: () => ({
       currentUser: window.user?.getActiveSession()?.user?.email || null,
       userPreferences: window.context?.getUserPreferences() || {}
     }),
-    render: (data) => window.welcomeView.renderWelcomeView()
+    render: (data) => window.chatView.renderChatView()
   },
   
   'calendar': {
@@ -78,6 +78,37 @@ const VIEWS_REGISTRY = {
       }
       return html;
     }
+  },
+  
+  'services': {
+    id: 'services',
+    name: 'Services',
+    description: 'View upcoming services and integrations',
+    type: 'services',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({}),
+    render: (data) => window.servicesView.renderServicesView()
+  },
+  
+  'actions': {
+    id: 'actions',
+    name: 'Actions',
+    description: 'View all available actions you can perform',
+    type: 'actions',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({
+      actions: window.actions?.ACTIONS_REGISTRY ? Object.values(window.actions.ACTIONS_REGISTRY) : []
+    }),
+    render: (data) => {
+      const html = window.actionsView.renderActionsView();
+      // Apply context highlighting specifically for actions view
+      if (window.actionsView.applyContextHighlighting) {
+        window.actionsView.applyContextHighlighting();
+      }
+      return html;
+    }
   }
 };
 
@@ -132,8 +163,8 @@ function renderCurrentView(withTransition = true) {
   let newHtml = '';
   
   if (!activeView) {
-    // Always show welcome view when activeView is null
-    newHtml = window.welcomeView.renderWelcomeView();
+    // Always show memory view when activeView is null
+    newHtml = window.memoryView.renderMemoryView();
   } else {
     const { type, data } = activeView;
     
@@ -220,9 +251,9 @@ function removeViewUI() {
 // =================== Views Initialization ===================
 
 function init() {
-  // Initialize welcome view
-  if (window.welcomeView) {
-    window.welcomeView.init();
+  // Initialize chat view
+  if (window.chatView) {
+    window.chatView.init();
   }
   
   // Initialize memory view
@@ -230,7 +261,7 @@ function init() {
     window.memoryView.init();
   }
   
-  // Always render current view (including welcome when activeView is null)
+  // Always render current view (including memory when activeView is null)
   renderCurrentView(false); // No transition on init
 }
 

@@ -1,4 +1,4 @@
-// =================== Welcome View Rendering ===================
+// =================== Chat View Rendering ===================
 
 // Helper function to calculate duration display
 function formatDuration(startTime, endTime) {
@@ -32,7 +32,7 @@ function getEffectiveEndTime(chat, activeChatId) {
   return null; // No end time available
 }
 
-function renderWelcomeView() {
+function renderChatView() {
   const activeChatId = window.context?.getActiveChatId();
   const chats = window.context?.getChats() || [];
   const currentChat = chats.find(c => c.id === activeChatId);
@@ -85,22 +85,22 @@ function renderWelcomeView() {
   `;
 }
 
-// =================== Welcome View Event Handlers ===================
+// =================== Chat View Event Handlers ===================
 
-function setupWelcomeHandlers() {
-  // No specific handlers needed for welcome view currently
+function setupChatHandlers() {
+  // No specific handlers needed for chat view currently
 }
 
-// =================== Welcome View Initialization ===================
+// =================== Chat View Initialization ===================
 
 function init() {
-  setupWelcomeHandlers();
+  setupChatHandlers();
 }
 
 // Export functions for global access
-window.welcomeView = {
-  renderWelcomeView,
-  setupWelcomeHandlers,
+window.chatView = {
+  renderChatView,
+  setupChatHandlers,
   init,
   formatDuration, // Export for reuse
   getEffectiveEndTime // Export for reuse

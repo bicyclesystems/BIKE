@@ -185,9 +185,9 @@ function highlightContextWords(element = null) {
     if (contextItem.type === 'artifact') {
       contextStyle = 'style="color: var(--color-blue);"';
     } else if (contextItem.type === 'view') {
-      contextStyle = 'style="color: var(--color-dark-green);"';
-    } else if (contextItem.type === 'action') {
       contextStyle = 'style="color: var(--color-orange);"';
+    } else if (contextItem.type === 'action') {
+      contextStyle = 'style="color: var(--color-dark-green);"';
     } else if (contextItem.type === 'chat') {
       contextStyle = 'style="color: var(--color-violet);"';
     }
