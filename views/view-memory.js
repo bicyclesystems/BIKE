@@ -2,17 +2,17 @@
 
 // Helper function to extract name from email
 function getNameFromEmail(email) {
-  if (!email) return "there";
+  if (!email) return 'there';
   // Extract the part before @ and capitalize first letter
-  const namePart = email.split("@")[0];
+  const namePart = email.split('@')[0];
   // Replace dots, underscores, numbers with spaces and capitalize
-  const cleanName = namePart.replace(/[._\d]/g, " ").trim();
+  const cleanName = namePart.replace(/[._\d]/g, ' ').trim();
   // Capitalize first letter of each word
   return (
     cleanName
-      .split(" ")
+      .split(' ')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(" ") || "there"
+      .join(' ') || 'there'
   );
 }
 
@@ -26,18 +26,15 @@ function setupMemoryViewEventListeners() {
 
   // Set up real-time updates when memory system events occur
   if (window.memory?.events) {
-    window.memory.events.addEventListener("dataChanged", (event) => {
+    window.memory.events.addEventListener('dataChanged', (event) => {
       // Only refresh if memory view is currently active
-      if (window.context?.getActiveView()?.type === "memory") {
-        console.log(
-          "[MEMORY VIEW] Data changed, refreshing view:",
-          event.detail?.type
-        );
+      if (window.context?.getActiveView()?.type === 'memory') {
+        console.log('[MEMORY VIEW] Data changed, refreshing view:', event.detail?.type);
         refreshMemoryView();
       }
     });
 
-    console.log("[MEMORY VIEW] Real-time event listeners established");
+    console.log('[MEMORY VIEW] Real-time event listeners established');
     memoryViewEventListenersSetup = true;
   } else {
     // Memory system not ready yet, try again in a moment
@@ -55,14 +52,12 @@ function applyContextHighlighting() {
     if (viewElement) {
       // Find all text elements that could benefit from context highlighting
       const textElements = viewElement.querySelectorAll(
-        "h1, h2, h3, h4, h5, h6, .text-xs, .text-s, .text-m, .text-l, .text-xl"
+        'h1, h2, h3, h4, h5, h6, .text-xs, .text-s, .text-m, .text-l, .text-xl'
       );
       textElements.forEach((element) => {
         if (element.innerText && element.innerText.trim()) {
           // If element contains trait tags, preserve them by applying highlighting carefully
-          const traitTags = element.querySelectorAll(
-            '[data-no-highlight="true"]'
-          );
+          const traitTags = element.querySelectorAll('[data-no-highlight="true"]');
           if (traitTags.length > 0) {
             // Save trait tag content and temporarily replace with placeholders
             const traitData = [];
@@ -127,10 +122,10 @@ function renderMemoryView() {
 
   // Get user information
   const session = window.user?.getActiveSession();
-  const email = session?.user?.email || "";
+  const email = session?.user?.email || '';
 
   // Get actual session signup time information
-  let signupTimeText = "";
+  let signupTimeText = '';
 
   if (session?.user && window.sessionManager) {
     // Get signup time from user creation date
@@ -150,12 +145,12 @@ function renderMemoryView() {
       } else if (diffDays < 365) {
         const months = Math.floor(diffDays / 30);
         signupTimeText = `, and you signed up <span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${months} month${
-          months === 1 ? "" : "s"
+          months === 1 ? '' : 's'
         } ago</span>`;
       } else {
         const years = Math.floor(diffDays / 365);
         signupTimeText = `, and you signed up <span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${years} year${
-          years === 1 ? "" : "s"
+          years === 1 ? '' : 's'
         } ago</span>`;
       }
     }
@@ -176,8 +171,8 @@ function renderMemoryView() {
             if (index === 0) return tag;
             return `, ${tag}`;
           })
-          .join("")}.`
-      : "";
+          .join('')}.`
+      : '';
 
   // Helper function to create styled data badges
   const createDataBadge = (content) =>
@@ -193,23 +188,15 @@ function renderMemoryView() {
         <h1>
           Hello ${createDataBadge(
             userPreferences.name || getNameFromEmail(email)
-          )}, you're logged in as ${createDataBadge(
-    email || "guest user"
-  )}${signupTimeText}${
-    userPreferences.role
-      ? ` with the role of ${createDataBadge(userPreferences.role)}`
-      : ""
+          )}, you're logged in as ${createDataBadge(email || 'guest user')}${signupTimeText}${
+    userPreferences.role ? ` with the role of ${createDataBadge(userPreferences.role)}` : ''
   }${
-    userPreferences.usingFor
-      ? ` using this for ${createDataBadge(userPreferences.usingFor)}`
-      : ""
+    userPreferences.usingFor ? ` using this for ${createDataBadge(userPreferences.usingFor)}` : ''
   }.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chat${
-    totalChats === 1 ? "" : "s"
+    totalChats === 1 ? '' : 's'
   } containing ${createDataBadge(totalMessages)} total message${
-    totalMessages === 1 ? "" : "s"
-  }. You've created ${createDataBadge(totalArtifacts)} artifact${
-    totalArtifacts === 1 ? "" : "s"
-  }.
+    totalMessages === 1 ? '' : 's'
+  }. You've created ${createDataBadge(totalArtifacts)} artifact${totalArtifacts === 1 ? '' : 's'}.
         </h1>
       </div>
 
@@ -218,7 +205,7 @@ function renderMemoryView() {
 }
 
 function refreshMemoryView() {
-  if (window.context?.getActiveView()?.type === "memory") {
+  if (window.context?.getActiveView()?.type === 'memory') {
     window.views?.renderCurrentView();
     applyContextHighlighting();
   }
@@ -231,7 +218,7 @@ function escapeHtml(text) {
     return window.utils.escapeHtml(text);
   }
   // Fallback implementation
-  const div = document.createElement("div");
+  const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML;
 }
@@ -239,61 +226,58 @@ function escapeHtml(text) {
 // =================== Initialization ===================
 
 // Initialize event listeners when the DOM is ready
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener('DOMContentLoaded', () => {
   setupMemoryViewEventListeners();
 });
 
 // Also try to set up listeners immediately if DOM is already ready
-if (document.readyState === "loading") {
+if (document.readyState === 'loading') {
   // DOM not ready yet, wait for DOMContentLoaded
 } else {
   // DOM already ready
   setupMemoryViewEventListeners();
 }
-document.addEventListener("DOMContentLoaded", async () => {
+document.addEventListener('DOMContentLoaded', async () => {
   try {
     // Call getter functions from users.js
-    Promise.all([
-      getUserData(),
-      getUserArtifacts(),
-      getUserChats(),
-      getUserMessages(),
-    ]).then(([user, artifacts, chats, messages]) => {
-      console.log("[INIT] Fetched data from users.js getters:", {
-        user,
-        artifacts,
-        chats,
-        messages,
-      });
+    Promise.all([getUserData(), getUserArtifacts(), getUserChats(), getUserMessages()]).then(
+      ([user, artifacts, chats, messages]) => {
+        console.log('[INIT] Fetched data from users.js getters:', {
+          user,
+          artifacts,
+          chats,
+          messages,
+        });
 
-      // Group messages by chat_id
-      const messagesByChat = messages.reduce(function (acc, message) {
-        var chatId = message.chat_id;
-        if (!acc[chatId]) {
-          acc[chatId] = [];
-        }
-        acc[chatId].push(message);
-        return acc;
-      }, {});
+        // Group messages by chat_id
+        const messagesByChat = messages.reduce(function (acc, message) {
+          var chatId = message.chat_id;
+          if (!acc[chatId]) {
+            acc[chatId] = [];
+          }
+          acc[chatId].push(message);
+          return acc;
+        }, {});
 
-      // Save to localStorage
-      localStorage.setItem("bike_user_data", JSON.stringify({ user }));
-      localStorage.setItem("userPreferences", JSON.stringify(user.preferences));
-      localStorage.setItem("userId", user?.id || "");
-      localStorage.setItem("artifacts", JSON.stringify(artifacts));
-      localStorage.setItem("chats", JSON.stringify(chats));
-      localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
-    });
+        // Save to localStorage
+        localStorage.setItem('bike_user_data', JSON.stringify({ user }));
+        localStorage.setItem('userPreferences', JSON.stringify(user.preferences));
+        localStorage.setItem('userId', user?.id || '');
+        localStorage.setItem('artifacts', JSON.stringify(artifacts));
+        localStorage.setItem('chats', JSON.stringify(chats));
+        localStorage.setItem('messagesByChat', JSON.stringify(messagesByChat));
+      }
+    );
 
     // Set activeChatId as the latest chat's id
     const lastChat = chats[chats.length - 1];
     if (lastChat?.id) {
-      localStorage.setItem("activeChatId", lastChat.id.toString());
+      localStorage.setItem('activeChatId', lastChat.id.toString());
     }
 
-    console.log("[INIT] LocalStorage updated with user session data.");
+    console.log('[INIT] LocalStorage updated with user session data.');
   } catch (err) {
-    console.error("[INIT] Failed to fetch and store data:", err);
+    console.error('[INIT] Failed to fetch and store data:', err);
   }
 });
 
