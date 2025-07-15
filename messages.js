@@ -176,6 +176,7 @@ function showLoadingIndicator() {
   `;
 
   // Generic breathing animation
+  // Generic breathing animation
   const container = messagesContainer.querySelector('.typewriter-container');
   if (container) {
     const breathingClasses = [['blur-s'], ['blur-l', 'scale-125']];
@@ -568,6 +569,17 @@ function setupMessageEventHandlers(isShowAllMode) {
   Array.from(messagesContainer.querySelectorAll('[data-msg-idx]')).forEach((el) => {
     el.onclick = createToggleHandler(!isShowAllMode);
     el.classList.add('cursor-pointer', 'transition', 'hover-grow');
+
+    // Add hover blur effect for single message mode
+    if (!isShowAllMode) {
+      el.onmouseenter = () => {
+        window.inputModule.blurViews();
+      };
+
+      el.onmouseleave = () => {
+        window.inputModule.unblurViews();
+      };
+    }
   });
 
   setupContextWordHandlers();

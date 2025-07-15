@@ -7,7 +7,12 @@
 
 // AI configuration
 const AI_CONFIG = {
-  API_KEY: window.API_KEY || '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',
+  get API_KEY() {
+    if (!window.API_KEY) {
+      throw new Error('API_KEY not found. Please ensure config.js is loaded and API_KEY is set.');
+    }
+    return window.API_KEY;
+  },
   CHAT_MODEL: 'gpt-4o',
   IMAGE_MODEL: 'dall-e-3',
   CHAT_API_URL: 'https://api.openai.com/v1/chat/completions',
@@ -123,7 +128,7 @@ You MUST follow this response style in ALL your messages. This is the user's exp
       "content": "The actual content or prompt for the artifact"
     }
   ],
-  "recommendedView": "artifact", // Optional: "artifact", "artifacts", "calendar", "welcome", "memory", or null
+        "recommendedView": "artifact", // Optional: "artifact", "artifacts", "calendar", "chat", "memory", or null
   "actionsExecuted": [
     {
       "actionId": "views.switch",

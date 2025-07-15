@@ -30,7 +30,7 @@ class InputManager {
     this.animatedWords = new Set(); // Track words that have already been animated
     this.placeholderTimeout = null; // Track placeholder animation
     this.isShowingPlaceholder = false; // Track placeholder state
-    this.placeholderText = "write something";
+    this.placeholderText = "say something";
   }
 
   // =================== Lifecycle Management ===================
@@ -319,10 +319,27 @@ class InputManager {
   setupEventListeners() {
     if (!this.inputElement || !this.inputContainer) return;
 
-    // Right-click to show input
+    // Right-click to show input (logged out) or trigger processing (logged in)
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this.show();
+      
+      // Check if user is logged in
+      const session = window.user?.getActiveSession();
+      const isLoggedIn = !!session;
+      
+      if (isLoggedIn) {
+        // Logged in mode: trigger processing
+        if (window.processModule?.process) {
+          window.processModule.process();
+        } else if (window.process) {
+          window.process();
+        } else {
+          console.warn('[INPUT] Process function not available');
+        }
+      } else {
+        // Logged out mode: show input with "write something" animation
+        this.show();
+      }
     });
 
     // Click outside to hide input

@@ -1,18 +1,41 @@
 // =================== Minimal Calendar View ===================
 
-// Simple chat events generation
+// Helper function to get effective end time for calendar (explicit, inferred, or default)
+function getCalendarEndTime(chat) {
+  if (chat.endTime) {
+    return new Date(chat.endTime);
+  }
+  
+  // Try to infer from last message
+  const messages = window.context?.getMessagesByChat()[chat.id] || [];
+  if (messages.length > 0) {
+    const lastMessage = messages[messages.length - 1];
+    if (lastMessage.timestamp) {
+      const lastTime = lastMessage.timestamp.includes('M') && !lastMessage.timestamp.includes(',')
+        ? new Date(`${new Date().toDateString()} ${lastMessage.timestamp}`)
+        : new Date(lastMessage.timestamp);
+      
+      if (!isNaN(lastTime) && lastTime > new Date(chat.timestamp)) {
+        return lastTime;
+      }
+    }
+  }
+  
+  // Default to 1 hour if no other duration available
+  const defaultEnd = new Date(chat.timestamp);
+  defaultEnd.setHours(defaultEnd.getHours() + 1);
+  return defaultEnd;
+}
+
+// Smart chat events generation with real durations
 const generateChatEvents = () => {
   const chats = window.context?.getChats() || [];
   
   return chats.map(chat => {
-    const chatDate = new Date(chat.timestamp);
+    const startTime = new Date(chat.timestamp);
+    const endTime = getCalendarEndTime(chat);
     const isActive = chat.id === window.context?.getActiveChatId();
     const color = isActive ? "#3b82f6" : "#9ca3af";
-    
-    // Simple: all chats as 1-hour events at their creation time
-    const startTime = new Date(chatDate);
-    const endTime = new Date(chatDate);
-    endTime.setHours(endTime.getHours() + 1);
     
     return {
       id: chat.id,
@@ -20,7 +43,8 @@ const generateChatEvents = () => {
       start: startTime.toISOString(),
       end: endTime.toISOString(),
       color: color,
-      chatId: chat.id
+      chatId: chat.id,
+      hasExplicitDuration: !!chat.endTime
     };
   });
 };
@@ -160,8 +184,8 @@ function renderCalendarView() {
 
 // Chat switching
 const switchToChat = (chatId) => {
-  if (window.context && window.context.switchChat) {
-    window.context.switchChat(chatId);
+        if (window.actions && window.actions.executeAction) {
+        window.actions.executeAction('chat.switch', { chatId });
   }
 };
 
@@ -170,8 +194,8 @@ const createChatAt = (date, hour) => {
   if (!window.context) return;
   const chatDate = new Date(date);
   chatDate.setHours(hour, 0, 0, 0);
-  if (window.context.createNewChat) {
-    window.context.createNewChat(chatDate.toISOString());
+        if (window.actions.executeAction) {
+        window.actions.executeAction('chat.create', { timestamp: chatDate.toISOString() });
   }
   if (window.views?.renderCurrentView) {
     window.views.renderCurrentView();

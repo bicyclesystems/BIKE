@@ -322,14 +322,16 @@ function loadChat() {
 
 // =================== View Management ===================
 
-function setActiveView(viewType, data = {}) {
-  // Handle null viewType by setting activeView to null (shows welcome or empty state)
+function setActiveView(viewType, data = {}, options = {}) {
+  const { withTransition = true } = options;
+
+  // Handle null viewType by setting activeView to null (shows chat or empty state)
   if (viewType === null || viewType === undefined) {
     if (AppState.activeView === null) return; // Already null, no change needed
     setState({ activeView: null });
     window.memory?.saveActiveView(null);
     if (window.views?.renderCurrentView) {
-      window.views.renderCurrentView();
+      window.views.renderCurrentView(withTransition);
     }
     return;
   }
@@ -365,7 +367,7 @@ function setActiveView(viewType, data = {}) {
 
   // Render the view
   if (window.views?.renderCurrentView) {
-    window.views.renderCurrentView();
+    window.views.renderCurrentView(withTransition);
   }
 }
 
@@ -467,7 +469,7 @@ async function init(session = null) {
 
     // Create new chat if none exist
     if (!AppState.activeChatId && AppState.chats.length === 0) {
-      createNewChat();
+      window.actions?.executeAction('chat.create', {});
     } else if (!AppState.activeChatId) {
       setState({ activeChatId: AppState.chats[0].id });
     }
@@ -517,7 +519,7 @@ async function init(session = null) {
     });
 
     // Create a new chat for the fresh guest session
-    createNewChat();
+    window.actions?.executeAction('chat.create', {});
   }
 }
 
@@ -530,11 +532,7 @@ window.context = {
   getContext,
 
   // Chat management
-  createNewChat,
-  switchChat,
   setActiveChat,
-  renameChat,
-  deleteChat,
   loadChat,
   setActiveMessages,
   getActiveChatId: () => AppState.activeChatId,

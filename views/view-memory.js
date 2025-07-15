@@ -124,6 +124,12 @@ function renderMemoryView() {
   const session = window.user?.getActiveSession();
   const email = session?.user?.email || '';
 
+  // Check if there's no meaningful memory yet
+  // This covers: logged out users (guest mode) OR users with minimal activity (1 empty chat)
+  const isLoggedOut = !session || !email;
+  const hasMinimalActivity = totalChats <= 1 && totalMessages === 0 && totalArtifacts === 0;
+  const hasNoMemory = isLoggedOut || hasMinimalActivity;
+
   // Get actual session signup time information
   let signupTimeText = '';
 
@@ -182,8 +188,6 @@ function renderMemoryView() {
 
   return `
     <div class="column gap-l padding-l view">
-
-      <!-- User Information Summary -->
       <div class="background-primary padding-l radius-l">
         <h1>
           Hello ${createDataBadge(
@@ -197,9 +201,25 @@ function renderMemoryView() {
   } containing ${createDataBadge(totalMessages)} total message${
     totalMessages === 1 ? '' : 's'
   }. You've created ${createDataBadge(totalArtifacts)} artifact${totalArtifacts === 1 ? '' : 's'}.
+          Hello ${createDataBadge(userPreferences.name || getNameFromEmail(email))}.${
+    hasNoMemory
+      ? ' A moment of pure possibility. An invitation to discover. A celebration of the present moment before memory begins.'
+      : ''
+  } You're logged in as ${createDataBadge(email || 'guest user')}${signupTimeText}${
+    userPreferences.role ? ` with the role of ${createDataBadge(userPreferences.role)}` : ''
+  }${
+    userPreferences.usingFor ? ` using this for ${createDataBadge(userPreferences.usingFor)}` : ''
+  }.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chat${
+    totalChats === 1 ? '' : 's'
+  } containing ${createDataBadge(totalMessages)} total message${
+    totalMessages === 1 ? '' : 's'
+  }. You've created ${createDataBadge(totalArtifacts)} artifact${
+    totalArtifacts === 1 ? '' : 's'
+  }. You've connected ${createDataBadge('0')} services. You have ${createDataBadge(
+    totalActions
+  )} available action${totalActions === 1 ? '' : 's'}.
         </h1>
       </div>
-
     </div>
   `;
 }
@@ -212,6 +232,15 @@ function refreshMemoryView() {
 }
 
 // =================== Helper Functions ===================
+
+function getAvailableActionsCount() {
+  // Get all actions from the actions registry
+  if (!window.actions?.ACTIONS_REGISTRY) {
+    return 0;
+  }
+
+  return Object.keys(window.actions.ACTIONS_REGISTRY).length;
+}
 
 function escapeHtml(text) {
   if (window.utils?.escapeHtml) {
@@ -238,38 +267,42 @@ if (document.readyState === 'loading') {
   setupMemoryViewEventListeners();
 }
 document.addEventListener('DOMContentLoaded', async () => {
+  // Wait until window.SUPABASE_CONFIG is available
+  while (!window.SUPABASE_CONFIG?.url || !window.SUPABASE_CONFIG?.key) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  // Now it's safe to initialize Supabase
+  const supabase = window.supabase.createClient(
+    window.SUPABASE_CONFIG.url,
+    window.SUPABASE_CONFIG.key
+  );
+
+  // Now safely import your functions or call them here
+  const session = await supabase.auth.getSession(); // test it
+
   try {
-    // Call getter functions from users.js
-    Promise.all([getUserData(), getUserArtifacts(), getUserChats(), getUserMessages()]).then(
-      ([user, artifacts, chats, messages]) => {
-        console.log('[INIT] Fetched data from users.js getters:', {
-          user,
-          artifacts,
-          chats,
-          messages,
-        });
+    const [user, artifacts, chats, messages] = await Promise.all([
+      getUserData(),
+      getUserArtifacts(),
+      getUserChats(),
+      getUserMessages(),
+    ]);
 
-        // Group messages by chat_id
-        const messagesByChat = messages.reduce(function (acc, message) {
-          var chatId = message.chat_id;
-          if (!acc[chatId]) {
-            acc[chatId] = [];
-          }
-          acc[chatId].push(message);
-          return acc;
-        }, {});
+    const messagesByChat = messages.reduce((acc, message) => {
+      const chatId = message.chat_id;
+      acc[chatId] = acc[chatId] || [];
+      acc[chatId].push(message);
+      return acc;
+    }, {});
 
-        // Save to localStorage
-        localStorage.setItem('bike_user_data', JSON.stringify({ user }));
-        localStorage.setItem('userPreferences', JSON.stringify(user.preferences));
-        localStorage.setItem('userId', user?.id || '');
-        localStorage.setItem('artifacts', JSON.stringify(artifacts));
-        localStorage.setItem('chats', JSON.stringify(chats));
-        localStorage.setItem('messagesByChat', JSON.stringify(messagesByChat));
-      }
-    );
+    localStorage.setItem('bike_user_data', JSON.stringify({ user }));
+    localStorage.setItem('userPreferences', JSON.stringify(user.preferences));
+    localStorage.setItem('userId', user?.id || '');
+    localStorage.setItem('artifacts', JSON.stringify(artifacts));
+    localStorage.setItem('chats', JSON.stringify(chats));
+    localStorage.setItem('messagesByChat', JSON.stringify(messagesByChat));
 
-    // Set activeChatId as the latest chat's id
     const lastChat = chats[chats.length - 1];
     if (lastChat?.id) {
       localStorage.setItem('activeChatId', lastChat.id.toString());

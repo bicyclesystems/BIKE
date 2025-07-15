@@ -323,6 +323,9 @@ class SupabaseSync {
       id: serverChat.id,
       title: serverChat.title,
       timestamp: serverChat.timestamp,
+      description: serverChat.description || '',
+      timestamp: serverChat.timestamp,
+      endTime: serverChat.endTime,
     };
 
     // Use memory module to save the chat

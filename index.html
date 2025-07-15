@@ -1,65 +1,69 @@
 <!DOCTYPE html>
 <html lang="en">
+  <head>
+    <title>Bike</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="rene/index.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      // Configure PDF.js worker
+      if (typeof pdfjsLib !== 'undefined') {
+        pdfjsLib.GlobalWorkerOptions.workerSrc =
+          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      }
+    </script>
+  </head>
 
-<head>
-  <title>Bike</title>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <link rel="stylesheet" href="rene/index.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-  <script>
-    // Configure PDF.js worker
-    if (typeof pdfjsLib !== 'undefined') {
-      pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-    }
-  </script>
-</head>
+  <body
+    class="view align-center justify-center"
+    style="
+      background-size: cover;
+      background-position: center center;
+      background-repeat: no-repeat;
+      background-attachment: fixed;
+    "
+  >
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="config.js"></script>
+    <script src="memory.js"></script>
+    <script src="sync.js"></script>
+    <script src="actions.js"></script>
+    <script src="context/context.js"></script>
+    <script src="context/context-highlight.js"></script>
+    <script src="user.js"></script>
+    <script src="artifacts.js"></script>
+    <script src="input.js"></script>
+    <script src="process/process.js"></script>
+    <script src="process/process-image.js"></script>
+    <script src="process/process-content.js"></script>
+    <script src="orchestrate.js"></script>
+    <script src="messages.js"></script>
+    <script src="views/view-artifact.js"></script>
+    <script src="views/view-artifacts.js"></script>
+    <script src="views/view-calendar.js"></script>
+    <script src="views/view-memory.js"></script>
+    <script src="views/view-services.js"></script>
+    <script src="views/view-chat.js"></script>
+    <script src="views/views.js"></script>
+    <script src="theme.js"></script>
+    <script>
+      // Simple, distributed initialization
+      document.addEventListener('DOMContentLoaded', async function () {
+        // Initialize authentication FIRST to determine user state
+        const session = await user.initAuth();
 
-<body class="view align-center justify-center"
-  style="background-size: cover; background-position: center center; background-repeat: no-repeat; background-attachment: fixed;">
+        // Initialize context with knowledge of auth state (loads data appropriately)
+        await context.init(session);
 
+        // Handle UI based on auth state
+        await user.updateAuthState(session);
 
-
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="config.js"></script>
-  <script src="memory.js"></script>
-  <script src="sync.js"></script>
-  <script src="actions.js"></script>
-  <script src="context/context.js"></script>
-  <script src="context/context-highlight.js"></script>
-  <script src="user.js"></script>
-  <script src="artifacts.js"></script>
-  <script src="input.js"></script>
-  <script src="process/process.js"></script>
-  <script src="process/process-image.js"></script>
-  <script src="process/process-content.js"></script>
-  <script src="orchestrate.js"></script>
-  <script src="messages.js"></script>
-  <script src="views/view-artifact.js"></script>
-  <script src="views/view-artifacts.js"></script>
-  <script src="views/view-calendar.js"></script>
-  <script src="views/view-memory.js"></script>
-  <script src="views/view-welcome.js"></script>
-  <script src="views/views.js"></script>
-  <script src="theme.js"></script>
-  <script>
-    // Simple, distributed initialization
-    document.addEventListener('DOMContentLoaded', async function () {
-      // Initialize authentication FIRST to determine user state
-      const session = await user.initAuth();
-      
-      // Initialize context with knowledge of auth state (loads data appropriately)
-      await context.init(session);
-
-      // Handle UI based on auth state
-      await user.updateAuthState(session);
-
-      // Initialize modules (they handle their own click handlers and UI)
-      artifacts.init();
-      views.init();
-    });
-  </script>
-</body>
-
+        // Initialize modules (they handle their own click handlers and UI)
+        artifacts.init();
+        views.init();
+      });
+    </script>
+  </body>
 </html>

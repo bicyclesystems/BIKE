@@ -11,6 +11,7 @@ class SessionManager {
       LOGIN_PROCESS: 'bike_process_triggered',
       GUEST_PROCESS: 'bike_guest_process_triggered',
       LOGIN_TIME: 'bike_login_time',
+      LOGIN_PROCESS: 'bike_process_triggered',
     };
   }
 
@@ -20,37 +21,16 @@ class SessionManager {
     return sessionStorage.getItem(this.SESSION_KEYS.LOGIN_PROCESS) === 'true';
   }
 
-  hasTriggeredGuest() {
-    return sessionStorage.getItem(this.SESSION_KEYS.GUEST_PROCESS) === 'true';
-  }
-
   markLoginTriggered() {
     sessionStorage.setItem(this.SESSION_KEYS.LOGIN_PROCESS, 'true');
-    sessionStorage.setItem(this.SESSION_KEYS.LOGIN_TIME, new Date().toISOString());
-    this.clearGuestFlag();
-  }
-
-  markGuestTriggered() {
-    sessionStorage.setItem(this.SESSION_KEYS.GUEST_PROCESS, 'true');
   }
 
   clearLoginFlag() {
     sessionStorage.removeItem(this.SESSION_KEYS.LOGIN_PROCESS);
   }
 
-  clearGuestFlag() {
-    sessionStorage.removeItem(this.SESSION_KEYS.GUEST_PROCESS);
-  }
-
   clearAllFlags() {
     this.clearLoginFlag();
-    this.clearGuestFlag();
-    sessionStorage.removeItem(this.SESSION_KEYS.LOGIN_TIME);
-  }
-
-  getLoginTime() {
-    const loginTime = sessionStorage.getItem(this.SESSION_KEYS.LOGIN_TIME);
-    return loginTime ? new Date(loginTime) : null;
   }
 
   // =================== Process Triggering ===================
@@ -106,10 +86,6 @@ class SessionManager {
   handleLogout() {
     this.clearAllFlags();
   }
-
-  handleSessionRestore() {
-    this.clearGuestFlag(); // User was already logged in
-  }
 }
 
 // Create global session manager instance
@@ -118,6 +94,7 @@ window.sessionManager = sessionManager;
 
 // =================== Session Helpers ===================
 async function getCurrentSession() {
+  if (!supabase) throw new Error('Supabase client is not initialized');
   const {
     data: { session },
   } = await supabase.auth.getSession();
@@ -347,12 +324,32 @@ function renderIntroScreen() {
   const intro = window.utils.createElementWithClass('div', '');
   intro.id = 'intro';
   intro.style.cssText = INTRO_STYLES;
+
+  // Add click handler to dismiss intro screen
+  intro.addEventListener('click', () => {
+    removeIntroScreen();
+  });
+
+  // Add subtle cursor hint
+  intro.style.cursor = 'pointer';
+
+  // Auto-dismiss after 5 seconds for better UX
+  setTimeout(() => {
+    if (document.getElementById('intro')) {
+      removeIntroScreen();
+    }
+  }, 5000);
+
   document.body.appendChild(intro);
 }
 
 function removeIntroScreen() {
   const intro = document.getElementById('intro');
-  if (intro) blurFadeOut(intro, () => window.utils.removeElement(intro));
+  if (intro) {
+    blurFadeOut(intro, () => {
+      window.utils.removeElement(intro);
+    });
+  }
 }
 
 // =================== App Initialization ===================
@@ -366,7 +363,7 @@ function initializeMainApp() {
 
   if (chats.length === 0) {
     console.log('[AUTH] Creating new chat');
-    window.context.createNewChat();
+    window.actions.executeAction('chat.create', {});
   } else if (!activeChatId) {
     console.log('[AUTH] Setting first chat as active');
     window.context.setActiveChat(chats[0].id);
@@ -380,7 +377,7 @@ function initializeMainApp() {
 }
 
 // =================== Authenticated State Handler ===================
-async function handleAuthenticatedState(shouldTriggerProcess = false) {
+async function handleAuthenticatedState() {
   removeIntroScreen();
   toggleUI(true);
   await initializeSync();
@@ -392,7 +389,7 @@ async function handleAuthenticatedState(shouldTriggerProcess = false) {
   // Show welcome view if no active view is set
   const currentView = window.context.getActiveView();
   if (window.context?.setActiveView && !currentView) {
-    window.context.setActiveView('welcome', {});
+    window.context.setActiveView('memory', {}, { withTransition: false });
   }
 
   initializeMainApp();
@@ -475,7 +472,7 @@ async function updateAuthState(session, forceNewLogin = false) {
   const shouldTriggerProcess = isNewLogin && !window.sessionManager.hasTriggeredLogin();
 
   if (isLoggedIn) {
-    await handleAuthenticatedState(shouldTriggerProcess);
+    await handleAuthenticatedState();
   } else {
     handleUnauthenticatedState();
     window.sessionManager.handleLogout();
