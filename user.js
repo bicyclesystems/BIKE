@@ -331,8 +331,9 @@ async function handleAuthenticatedState() {
   
   initializeMainApp();
   
-  // Skip auto-processing on login - let user initiate manually
-  console.log('[AUTH] Authentication complete - user can initiate processing manually');
+  // Trigger contextual guidance for fresh logins only (not page refreshes)
+  await window.sessionManager.handleFreshLogin();
+  console.log('[AUTH] Authentication complete');
 }
 
 // =================== Sync Integration ===================
