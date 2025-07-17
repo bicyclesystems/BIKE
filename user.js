@@ -339,11 +339,6 @@ async function handleAuthenticatedState() {
   }
 
   initializeMainApp();
-
-  // Skip auto-processing on login - let user initiate manually
-  console.log(
-    "[AUTH] Authentication complete - user can initiate processing manually"
-  );
 }
 
 // =================== Sync Integration ===================
