@@ -800,7 +800,6 @@ class SupabaseSync {
       this.queueOperation("uploadMessage", { chatId, message });
       return;
     }
-
     try {
       const { error } = await this.supabase.from("messages").insert([
         {
@@ -809,6 +808,7 @@ class SupabaseSync {
           role: message.role,
           content: message.content,
           metadata: message.metadata || {},
+          message_id: message.message_id,
         },
       ]);
 
@@ -962,6 +962,48 @@ if (document.readyState === "loading") {
 } else {
   syncManager.init();
 }
+
+document.addEventListener("DOMContentLoaded", async () => {
+  // Wait until window.SUPABASE_CONFIG is available
+  while (!window.SUPABASE_CONFIG?.url || !window.SUPABASE_CONFIG?.key) {
+    await new Promise((r) => setTimeout(r, 100));
+  }
+
+  //fetching all the data of the user from database
+  try {
+    const [user, artifacts, chats, messages] = await Promise.all([
+      getUserData(),
+      getUserArtifacts(),
+      getUserChats(),
+      getUserMessages(),
+    ]);
+
+    const messagesByChat = messages.reduce((acc, message) => {
+      const chatId = message.chat_id;
+      acc[chatId] = acc[chatId] || [];
+      acc[chatId].push(message);
+      return acc;
+    }, {});
+
+    //data stored to the local
+    localStorage.setItem("bike_user_data", JSON.stringify({ user }));
+    localStorage.setItem("userPreferences", JSON.stringify(user.preferences));
+    localStorage.setItem("userId", user?.id || "");
+    localStorage.setItem("artifacts", JSON.stringify(artifacts));
+    localStorage.setItem("chats", JSON.stringify(chats));
+    localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
+
+    //the last chat from the db will be the active chat
+    const lastChat = chats[chats.length - 1];
+    if (lastChat?.id) {
+      localStorage.setItem("activeChatId", lastChat.id.toString());
+    }
+
+    console.log("[MEMORY] LocalStorage updated with user session data.");
+  } catch (err) {
+    console.error("[MEMORY] Failed to fetch and store data:", err);
+  }
+});
 
 // Export for global access
 window.syncManager = syncManager;
