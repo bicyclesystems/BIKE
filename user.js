@@ -500,6 +500,51 @@ async function getUserMessages() {
 
   return data;
 }
+window.createLiveSessionInvite = async function () {
+  console.log("🟡 [LiveSession] Initializing live session...");
+
+  const userId = localStorage.getItem("userId");
+
+  if (!userId) {
+    console.warn("⚠️ [LiveSession] No userId found in localStorage. Aborting.");
+    alert("User not logged in.");
+    return;
+  }
+
+  const sessionId = crypto.randomUUID();
+  const inviteLink = `${window.location.origin}/#/${userId}/live-${sessionId}/live`;
+
+  console.log("📦 [LiveSession] Saving invite to Supabase...");
+  console.log("➡️ Session ID:", sessionId);
+  console.log("➡️ User ID:", userId);
+  console.log("➡️ Invite Link:", inviteLink);
+
+  const { error } = await supabase.from("invites").insert([
+    {
+      session_id: sessionId,
+      user_id: userId,
+      live_link: inviteLink,
+    },
+  ]);
+
+  if (error) {
+    console.error("❌ [LiveSession] Failed to save invite to Supabase:", error);
+    return;
+  }
+
+  console.log("✅ [LiveSession] Live session created and saved to Supabase.");
+  console.log("🔗 Redirecting to live view...");
+
+  // Apply the view (either directly or via your setActiveView method)
+  window.context.setActiveView("live", {});
+
+  window.views?.renderCurrentView();
+  location.hash = `#/${userId}/live-${sessionId}/live`;
+};
+
+document.addEventListener("DOMContentLoaded", async () => {
+  await window.createLiveSessionInvite?.();
+});
 // =================== Public API ===================
 window.user = {
   loginWithEmail,

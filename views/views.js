@@ -121,6 +121,21 @@ const VIEWS_REGISTRY = {
       return html;
     },
   },
+  live: {
+    id: "live",
+    name: "Live Session",
+    description: "Yjs-based real-time collaborative session",
+    type: "live",
+    requiredParams: ["sessionId", "userId"],
+    optionalParams: [],
+    availableData: () => ({}),
+    render: (data) => {
+      if (!data) {
+        console.log("no data");
+      }
+      window.liveView.renderLiveView(data);
+    },
+  },
 };
 
 // =================== Views Registry API ===================
