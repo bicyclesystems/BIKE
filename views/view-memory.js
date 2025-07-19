@@ -43,6 +43,12 @@ function setupMemoryViewEventListeners() {
     // Memory system not ready yet, try again in a moment
     setTimeout(setupMemoryViewEventListeners, 100);
   }
+
+  // Listen for collaboration updates
+  document.addEventListener("collaborationUpdate", () => {
+    console.log("[COLLAB] Collaboration update received, refreshing view");
+    refreshMemoryView();
+  });
 }
 
 // =================== Context Highlighting ===================
@@ -193,6 +199,59 @@ function renderMemoryView() {
       content
     )}</span>`;
 
+  // Get collaboration status
+  const collabStatus = window.collaboration?.getStatus() || {};
+  const isCollaborating = collabStatus.isCollaborating || false;
+  const collaborationId = collabStatus.collaborationId;
+  const peerCount = collabStatus.peerCount || 0;
+  const isLeader = collabStatus.isLeader || false;
+
+  // Create collaboration UI
+  const collaborationUI = isCollaborating
+    ? `
+      <div class="background-secondary padding-m radius-m">
+        <div class="row align-center justify-between">
+          <div class="column gap-xs">
+            <div class="text-m">🤝 Live Collaboration Active</div>
+            <div class="text-s opacity-s">Session: ${collaborationId}</div>
+            <div class="text-s opacity-s">${peerCount} peer${
+        peerCount === 1 ? "" : "s"
+      } connected</div>
+            <div class="text-s opacity-s">Role: ${
+              isLeader ? "Leader" : "Collaborator"
+            }</div>
+            ${
+              isLeader
+                ? `<div class="text-s opacity-s">Share this link: ${window.location.origin}${window.location.pathname}#/collab-${collaborationId}</div>`
+                : ""
+            }
+          </div>
+          <button class="button-secondary" onclick="window.collaboration.leaveSession()">
+            Leave Session
+          </button>
+          <button class="button-secondary" onclick="handleTestConnection()">
+            Test Connection
+          </button>
+          <button class="button-secondary" onclick="handleTriggerDiscovery()">
+            Trigger Discovery
+          </button>
+        </div>
+      </div>
+    `
+    : `
+      <div class="background-secondary padding-m radius-m">
+        <div class="row align-center justify-between">
+          <div class="column gap-xs">
+            <div class="text-m">🤝 Start Live Collaboration</div>
+            <div class="text-s opacity-s">Share your session with others in real-time</div>
+          </div>
+          <button class="button-primary" onclick="handleCreateCollaboration()">
+            Create Link
+          </button>
+        </div>
+      </div>
+    `;
+
   return `
     <div class="column gap-l padding-l view">
       <div class="background-primary padding-l radius-l">
@@ -226,6 +285,8 @@ function renderMemoryView() {
   }.
         </h1>
       </div>
+      
+      ${collaborationUI}
     </div>
   `;
 }
@@ -246,6 +307,102 @@ function getAvailableActionsCount() {
   }
 
   return Object.keys(window.actions.ACTIONS_REGISTRY).length;
+}
+
+// =================== Collaboration Functions ===================
+
+async function handleCreateCollaboration() {
+  console.log("[COLLAB] handleCreateCollaboration called");
+
+  if (!window.collaboration) {
+    console.error("[COLLAB] Collaboration module not available");
+    alert(
+      "Collaboration module not loaded. Please refresh the page and try again."
+    );
+    return;
+  }
+
+  try {
+    console.log("[COLLAB] Creating collaboration link...");
+    const result = await window.collaboration.createCollaborationLink();
+
+    console.log("[COLLAB] createCollaborationLink result:", result);
+
+    if (result.success) {
+      console.log("[COLLAB] Collaboration link created:", result.shareableLink);
+
+      // Show success message
+      alert(result.message);
+
+      // Refresh the view to show collaboration status
+      refreshMemoryView();
+    } else {
+      console.error(
+        "[COLLAB] Failed to create collaboration link:",
+        result.error
+      );
+      alert(`Failed to create collaboration link: ${result.error}`);
+    }
+  } catch (error) {
+    console.error("[COLLAB] Error creating collaboration:", error);
+    alert(`Error creating collaboration: ${error.message}`);
+  }
+}
+
+async function handleTestConnection() {
+  console.log("[COLLAB] handleTestConnection called");
+
+  if (!window.collaboration) {
+    console.error("[COLLAB] Collaboration module not available");
+    alert("Collaboration module not loaded");
+    return;
+  }
+
+  try {
+    console.log("[COLLAB] Testing connection...");
+    const result = await window.collaboration.testConnection();
+
+    console.log("[COLLAB] testConnection result:", result);
+
+    if (result.success) {
+      console.log("[COLLAB] Connection test completed");
+      alert("Connection test completed. Check console for details.");
+    } else {
+      console.error("[COLLAB] Connection test failed:", result.error);
+      alert(`Connection test failed: ${result.error}`);
+    }
+  } catch (error) {
+    console.error("[COLLAB] Error testing connection:", error);
+    alert(`Error testing connection: ${error.message}`);
+  }
+}
+
+async function handleTriggerDiscovery() {
+  console.log("[COLLAB] handleTriggerDiscovery called");
+
+  if (!window.collaboration) {
+    console.error("[COLLAB] Collaboration module not available");
+    alert("Collaboration module not loaded");
+    return;
+  }
+
+  try {
+    console.log("[COLLAB] Triggering peer discovery...");
+    const result = await window.collaboration.triggerPeerDiscovery();
+
+    console.log("[COLLAB] triggerPeerDiscovery result:", result);
+
+    if (result.success) {
+      console.log("[COLLAB] Peer discovery triggered");
+      alert("Peer discovery triggered. Check console for details.");
+    } else {
+      console.error("[COLLAB] Peer discovery failed:", result.error);
+      alert(`Peer discovery failed: ${result.error}`);
+    }
+  } catch (error) {
+    console.error("[COLLAB] Error triggering peer discovery:", error);
+    alert(`Error triggering peer discovery: ${error.message}`);
+  }
 }
 
 function escapeHtml(text) {
