@@ -231,7 +231,7 @@ function renderFileArtifact(fileData) {
 // Helper function to download file artifacts
 function downloadFileArtifact(fileName, dataUrl, mimeType) {
   if (!dataUrl) {
-    alert('No file data available for download');
+    // No file data available for download - silently fail for better UX
     return;
   }
 

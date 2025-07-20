@@ -37,7 +37,7 @@ function setupMemoryViewEventListeners() {
       }
     });
 
-    console.log("[MEMORY VIEW] Real-time event listeners established");
+    
     memoryViewEventListenersSetup = true;
   } else {
     // Memory system not ready yet, try again in a moment
@@ -309,7 +309,7 @@ document.addEventListener("DOMContentLoaded", async () => {
       localStorage.setItem("activeChatId", lastChat.id.toString());
     }
 
-    console.log("[MEMORY] LocalStorage updated with user session data.");
+    
   } catch (err) {
     console.error("[MEMORY] Failed to fetch and store data:", err);
   }

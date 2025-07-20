@@ -109,6 +109,19 @@ const VIEWS_REGISTRY = {
       }
       return html;
     }
+  },
+  
+  'system': {
+    id: 'system',
+    name: 'System',
+    description: 'View the AI system prompt',
+    type: 'system',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({
+      systemSections: window.systemModule?.getSystemSections() || {}
+    }),
+    render: (data) => window.systemView.renderSystemView()
   }
 };
 

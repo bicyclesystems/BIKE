@@ -2,18 +2,6 @@
 // This module handles user input from typing to AI response orchestration
 // Organized in 4 conceptual sections: Interface → Processing → AI Communication → Coordination
 
-// =================== UTILITIES ===================
-// Simple utility functions
-
-function hideMessages() {
-  const container = window.context?.getMessagesContainer();
-  if (container) {
-    container.innerHTML = '';
-  }
-}
-
-
-
 // =================== INPUT INTERFACE ===================
 // Everything about the visual input experience: DOM, UI, events, animations
 
@@ -110,7 +98,10 @@ class InputManager {
   }
 
   show() {
-    hideMessages(); // Hide messages when showing input
+    // Hide messages when showing input
+    if (window.messages && window.messages.hideLoadingIndicator) {
+      window.messages.hideLoadingIndicator();
+    }
     if (this.inputContainer) {
       // Show input using Renée classes and reset all states
       this.inputContainer.classList.remove('opacity-xl', 'hidden', 'scale-50', 'blur-l', 'blur-m', 'blur-s');
@@ -607,9 +598,6 @@ window.inputModule = {
   // Utilities
   highlightContextWords: () => inputManager.highlightContextWords(),
   stopPlaceholderAnimation: () => inputManager.stopPlaceholderAnimation(),
-  
-  // Internal access for debugging
-  _manager: inputManager,
   
   // Legacy send function - now delegates to processModule
   send: () => {

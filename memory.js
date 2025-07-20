@@ -25,7 +25,7 @@ function debouncedSaveChats() {
   saveTimeouts.chats = setTimeout(() => {
     localStorage.setItem(CHATS_KEY, JSON.stringify(AppState.chats));
     saveTimeouts.chats = null;
-    console.log('[MEMORY] Debounced chats save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -36,7 +36,7 @@ function debouncedSaveMessages() {
   saveTimeouts.messages = setTimeout(() => {
     localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppState.messagesByChat));
     saveTimeouts.messages = null;
-    console.log('[MEMORY] Debounced messages save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -47,7 +47,7 @@ function debouncedSaveArtifacts() {
   saveTimeouts.artifacts = setTimeout(() => {
     localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppState.artifacts));
     saveTimeouts.artifacts = null;
-    console.log('[MEMORY] Debounced artifacts save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -58,7 +58,7 @@ function debouncedSaveUserPreferences() {
   saveTimeouts.userPreferences = setTimeout(() => {
     localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(userPreferences));
     saveTimeouts.userPreferences = null;
-    console.log('[MEMORY] Debounced user preferences save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -69,7 +69,7 @@ function debouncedSaveActiveView(view) {
   saveTimeouts.activeView = setTimeout(() => {
     localStorage.setItem('activeView', JSON.stringify(view));
     saveTimeouts.activeView = null;
-    console.log('[MEMORY] Debounced activeView save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -80,7 +80,7 @@ function debouncedSaveActiveChatId(chatId) {
   saveTimeouts.activeChatId = setTimeout(() => {
     localStorage.setItem('activeChatId', chatId);
     saveTimeouts.activeChatId = null;
-    console.log('[MEMORY] Debounced activeChatId save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -91,7 +91,7 @@ function debouncedSaveSyncQueue(queue) {
   saveTimeouts.syncQueue = setTimeout(() => {
     localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
     saveTimeouts.syncQueue = null;
-    console.log('[MEMORY] Debounced syncQueue save completed');
+    
   }, SAVE_DEBOUNCE_DELAY);
 }
 
@@ -112,7 +112,7 @@ function flushAllPendingSaves() {
   
   // Note: activeView and activeChatId are saved when they change, 
   // so no need to force flush them here as they're not frequently changing
-  console.log('[MEMORY] All pending saves flushed immediately');
+
 }
 
 // Set up page unload handler to ensure data is saved
@@ -155,7 +155,7 @@ async function initIndexedDB() {
 
     request.onsuccess = (event) => {
       indexedDB_instance = event.target.result;
-      console.log('[MEMORY] IndexedDB initialized successfully');
+  
       resolve(indexedDB_instance);
     };
 
@@ -197,7 +197,7 @@ async function saveArtifactsToIndexedDB() {
       });
     }
 
-    console.log('[MEMORY] Artifacts saved to IndexedDB');
+
     return true;
   } catch (error) {
     console.error('[MEMORY] Failed to save artifacts to IndexedDB:', error);
@@ -215,7 +215,7 @@ async function loadArtifactsFromIndexedDB() {
     return new Promise((resolve, reject) => {
       const request = store.getAll();
       request.onsuccess = () => {
-        console.log('[MEMORY] Artifacts loaded from IndexedDB');
+    
         resolve(request.result);
       };
       request.onerror = () => reject(request.error);
@@ -233,13 +233,13 @@ function saveAll(immediate = false) {
     localStorage.setItem(CHATS_KEY, JSON.stringify(AppState.chats));
     localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppState.messagesByChat));
     localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppState.artifacts));
-    console.log('[MEMORY] Immediate saveAll completed');
+  
   } else {
     // Use debounced saves for better performance
     debouncedSaveChats();
     debouncedSaveMessages();
     debouncedSaveArtifacts();
-    console.log('[MEMORY] Debounced saveAll initiated');
+  
   }
   
   // Also save to IndexedDB if available
@@ -293,7 +293,7 @@ async function loadArtifacts() {
     const saved = localStorage.getItem(ARTIFACTS_KEY);
     if (saved) {
       artifacts = JSON.parse(saved);
-      console.log('[MEMORY] Artifacts loaded from localStorage fallback');
+  
     }
   }
   
@@ -335,7 +335,7 @@ function saveMessage(chatId, message) {
 }
 
 function deleteChat(chatId) {
-  console.log(`[MEMORY] Deleting chat data for: ${chatId}`);
+
   
   try {
     // 1. Remove chat from chats array
@@ -382,7 +382,7 @@ function deleteChat(chatId) {
     // 9. Notify sync system
     dispatchDataChange('chatDeleted', { chatId });
     
-    console.log(`[MEMORY] Successfully deleted chat data for: ${chatId}`);
+  
     return true;
     
   } catch (error) {
@@ -435,7 +435,7 @@ let userPreferences = {}; // In-memory cache for user preferences
 
 function saveUserPreferences(preferences) {
   userPreferences = preferences; // Set to exactly what was passed (already merged)
-  console.log('[MEMORY] Saved user preferences to cache:', userPreferences);
+
   debouncedSaveUserPreferences(); // Use debounced save instead of immediate save
   
   // Notify sync system
@@ -447,7 +447,7 @@ function loadUserPreferences() {
   
   // Migrate aiTraits from string to array if needed
   if (saved.aiTraits && typeof saved.aiTraits === 'string') {
-    console.log('[MEMORY] Migrating aiTraits from string to array format');
+
     const traits = saved.aiTraits.split(',').map(trait => trait.trim().toLowerCase()).filter(Boolean);
     saved.aiTraits = traits;
     
@@ -497,7 +497,7 @@ function purgeAllData() {
       const transaction = indexedDB_instance.transaction([STORE_NAMES.artifacts], 'readwrite');
       const store = transaction.objectStore(STORE_NAMES.artifacts);
       store.clear();
-      console.log('[MEMORY] IndexedDB cleared');
+  
     } catch (error) {
       console.error('[MEMORY] Failed to clear IndexedDB:', error);
     }

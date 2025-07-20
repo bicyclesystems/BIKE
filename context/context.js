@@ -229,7 +229,7 @@ async function init(session = null) {
   
   if (isAuthenticated) {
     // AUTHENTICATED: Load existing data normally
-    console.log('[CONTEXT] Initializing for authenticated user');
+
     window.memory?.loadAll();
     
     // Set up initial active chat from existing data
@@ -267,7 +267,7 @@ async function init(session = null) {
     }
   } else {
     // GUEST: Start fresh with empty state
-    console.log('[CONTEXT] Initializing fresh session for guest user');
+
     
     // Initialize with empty state (no data loading)
     setState({
