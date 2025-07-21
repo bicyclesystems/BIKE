@@ -99,8 +99,9 @@ class InputManager {
 
   show() {
     // Hide messages when showing input
-    if (window.messages && window.messages.hideLoadingIndicator) {
-      window.messages.hideLoadingIndicator();
+    const container = window.context?.getMessagesContainer();
+    if (container) {
+      container.innerHTML = '';
     }
     if (this.inputContainer) {
       // Show input using Renée classes and reset all states
