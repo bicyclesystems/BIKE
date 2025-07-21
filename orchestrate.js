@@ -238,7 +238,7 @@ async function orchestrateAIResponse(response, utilities) {
 
     // If there were action results, log them for transparency
     if (actionResults.length > 0) {
-      console.log('[ORCHESTRATE] Action execution summary:', actionResults);
+    
       
       // Optionally show action results in UI (for development/debugging)
       if (window.contextMenu && actionResults.some(r => r.verification !== 'SUCCESS')) {

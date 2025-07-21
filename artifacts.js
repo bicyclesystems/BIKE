@@ -1321,7 +1321,7 @@ class FileUploadManager {
     
     this.setupDropZone();
     this.isInitialized = true;
-    console.log('[UPLOAD] File upload manager initialized');
+
   }
 
   setupDropZone() {
@@ -1369,7 +1369,7 @@ class FileUploadManager {
   async processFiles(files, source = 'unknown') {
     if (!files || files.length === 0) return;
 
-    console.log(`[UPLOAD] Processing ${files.length} files from ${source}`);
+
 
     for (const file of files) {
       try {
@@ -1407,7 +1407,7 @@ class FileUploadManager {
       const currentMessageId = window.context?.getCurrentMessageId?.() || 'upload-' + Date.now();
       createArtifactSilent(formattedContent, currentMessageId, artifactType);
       
-      console.log(`[UPLOAD] Created artifact for ${file.name} (${artifactType})`);
+      
       
     } catch (error) {
       console.error('[UPLOAD] Error processing file:', file.name, error);
@@ -1728,8 +1728,5 @@ window.fileUploadModule = {
   // File processing
   processFiles: (files, source) => fileUploadManager.processFiles(files, source),
   handleFilesDrop: (files) => fileUploadManager.handleFilesDrop(files),
-  handleFilesPaste: (files) => fileUploadManager.handleFilesPaste(files),
-  
-  // Internal access for debugging
-  _manager: fileUploadManager
+  handleFilesPaste: (files) => fileUploadManager.handleFilesPaste(files)
 };

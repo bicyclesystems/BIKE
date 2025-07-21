@@ -78,228 +78,14 @@ function setActiveMessages(messages) {
   window.memory?.saveAll();
 }
 
-function createNewChat(timestamp = null, title = null) {
-  resetAppStateForChat();
-  const id = Date.now().toString();
-  const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
-  const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-  const chat = { id, title: chatTitle, timestamp: chatTimestamp };
-  setState({
-    chats: [...AppState.chats, chat],
-    messagesByChat: { ...AppState.messagesByChat, [id]: [] }
-  });
-  window.memory?.saveAll();
-  switchChat(id);
-  return id; // Return the chat ID for convenience
-}
 
-function switchChat(id) {
-  if (AppState.activeChatId) {
-    window.memory?.saveActiveView(AppState.activeView || null);
-  }
-  resetAppStateForChat();
-  setActiveChat(id);
-  
-  const restoredView = window.memory?.loadActiveView();
-  if (restoredView) {
-    // Validate the restored view
-    if (restoredView.type === 'artifact' && restoredView.data.artifactId) {
-      const artifact = AppState.artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === id);
-      if (artifact) {
-        setState({ activeView: restoredView });
-      } else {
-        setState({ activeView: null });
-      }
-    } else if (restoredView.type !== 'artifact') {
-      // System views (calendar, etc.) are always valid
-      setState({ activeView: restoredView });
-    } else {
-      setState({ activeView: null });
-    }
-  } else {
-    setState({ activeView: null });
-  }
-  clearUI();
-  loadChat();
-  // Note: artifacts are loaded through memory module, not a separate loadArtifacts call
-  
-  const messages = AppState.messagesByChat[id] || [];
-  if (messages.length === 0) {
-    // Show input for new chats
-    if (window.inputModule) {
-      window.inputModule.show();
-    }
-  }
-  
-  // Render the current view (welcome if activeView is null)
-  if (window.views?.renderCurrentView) {
-    window.views.renderCurrentView();
-  }
-}
 
-function renameChat(chatId, newTitle) {
-  console.log(`[CONTEXT] Attempting to rename chat: ${chatId} to "${newTitle}"`);
-  
-  // Validate inputs
-  if (!chatId || !newTitle || typeof newTitle !== 'string') {
-    console.error('[CONTEXT] Invalid parameters for chat rename');
-    return false;
-  }
-  
-  const trimmedTitle = newTitle.trim();
-  if (trimmedTitle.length === 0) {
-    console.error('[CONTEXT] Chat title cannot be empty');
-    return false;
-  }
-  
-  // Find the chat
-  const chatIndex = AppState.chats.findIndex(c => c.id === chatId);
-  if (chatIndex === -1) {
-    console.error(`[CONTEXT] Chat ${chatId} not found`);
-    return false;
-  }
-  
-  try {
-    const oldTitle = AppState.chats[chatIndex].title;
-    console.log(`[CONTEXT] Renaming chat "${oldTitle}" to "${trimmedTitle}"`);
-    
-    // Update the chat in the chats array
-    const updatedChats = [...AppState.chats];
-    updatedChats[chatIndex] = {
-      ...updatedChats[chatIndex],
-      title: trimmedTitle
-    };
-    
-    // Update state
-    setState({ chats: updatedChats });
-    
-    // Persist changes
-    window.memory?.saveAll();
-    
-    // Notify sync system about the change
-    if (window.memory?.events) {
-      window.memory.events.dispatchEvent(new CustomEvent('dataChanged', {
-        detail: { 
-          type: 'chatRenamed', 
-          data: { 
-            chatId, 
-            oldTitle,
-            newTitle: trimmedTitle
-          } 
-        }
-      }));
-    }
-    
-    // If views are available, re-render current view to reflect the change
-    if (window.views?.renderCurrentView) {
-      window.views.renderCurrentView();
-    }
-    
-    console.log(`[CONTEXT] Successfully renamed chat from "${oldTitle}" to "${trimmedTitle}"`);
-    return true;
-    
-  } catch (error) {
-    console.error('[CONTEXT] Error renaming chat:', error);
-    return false;
-  }
-}
 
-function deleteChat(chatIdToDelete) {
-  console.log(`[CONTEXT] Attempting to delete chat: ${chatIdToDelete}`);
-  
-  // Validate chat exists
-  const chatIndex = AppState.chats.findIndex(c => c.id === chatIdToDelete);
-  if (chatIndex === -1) {
-    console.error(`[CONTEXT] Chat ${chatIdToDelete} not found`);
-    return false;
-  }
 
-  // Prevent deleting the last chat
-  if (AppState.chats.length <= 1) {
-    console.error('[CONTEXT] Cannot delete the last remaining chat');
-    return false;
-  }
 
-  try {
-    const deletedChat = AppState.chats[chatIndex];
-    console.log(`[CONTEXT] Deleting chat "${deletedChat.title}" (${chatIdToDelete})`);
 
-    // 1. Remove chat from chats array
-    const updatedChats = AppState.chats.filter(c => c.id !== chatIdToDelete);
-    
-    // 2. Remove all messages for this chat
-    const updatedMessagesByChat = { ...AppState.messagesByChat };
-    delete updatedMessagesByChat[chatIdToDelete];
-    
-    // 3. Remove all artifacts for this chat
-    const updatedArtifacts = AppState.artifacts.filter(a => a.chatId !== chatIdToDelete);
-    const deletedArtifactCount = AppState.artifacts.length - updatedArtifacts.length;
-    
-    // 4. Clear action history for this chat
-    if (window.actions?.clearActionHistory) {
-      window.actions.clearActionHistory(chatIdToDelete);
-    }
-    
-    // 5. Update state
-    setState({
-      chats: updatedChats,
-      messagesByChat: updatedMessagesByChat,
-      artifacts: updatedArtifacts
-    });
-    
-    // 6. Handle active chat switching
-    let newActiveChatId = null;
-    if (AppState.activeChatId === chatIdToDelete) {
-      // Switch to the most recent chat or create a new one
-      if (updatedChats.length > 0) {
-        // Find the most recent chat by timestamp
-        const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-        newActiveChatId = sortedChats[0].id;
-        console.log(`[CONTEXT] Switching to most recent chat: ${newActiveChatId}`);
-      } else {
-        // This shouldn't happen due to our check above, but handle gracefully
-        console.log('[CONTEXT] No chats remaining, creating new chat');
-        createNewChat();
-        return true; // createNewChat handles persistence
-      }
-    }
-    
-    // 7. Persist changes
-    window.memory?.saveAll();
-    
-    // 8. Switch to new active chat if needed
-    if (newActiveChatId) {
-      switchChat(newActiveChatId);
-    } else {
-      // If no chat to switch to, make sure view is updated
-      setState({ activeView: null });
-      if (window.views?.renderCurrentView) {
-        window.views.renderCurrentView();
-      }
-    }
-    
-    // 9. Notify sync system about deletion
-    if (window.memory?.events) {
-      window.memory.events.dispatchEvent(new CustomEvent('dataChanged', {
-        detail: { 
-          type: 'chatDeleted', 
-          data: { 
-            chatId: chatIdToDelete, 
-            title: deletedChat.title,
-            deletedArtifactCount
-          } 
-        }
-      }));
-    }
-    
-    console.log(`[CONTEXT] Successfully deleted chat "${deletedChat.title}" and ${deletedArtifactCount} artifacts`);
-    return true;
-    
-  } catch (error) {
-    console.error('[CONTEXT] Error deleting chat:', error);
-    return false;
-  }
-}
+
+
 
 function loadChat() {
   const messages = getActiveMessages();
@@ -314,14 +100,16 @@ function loadChat() {
 
 // =================== View Management ===================
 
-function setActiveView(viewType, data = {}) {
-  // Handle null viewType by setting activeView to null (shows welcome or empty state)
+function setActiveView(viewType, data = {}, options = {}) {
+  const { withTransition = true } = options;
+  
+  // Handle null viewType by setting activeView to null (shows chat or empty state)
   if (viewType === null || viewType === undefined) {
     if (AppState.activeView === null) return; // Already null, no change needed
     setState({ activeView: null });
     window.memory?.saveActiveView(null);
     if (window.views?.renderCurrentView) {
-      window.views.renderCurrentView();
+      window.views.renderCurrentView(withTransition);
     }
     return;
   }
@@ -347,9 +135,9 @@ function setActiveView(viewType, data = {}) {
     }
   }
   
-  // Render the view
+  // Render the view with transition option
   if (window.views?.renderCurrentView) {
-    window.views.renderCurrentView();
+    window.views.renderCurrentView(withTransition);
   }
 }
 
@@ -441,7 +229,7 @@ async function init(session = null) {
   
   if (isAuthenticated) {
     // AUTHENTICATED: Load existing data normally
-    console.log('[CONTEXT] Initializing for authenticated user');
+
     window.memory?.loadAll();
     
     // Set up initial active chat from existing data
@@ -450,7 +238,7 @@ async function init(session = null) {
     
     // Create new chat if none exist
     if (!AppState.activeChatId && AppState.chats.length === 0) {
-      createNewChat();
+      window.actions?.executeAction('chat.create', {});
     } else if (!AppState.activeChatId) {
       setState({ activeChatId: AppState.chats[0].id });
     }
@@ -479,7 +267,7 @@ async function init(session = null) {
     }
   } else {
     // GUEST: Start fresh with empty state
-    console.log('[CONTEXT] Initializing fresh session for guest user');
+
     
     // Initialize with empty state (no data loading)
     setState({
@@ -498,7 +286,7 @@ async function init(session = null) {
     });
     
     // Create a new chat for the fresh guest session
-    createNewChat();
+    window.actions?.executeAction('chat.create', {});
   }
 }
 
@@ -511,11 +299,7 @@ window.context = {
   getContext,
   
   // Chat management
-  createNewChat,
-  switchChat,
   setActiveChat,
-  renameChat,
-  deleteChat,
   loadChat,
   setActiveMessages,
   getActiveChatId: () => AppState.activeChatId,

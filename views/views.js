@@ -1,18 +1,18 @@
 // =================== Views Registry ===================
 
 const VIEWS_REGISTRY = {
-  'welcome': {
-    id: 'welcome',
-    name: 'Welcome',
-    description: 'Show the welcome/home view',
-    type: 'welcome',
+  'chat': {
+    id: 'chat',
+    name: 'Chat',
+    description: 'Show the chat view',
+    type: 'chat',
     requiredParams: [],
     optionalParams: [],
     availableData: () => ({
       currentUser: window.user?.getActiveSession()?.user?.email || null,
       userPreferences: window.context?.getUserPreferences() || {}
     }),
-    render: (data) => window.welcomeView.renderWelcomeView()
+    render: (data) => window.chatView.renderChatView()
   },
   
   'calendar': {
@@ -78,6 +78,50 @@ const VIEWS_REGISTRY = {
       }
       return html;
     }
+  },
+  
+  'services': {
+    id: 'services',
+    name: 'Services',
+    description: 'View upcoming services and integrations',
+    type: 'services',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({}),
+    render: (data) => window.servicesView.renderServicesView()
+  },
+  
+  'actions': {
+    id: 'actions',
+    name: 'Actions',
+    description: 'View all available actions you can perform',
+    type: 'actions',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({
+      actions: window.actions?.ACTIONS_REGISTRY ? Object.values(window.actions.ACTIONS_REGISTRY) : []
+    }),
+    render: (data) => {
+      const html = window.actionsView.renderActionsView();
+      // Apply context highlighting specifically for actions view
+      if (window.actionsView.applyContextHighlighting) {
+        window.actionsView.applyContextHighlighting();
+      }
+      return html;
+    }
+  },
+  
+  'system': {
+    id: 'system',
+    name: 'System',
+    description: 'View the AI system prompt',
+    type: 'system',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({
+      systemSections: window.systemModule?.getSystemSections() || {}
+    }),
+    render: (data) => window.systemView.renderSystemView()
   }
 };
 
@@ -114,36 +158,73 @@ function validateViewParams(viewId, params = {}) {
 
 // =================== View Rendering ===================
 
+// State for managing transitions
+let isTransitioning = false;
 
-
-function renderCurrentView() {
+function renderCurrentView(withTransition = true) {
   const viewElement = window.context?.getViewElement();
   if (!viewElement) window.context?.setViewElement(document.getElementById('view'));
   
   const currentViewElement = window.context?.getViewElement();
   if (!currentViewElement) return;
   
-  // Render content immediately
+  // Prevent multiple simultaneous transitions
+  if (isTransitioning && withTransition) return;
+  
+  // Get new content
   const activeView = window.context?.getActiveView();
+  let newHtml = '';
+  
   if (!activeView) {
-    // Always show welcome view when activeView is null
-    currentViewElement.innerHTML = window.welcomeView.renderWelcomeView();
+    // Always show memory view when activeView is null
+    newHtml = window.memoryView.renderMemoryView();
   } else {
     const { type, data } = activeView;
     
     // Find the view in our registry that matches this type
     const view = Object.values(VIEWS_REGISTRY).find(v => v.type === type);
     
-    let html = '';
-    
     if (view && view.render) {
-      html = view.render(data);
+      newHtml = view.render(data);
     } else {
-      html = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
+      newHtml = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
     }
-    
-    currentViewElement.innerHTML = html;
   }
+  
+  // If no transition requested or view is empty, render immediately
+  if (!withTransition || !currentViewElement.innerHTML.trim()) {
+    currentViewElement.innerHTML = newHtml;
+    return;
+  }
+  
+  // Simple blur transition
+  simpleBlurTransition(currentViewElement, newHtml);
+}
+
+function simpleBlurTransition(container, newHtml) {
+  isTransitioning = true;
+  
+  // Add transition style
+  container.style.transition = 'filter 0.4s ease-out, opacity 0.4s ease-out';
+  
+  // Blur out current content
+  container.style.filter = 'blur(5px)';
+  container.style.opacity = '0.5';
+  
+  setTimeout(() => {
+    // Change content
+    container.innerHTML = newHtml;
+    
+    // Blur in new content
+    container.style.filter = 'blur(0px)';
+    container.style.opacity = '1';
+    
+    // Clean up after transition
+    setTimeout(() => {
+      container.style.transition = '';
+      isTransitioning = false;
+    }, 400);
+  }, 400);
 }
 
 // =================== View UI Management ===================
@@ -178,12 +259,14 @@ function removeViewUI() {
   window.context?.setViewElement(null);
 }
 
+
+
 // =================== Views Initialization ===================
 
 function init() {
-  // Initialize welcome view
-  if (window.welcomeView) {
-    window.welcomeView.init();
+  // Initialize chat view
+  if (window.chatView) {
+    window.chatView.init();
   }
   
   // Initialize memory view
@@ -191,8 +274,8 @@ function init() {
     window.memoryView.init();
   }
   
-  // Always render current view (including welcome when activeView is null)
-  renderCurrentView();
+  // Always render current view (including memory when activeView is null)
+  renderCurrentView(false); // No transition on init
 }
 
 // Export functions for global access
@@ -207,5 +290,6 @@ window.views = {
   renderViewUI,
   removeViewUI,
   renderCurrentView,
+  simpleBlurTransition,
   init
 }; 

@@ -2,18 +2,6 @@
 // This module handles user input from typing to AI response orchestration
 // Organized in 4 conceptual sections: Interface → Processing → AI Communication → Coordination
 
-// =================== UTILITIES ===================
-// Simple utility functions
-
-function hideMessages() {
-  const container = window.context?.getMessagesContainer();
-  if (container) {
-    container.innerHTML = '';
-  }
-}
-
-
-
 // =================== INPUT INTERFACE ===================
 // Everything about the visual input experience: DOM, UI, events, animations
 
@@ -30,7 +18,7 @@ class InputManager {
     this.animatedWords = new Set(); // Track words that have already been animated
     this.placeholderTimeout = null; // Track placeholder animation
     this.isShowingPlaceholder = false; // Track placeholder state
-    this.placeholderText = "write something";
+    this.placeholderText = "say something";
   }
 
   // =================== Lifecycle Management ===================
@@ -110,7 +98,11 @@ class InputManager {
   }
 
   show() {
-    hideMessages(); // Hide messages when showing input
+    // Hide messages when showing input
+    const container = window.context?.getMessagesContainer();
+    if (container) {
+      container.innerHTML = '';
+    }
     if (this.inputContainer) {
       // Show input using Renée classes and reset all states
       this.inputContainer.classList.remove('opacity-xl', 'hidden', 'scale-50', 'blur-l', 'blur-m', 'blur-s');
@@ -319,10 +311,27 @@ class InputManager {
   setupEventListeners() {
     if (!this.inputElement || !this.inputContainer) return;
 
-    // Right-click to show input
+    // Right-click to show input (logged out) or trigger processing (logged in)
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
-      this.show();
+      
+      // Check if user is logged in
+      const session = window.user?.getActiveSession();
+      const isLoggedIn = !!session;
+      
+      if (isLoggedIn) {
+        // Logged in mode: trigger processing
+        if (window.processModule?.process) {
+          window.processModule.process();
+        } else if (window.process) {
+          window.process();
+        } else {
+          console.warn('[INPUT] Process function not available');
+        }
+      } else {
+        // Logged out mode: show input with "write something" animation
+        this.show();
+      }
     });
 
     // Click outside to hide input
@@ -590,9 +599,6 @@ window.inputModule = {
   // Utilities
   highlightContextWords: () => inputManager.highlightContextWords(),
   stopPlaceholderAnimation: () => inputManager.stopPlaceholderAnimation(),
-  
-  // Internal access for debugging
-  _manager: inputManager,
   
   // Legacy send function - now delegates to processModule
   send: () => {
