@@ -621,7 +621,109 @@ const collaboration = {
     }
   },
 
-  // Send test data from leader to collaborator
+  // Get leader's database data from localStorage/IndexedDB
+  getLeaderDatabaseData() {
+    console.log("[COLLAB] 📊 Collecting leader's database data...");
+
+    try {
+      // Get data from localStorage
+      const activeChatId = localStorage.getItem("activeChatId");
+      const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+      const messagesByChat = JSON.parse(
+        localStorage.getItem("messagesByChat") || "{}"
+      );
+      const artifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+      const userPreferences = JSON.parse(
+        localStorage.getItem("userPreferences") || "{}"
+      );
+
+      // Additional useful data
+      const activeView = localStorage.getItem("activeView");
+      const userId = localStorage.getItem("userId");
+
+      const databaseData = {
+        timestamp: Date.now(),
+        sender: "leader",
+        type: "database_sync",
+        data: {
+          activeChatId,
+          chats,
+          messagesByChat,
+          artifacts,
+          userPreferences,
+          activeView,
+          userId,
+        },
+        summary: {
+          totalChats: chats.length,
+          totalMessageGroups: Object.keys(messagesByChat).length,
+          totalArtifacts: artifacts.length,
+          activeChatId,
+          hasUserPreferences: Object.keys(userPreferences).length > 0,
+        },
+      };
+
+      console.log("[COLLAB] 📦 Database data collected:", {
+        chats: databaseData.summary.totalChats,
+        messageGroups: databaseData.summary.totalMessageGroups,
+        artifacts: databaseData.summary.totalArtifacts,
+        activeChatId: databaseData.data.activeChatId,
+        userPreferences: databaseData.summary.hasUserPreferences,
+      });
+
+      return databaseData;
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error collecting database data:", error);
+      return null;
+    }
+  },
+
+  // Send leader's database data to collaborator
+  async sendDatabaseData() {
+    console.log("[COLLAB] 📤 Sending database data...");
+
+    if (!this.ydoc) {
+      console.log("[COLLAB] ❌ No Yjs document available");
+      return { success: false, error: "No Yjs document" };
+    }
+
+    if (!this.isLeader) {
+      console.log("[COLLAB] ❌ Only leader can send database data");
+      return { success: false, error: "Only leader can send database data" };
+    }
+
+    try {
+      // Get leader's database data
+      const databaseData = this.getLeaderDatabaseData();
+      if (!databaseData) {
+        return { success: false, error: "Failed to collect database data" };
+      }
+
+      console.log("[COLLAB] 📦 Sending database data:", databaseData.summary);
+
+      // Send via shared map (better for structured data)
+      const sharedMap = this.getSharedMap("database-sync");
+      if (sharedMap) {
+        sharedMap.set("leaderDatabaseData", databaseData);
+        console.log("[COLLAB] ✅ Database data sent via shared map");
+      }
+
+      // Also send via shared text as backup
+      const sharedText = this.getSharedText("database-data");
+      if (sharedText) {
+        sharedText.delete(0, sharedText.length);
+        sharedText.insert(0, JSON.stringify(databaseData));
+        console.log("[COLLAB] ✅ Database data sent via shared text");
+      }
+
+      return { success: true, data: databaseData.summary };
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error sending database data:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Send test data from leader to collaborator (kept for compatibility)
   async sendTestData() {
     console.log("[COLLAB] 📤 Sending test data...");
 
@@ -671,7 +773,133 @@ const collaboration = {
     }
   },
 
-  // Receive and log test data
+  // Receive database data from leader
+  receiveDatabaseData() {
+    console.log("[COLLAB] 📥 Checking for database data...");
+
+    if (!this.ydoc) {
+      console.log("[COLLAB] ❌ No Yjs document available");
+      return null;
+    }
+
+    try {
+      // Get shared map data (primary source)
+      const sharedMap = this.getSharedMap("database-sync");
+      if (sharedMap && sharedMap.has("leaderDatabaseData")) {
+        const databaseData = sharedMap.get("leaderDatabaseData");
+        console.log("[COLLAB] 📥 Received database data from shared map:");
+        console.log("[COLLAB] 📊 Data summary:", databaseData.summary);
+        return databaseData;
+      }
+
+      // Fallback to shared text
+      const sharedText = this.getSharedText("database-data");
+      if (sharedText && sharedText.length > 0) {
+        const textData = sharedText.toString();
+        if (textData) {
+          const parsedData = JSON.parse(textData);
+          console.log("[COLLAB] 📥 Received database data from shared text:");
+          console.log("[COLLAB] 📊 Data summary:", parsedData.summary);
+          return parsedData;
+        }
+      }
+
+      console.log("[COLLAB] ❌ No database data found");
+      return null;
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error receiving database data:", error);
+      return null;
+    }
+  },
+
+  // Apply leader's database data to collaborator's local storage
+  async applyLeaderData(databaseData = null) {
+    console.log("[COLLAB] 🔄 Applying leader's database data...");
+
+    // If no data provided, try to receive it
+    if (!databaseData) {
+      databaseData = this.receiveDatabaseData();
+    }
+
+    if (!databaseData || !databaseData.data) {
+      console.log("[COLLAB] ❌ No database data available to apply");
+      return { success: false, error: "No database data available" };
+    }
+
+    try {
+      const { data } = databaseData;
+
+      console.log("[COLLAB] 📥 Applying data to localStorage:");
+      console.log("[COLLAB] - activeChatId:", data.activeChatId);
+      console.log("[COLLAB] - chats:", data.chats?.length || 0);
+      console.log(
+        "[COLLAB] - messagesByChat groups:",
+        Object.keys(data.messagesByChat || {}).length
+      );
+      console.log("[COLLAB] - artifacts:", data.artifacts?.length || 0);
+      console.log(
+        "[COLLAB] - userPreferences:",
+        Object.keys(data.userPreferences || {}).length
+      );
+
+      // Apply data to localStorage
+      if (data.activeChatId) {
+        localStorage.setItem("activeChatId", data.activeChatId);
+      }
+
+      if (data.chats) {
+        localStorage.setItem("chats", JSON.stringify(data.chats));
+      }
+
+      if (data.messagesByChat) {
+        localStorage.setItem(
+          "messagesByChat",
+          JSON.stringify(data.messagesByChat)
+        );
+      }
+
+      if (data.artifacts) {
+        localStorage.setItem("artifacts", JSON.stringify(data.artifacts));
+      }
+
+      if (data.userPreferences) {
+        localStorage.setItem(
+          "userPreferences",
+          JSON.stringify(data.userPreferences)
+        );
+      }
+
+      if (data.activeView) {
+        localStorage.setItem("activeView", data.activeView);
+      }
+
+      if (data.userId) {
+        localStorage.setItem("userId", data.userId);
+      }
+
+      // Update application state if memory module is available
+      if (window.memory && window.memory.loadAll) {
+        console.log("[COLLAB] 🔄 Refreshing application state...");
+        window.memory.loadAll();
+      }
+
+      console.log("[COLLAB] ✅ Database data applied successfully");
+
+      // Suggest page reload for full effect
+      console.log("[COLLAB] 💡 Suggestion: Reload page to see all changes");
+
+      return {
+        success: true,
+        summary: databaseData.summary,
+        suggestion: "Reload page to see all changes",
+      };
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error applying database data:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Receive and log test data (kept for compatibility)
   receiveTestData() {
     console.log("[COLLAB] 📥 Checking for test data...");
 
@@ -718,15 +946,48 @@ const collaboration = {
     }
 
     try {
-      // Listen to shared text changes
+      // Listen to database data changes
+      const databaseMap = this.getSharedMap("database-sync");
+      if (databaseMap) {
+        databaseMap.observe((event) => {
+          console.log("[COLLAB] 🔔 Database sync map changed:", event);
+          event.changes.keys.forEach((change, key) => {
+            if (change.action === "add" || change.action === "update") {
+              const value = databaseMap.get(key);
+              if (key === "leaderDatabaseData" && value) {
+                console.log("[COLLAB] 📥 Leader database data received:");
+                console.log("[COLLAB] 📊 Summary:", value.summary);
+
+                // Auto-apply if this is a collaborator
+                if (!this.isLeader) {
+                  console.log("[COLLAB] 🔄 Auto-applying leader data...");
+                  this.applyLeaderData(value).then((result) => {
+                    if (result.success) {
+                      console.log("[COLLAB] ✅ Auto-apply successful");
+                    } else {
+                      console.error(
+                        "[COLLAB] ❌ Auto-apply failed:",
+                        result.error
+                      );
+                    }
+                  });
+                }
+              }
+            }
+          });
+        });
+        console.log("[COLLAB] ✅ Database sync listener set up");
+      }
+
+      // Listen to shared text changes (for test data and fallback)
       const sharedText = this.getSharedText("test-data");
       if (sharedText) {
         sharedText.observe((event) => {
-          console.log("[COLLAB] 🔔 Shared text changed:", event);
+          console.log("[COLLAB] 🔔 Test data text changed:", event);
           if (sharedText.length > 0) {
             try {
               const data = JSON.parse(sharedText.toString());
-              console.log("[COLLAB] 📥 Auto-received data:", data);
+              console.log("[COLLAB] 📥 Auto-received test data:", data);
             } catch (e) {
               console.log(
                 "[COLLAB] 📥 Raw text change:",
@@ -735,22 +996,45 @@ const collaboration = {
             }
           }
         });
-        console.log("[COLLAB] ✅ Shared text listener set up");
+        console.log("[COLLAB] ✅ Test data text listener set up");
       }
 
-      // Listen to shared map changes
-      const sharedMap = this.getSharedMap("test-map");
-      if (sharedMap) {
-        sharedMap.observe((event) => {
-          console.log("[COLLAB] 🔔 Shared map changed:", event);
+      // Listen to database data text changes (fallback)
+      const databaseText = this.getSharedText("database-data");
+      if (databaseText) {
+        databaseText.observe((event) => {
+          console.log("[COLLAB] 🔔 Database data text changed:", event);
+          if (databaseText.length > 0) {
+            try {
+              const data = JSON.parse(databaseText.toString());
+              console.log(
+                "[COLLAB] 📥 Database data received via text:",
+                data.summary
+              );
+            } catch (e) {
+              console.log(
+                "[COLLAB] 📥 Raw database text change:",
+                databaseText.toString()
+              );
+            }
+          }
+        });
+        console.log("[COLLAB] ✅ Database data text listener set up");
+      }
+
+      // Listen to shared map changes (for test data)
+      const testMap = this.getSharedMap("test-map");
+      if (testMap) {
+        testMap.observe((event) => {
+          console.log("[COLLAB] 🔔 Test map changed:", event);
           event.changes.keys.forEach((change, key) => {
             if (change.action === "add" || change.action === "update") {
-              const value = sharedMap.get(key);
-              console.log(`[COLLAB] 📥 Map key '${key}' changed:`, value);
+              const value = testMap.get(key);
+              console.log(`[COLLAB] 📥 Test map key '${key}' changed:`, value);
             }
           });
         });
-        console.log("[COLLAB] ✅ Shared map listener set up");
+        console.log("[COLLAB] ✅ Test map listener set up");
       }
 
       console.log("[COLLAB] ✅ All data listeners configured");
@@ -763,7 +1047,34 @@ const collaboration = {
 // Make collaboration available globally
 window.collaboration = collaboration;
 
-// Add global test functions for easy console access
+// Add global functions for easy console access
+window.sendDatabaseData = function () {
+  console.log("[COLLAB] 🧪 Sending database data from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.sendDatabaseData();
+};
+
+window.receiveDatabaseData = function () {
+  console.log("[COLLAB] 🧪 Receiving database data from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.receiveDatabaseData();
+};
+
+window.applyLeaderData = function () {
+  console.log("[COLLAB] 🧪 Applying leader data from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.applyLeaderData();
+};
+
 window.sendTestData = function () {
   console.log("[COLLAB] 🧪 Sending test data from console...");
   if (!window.collaboration) {
@@ -790,6 +1101,16 @@ window.getCollaborationStatus = function () {
   return window.collaboration.getStatus();
 };
 
+console.log("[COLLAB] 🎯 Database functions available:");
+console.log(
+  "[COLLAB] - sendDatabaseData() - Send leader's database to collaborators"
+);
+console.log(
+  "[COLLAB] - receiveDatabaseData() - Check for received database data"
+);
+console.log(
+  "[COLLAB] - applyLeaderData() - Apply leader's data to local storage"
+);
 console.log("[COLLAB] 🎯 Test functions available:");
 console.log("[COLLAB] - sendTestData() - Send test data to collaborators");
 console.log("[COLLAB] - receiveTestData() - Check for received test data");
