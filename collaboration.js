@@ -20,8 +20,8 @@ const collaboration = {
     // Wait for Yjs to be loaded
     await this.waitForYjs();
 
-    // Check for auto-join
-    await this.checkForAutoJoin();
+    // Check for existing collaboration session or auto-join
+    await this.checkForExistingSession();
 
     console.log("[COLLAB] Collaboration module ready");
   },
@@ -68,8 +68,14 @@ const collaboration = {
       const result = await this.createSession(collaborationId);
 
       if (result.success) {
-        // Mark as leader
+        // Mark as leader and persist state
         this.isLeader = true;
+        localStorage.setItem("collaborationLeader", "true");
+        localStorage.setItem("collaborationId", collaborationId);
+        localStorage.setItem("collaborationActive", "true");
+
+        // Update URL
+        window.history.replaceState({}, "", `#/collab-${collaborationId}`);
 
         // Copy link to clipboard
         try {
@@ -106,34 +112,91 @@ const collaboration = {
 
     console.log("[COLLAB] Joining collaboration from URL:", collaborationId);
 
-    // Mark as collaborator (not leader)
+    // Mark as collaborator (not leader) and persist state
     this.isLeader = false;
+    localStorage.setItem("collaborationLeader", "false");
+    localStorage.setItem("collaborationId", collaborationId);
+    localStorage.setItem("collaborationActive", "true");
 
     return await this.joinSession(collaborationId);
   },
 
-  // Check if we should auto-join collaboration
-  async checkForAutoJoin() {
-    const collaborationId = this.extractCollaborationIdFromUrl();
+  // Check for existing collaboration session and restore it
+  async checkForExistingSession() {
+    console.log("[COLLAB] Checking for existing collaboration session...");
+    console.log("[COLLAB] Current URL:", window.location.href);
+    console.log("[COLLAB] Current hash:", window.location.hash);
 
-    console.log("[COLLAB] checkForAutoJoin - URL hash:", window.location.hash);
-    console.log("[COLLAB] checkForAutoJoin - extracted ID:", collaborationId);
-    console.log(
-      "[COLLAB] checkForAutoJoin - isCollaborating:",
-      this.isCollaborating
-    );
+    // First check localStorage for existing session
+    const storedCollabId = localStorage.getItem("collaborationId");
+    const storedIsLeader =
+      localStorage.getItem("collaborationLeader") === "true";
+    const storedIsCollaborating =
+      localStorage.getItem("collaborationActive") === "true";
 
-    if (collaborationId && !this.isCollaborating) {
-      console.log("[COLLAB] Auto-joining collaboration:", collaborationId);
-      const result = await this.joinCollaborationFromUrl();
-      console.log("[COLLAB] Auto-join result:", result);
-    } else {
+    // Then check URL for collaboration ID
+    const urlCollabId = this.extractCollaborationIdFromUrl();
+
+    console.log("[COLLAB] Session check:", {
+      storedCollabId,
+      storedIsLeader,
+      storedIsCollaborating,
+      urlCollabId,
+      currentlyCollaborating: this.isCollaborating,
+    });
+
+    if (storedIsCollaborating && storedCollabId && !this.isCollaborating) {
+      // Restore existing session
+      console.log("[COLLAB] Restoring collaboration session:", storedCollabId);
+      console.log("[COLLAB] Stored role - isLeader:", storedIsLeader);
+      this.isLeader = storedIsLeader;
+
+      if (this.isLeader) {
+        // Leader: restore and update URL
+        console.log("[COLLAB] Restoring as LEADER with ID:", storedCollabId);
+        window.history.replaceState({}, "", `#/collab-${storedCollabId}`);
+        const result = await this.createSession(storedCollabId);
+        if (result.success) {
+          console.log("[COLLAB] ✅ Leader session restored successfully");
+        } else {
+          console.error("[COLLAB] ❌ Leader session restore failed:", result);
+        }
+      } else {
+        // Collaborator: rejoin
+        console.log(
+          "[COLLAB] Restoring as COLLABORATOR with ID:",
+          storedCollabId
+        );
+        const result = await this.joinSession(storedCollabId);
+        if (result.success) {
+          console.log("[COLLAB] ✅ Collaborator session restored successfully");
+          // Request current data after successful rejoin
+          setTimeout(() => {
+            this.requestCurrentDataFromLeader();
+          }, 1500);
+        } else {
+          console.error(
+            "[COLLAB] ❌ Collaborator session restore failed:",
+            result
+          );
+        }
+      }
+    } else if (urlCollabId && !this.isCollaborating && !storedIsCollaborating) {
+      // New collaboration from URL (fresh join)
+      console.log("[COLLAB] NEW collaboration from URL. ID:", urlCollabId);
       console.log(
-        "[COLLAB] No auto-join needed - collaborationId:",
-        collaborationId,
-        "isCollaborating:",
-        this.isCollaborating
+        "[COLLAB] This should be a COLLABORATOR joining leader's room"
       );
+      const result = await this.joinCollaborationFromUrl();
+      console.log("[COLLAB] Fresh join result:", result);
+    } else {
+      console.log("[COLLAB] No collaboration session to restore");
+      console.log("[COLLAB] Conditions check:");
+      console.log("- storedIsCollaborating:", storedIsCollaborating);
+      console.log("- storedCollabId:", storedCollabId);
+      console.log("- !this.isCollaborating:", !this.isCollaborating);
+      console.log("- urlCollabId:", urlCollabId);
+      console.log("- !storedIsCollaborating:", !storedIsCollaborating);
     }
   },
 
@@ -146,6 +209,8 @@ const collaboration = {
       if (!roomName) {
         roomName = "room-" + Math.random().toString(36).substr(2, 9);
       }
+
+      console.log("[COLLAB] 🏠 Creating session with room ID:", roomName);
 
       // Check if room already exists globally
       if (window.globalRoomRegistry.has(roomName)) {
@@ -204,9 +269,11 @@ const collaboration = {
       // Set up event listeners
       this.setupEventListeners();
 
-      // Update state
+      // Update state and persist
       this.isCollaborating = true;
       this.collaborationId = roomName;
+      localStorage.setItem("collaborationActive", "true");
+      localStorage.setItem("collaborationId", roomName);
 
       console.log("[COLLAB] Session created:", roomName);
       return { success: true, roomName };
@@ -220,6 +287,7 @@ const collaboration = {
   async joinSession(roomName) {
     try {
       console.log("[COLLAB] Joining session:", roomName);
+      console.log("[COLLAB] 🏠 Joining session with room ID:", roomName);
 
       // Create Yjs document
       this.ydoc = new window.Y.Doc();
@@ -257,9 +325,11 @@ const collaboration = {
       // Set up event listeners
       this.setupEventListeners();
 
-      // Update state
+      // Update state and persist
       this.isCollaborating = true;
       this.collaborationId = roomName;
+      localStorage.setItem("collaborationActive", "true");
+      localStorage.setItem("collaborationId", roomName);
 
       console.log("[COLLAB] Joined session:", roomName);
       return { success: true, roomName };
@@ -309,10 +379,8 @@ const collaboration = {
       // Leader: On new peer, ensure initial data is pushed if needed
       if (this.isLeader) {
         const syncMap = this.getSharedSyncMap();
-        if (
-          syncMap &&
-          (!syncMap.get("initializedByLeader") || syncMap.size === 0)
-        ) {
+        if (syncMap && event.added.length > 0) {
+          // Always refresh and push current data when new peer joins
           if (window.memory && window.memory.loadAll) window.memory.loadAll();
           const chats = JSON.parse(localStorage.getItem("chats") || "[]");
           const messagesByChat = JSON.parse(
@@ -325,14 +393,29 @@ const collaboration = {
             localStorage.getItem("userPreferences") || "{}"
           );
           const activeChatId = localStorage.getItem("activeChatId");
+
+          // Push current data to sync map
           syncMap.set("chats", JSON.stringify(chats));
           syncMap.set("messagesByChat", JSON.stringify(messagesByChat));
           syncMap.set("artifacts", JSON.stringify(artifacts));
           syncMap.set("userPreferences", JSON.stringify(userPreferences));
           syncMap.set("activeChatId", activeChatId);
           syncMap.set("initializedByLeader", true);
-          console.log("[COLLAB] 🚀 Leader shared initial data");
+          syncMap.set("lastUpdated", Date.now().toString());
+
+          // Also push current messages to sharedMessages array
+          this.syncCurrentMessagesToSharedArray();
+
+          console.log("[COLLAB] 🚀 Leader shared current data for new peer");
         }
+      }
+
+      // Collaborator: On connection, request current data
+      if (!this.isLeader && event.added.length > 0) {
+        // Small delay to ensure leader has time to push data
+        setTimeout(() => {
+          this.requestCurrentDataFromLeader();
+        }, 1000);
       }
     });
 
@@ -421,6 +504,196 @@ const collaboration = {
   getSharedMap(name = "shared-map") {
     if (!this.ydoc) return null;
     return this.ydoc.getMap(name);
+  },
+
+  // Leave collaboration session
+  leaveSession() {
+    try {
+      console.log("[COLLAB] Leaving collaboration session...");
+
+      // Disconnect provider
+      if (this.provider) {
+        this.provider.disconnect();
+        this.provider = null;
+      }
+
+      // Clear Yjs document
+      if (this.ydoc) {
+        this.ydoc.destroy();
+        this.ydoc = null;
+      }
+
+      // Clear state
+      this.isCollaborating = false;
+      this.collaborationId = null;
+      this.peers.clear();
+      this.isLeader = false;
+
+      // Clear persistence
+      localStorage.removeItem("collaborationActive");
+      localStorage.removeItem("collaborationLeader");
+      localStorage.removeItem("collaborationId");
+      localStorage.removeItem("COLLABORATION_ACTIVE");
+      localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
+
+      // Clear URL
+      window.history.replaceState({}, "", window.location.pathname);
+
+      // Trigger UI update
+      this.updateUI();
+
+      console.log("[COLLAB] ✅ Successfully left collaboration session");
+      return { success: true, message: "Left collaboration session" };
+    } catch (error) {
+      console.error("[COLLAB] Error leaving session:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Sync current messages to shared array (for data integrity)
+  syncCurrentMessagesToSharedArray() {
+    if (!this.sharedMessages || !this.isLeader) return;
+
+    try {
+      // Clear existing shared messages and push current ones
+      while (this.sharedMessages.length > 0) {
+        this.sharedMessages.delete(0);
+      }
+
+      const messagesByChat = JSON.parse(
+        localStorage.getItem("messagesByChat") || "{}"
+      );
+      let count = 0;
+      Object.entries(messagesByChat).forEach(([chatId, msgArr]) => {
+        msgArr.forEach((msg) => {
+          const messageToSync = {
+            role: msg.role,
+            content: msg.content,
+            message_id: msg.message_id,
+            timestamp: msg.timestamp,
+            chatId: msg.chatId || chatId,
+          };
+          this.sharedMessages.push([messageToSync]);
+          count++;
+        });
+      });
+
+      console.log(
+        "[COLLAB] 🔄 Leader synced",
+        count,
+        "current messages to shared array"
+      );
+    } catch (e) {
+      console.warn("[COLLAB] ⚠️ Error syncing current messages:", e);
+    }
+  },
+
+  // Request current data from leader (for rejoining collaborators)
+  requestCurrentDataFromLeader() {
+    if (this.isLeader) return;
+
+    try {
+      const syncMap = this.getSharedSyncMap();
+      if (!syncMap) return;
+
+      // Check if leader has pushed data
+      const lastUpdated = syncMap.get("lastUpdated");
+      const hasLeaderData = syncMap.get("initializedByLeader");
+
+      if (hasLeaderData && lastUpdated) {
+        console.log("[COLLAB] 📥 Requesting current data from leader...");
+
+        // Force sync with leader's current data
+        const chats = JSON.parse(syncMap.get("chats") || "[]");
+        const messagesByChat = JSON.parse(
+          syncMap.get("messagesByChat") || "{}"
+        );
+        const artifacts = JSON.parse(syncMap.get("artifacts") || "[]");
+        const userPreferences = JSON.parse(
+          syncMap.get("userPreferences") || "{}"
+        );
+        const activeChatId = syncMap.get("activeChatId") || null;
+
+        // Update local storage with leader's current data
+        localStorage.setItem("chats", JSON.stringify(chats));
+        localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
+        localStorage.setItem("artifacts", JSON.stringify(artifacts));
+        localStorage.setItem(
+          "userPreferences",
+          JSON.stringify(userPreferences)
+        );
+        if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+
+        // Also sync messages from shared array
+        this.syncMessagesFromSharedArray();
+
+        // Refresh UI
+        if (window.memory && window.memory.loadAll) window.memory.loadAll();
+        if (window.views && window.views.renderCurrentView)
+          window.views.renderCurrentView(false);
+        if (window.memoryView && window.memoryView.refreshView)
+          window.memoryView.refreshView();
+
+        console.log("[COLLAB] ✅ Synced with leader's current data");
+      } else {
+        console.log("[COLLAB] ⏳ Waiting for leader to share data...");
+      }
+    } catch (e) {
+      console.warn("[COLLAB] ⚠️ Error requesting current data:", e);
+    }
+  },
+
+  // Sync messages from shared array (for data integrity)
+  syncMessagesFromSharedArray() {
+    if (!this.sharedMessages) return;
+
+    try {
+      const currentMessages = this.sharedMessages.toArray();
+      if (currentMessages.length === 0) return;
+
+      let messagesByChat = {};
+      currentMessages.forEach((msg) => {
+        const chatId = msg.chatId;
+        if (!chatId) return;
+
+        if (!messagesByChat[chatId]) {
+          messagesByChat[chatId] = [];
+        }
+
+        // Avoid duplicates
+        const exists = messagesByChat[chatId].some(
+          (m) => m.message_id === msg.message_id
+        );
+        if (!exists) {
+          messagesByChat[chatId].push(msg);
+        }
+      });
+
+      // Merge with existing local messages
+      const existingMessages = JSON.parse(
+        localStorage.getItem("messagesByChat") || "{}"
+      );
+      Object.entries(messagesByChat).forEach(([chatId, newMsgs]) => {
+        if (!existingMessages[chatId]) {
+          existingMessages[chatId] = newMsgs;
+        } else {
+          // Add new messages that don't exist locally
+          newMsgs.forEach((newMsg) => {
+            const exists = existingMessages[chatId].some(
+              (m) => m.message_id === newMsg.message_id
+            );
+            if (!exists) {
+              existingMessages[chatId].push(newMsg);
+            }
+          });
+        }
+      });
+
+      localStorage.setItem("messagesByChat", JSON.stringify(existingMessages));
+      console.log("[COLLAB] 🔄 Synced messages from shared array");
+    } catch (e) {
+      console.warn("[COLLAB] ⚠️ Error syncing messages from shared array:", e);
+    }
   },
 
   getSharedSyncMap() {
