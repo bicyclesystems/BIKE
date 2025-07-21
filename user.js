@@ -358,6 +358,20 @@ async function initializeSync() {
 }
 
 function handleUnauthenticatedState() {
+  // Check if collaboration is active before clearing data
+  const isCollabProtected = window.isCollaborationProtected
+    ? window.isCollaborationProtected()
+    : false;
+
+  if (isCollabProtected) {
+    console.log(
+      "[AUTH] 🛡️ Collaboration active - preserving state and skipping intro"
+    );
+    // Don't clear data or show intro screen during collaboration
+    toggleUI(true);
+    return;
+  }
+
   toggleUI(false);
   renderIntroScreen();
 

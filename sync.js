@@ -971,6 +971,19 @@ document.addEventListener("DOMContentLoaded", async () => {
     await new Promise((r) => setTimeout(r, 100));
   }
 
+  // Check if collaboration is active before overwriting data
+  const isCollabProtected = window.isCollaborationProtected
+    ? window.isCollaborationProtected()
+    : false;
+
+  if (isCollabProtected) {
+    console.log(
+      "[SYNC] 🛡️ Collaboration active - skipping database data overwrite"
+    );
+    console.log("[SYNC] Preserving synchronized collaboration data");
+    return; // Exit early to preserve collaboration data
+  }
+
   //fetching all the data of the user from database
   try {
     const [user, artifacts, chats, messages] = await Promise.all([

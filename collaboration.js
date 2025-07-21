@@ -305,6 +305,35 @@ const collaboration = {
 
       // Trigger UI update
       this.updateUI();
+
+      // Leader: On new peer, ensure initial data is pushed if needed
+      if (this.isLeader) {
+        const syncMap = this.getSharedSyncMap();
+        if (
+          syncMap &&
+          (!syncMap.get("initializedByLeader") || syncMap.size === 0)
+        ) {
+          if (window.memory && window.memory.loadAll) window.memory.loadAll();
+          const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+          const messagesByChat = JSON.parse(
+            localStorage.getItem("messagesByChat") || "{}"
+          );
+          const artifacts = JSON.parse(
+            localStorage.getItem("artifacts") || "[]"
+          );
+          const userPreferences = JSON.parse(
+            localStorage.getItem("userPreferences") || "{}"
+          );
+          const activeChatId = localStorage.getItem("activeChatId");
+          syncMap.set("chats", JSON.stringify(chats));
+          syncMap.set("messagesByChat", JSON.stringify(messagesByChat));
+          syncMap.set("artifacts", JSON.stringify(artifacts));
+          syncMap.set("userPreferences", JSON.stringify(userPreferences));
+          syncMap.set("activeChatId", activeChatId);
+          syncMap.set("initializedByLeader", true);
+          console.log("[COLLAB] 🚀 Leader shared initial data");
+        }
+      }
     });
 
     // Listen for connection status
@@ -356,6 +385,7 @@ const collaboration = {
 
     // Set up data listeners for automatic data sync
     this.setupDataListeners();
+    this.setupBidirectionalSync();
   },
 
   // Update UI to show collaboration status
@@ -393,6 +423,349 @@ const collaboration = {
     return this.ydoc.getMap(name);
   },
 
+  getSharedSyncMap() {
+    if (!this.ydoc) return null;
+    return this.ydoc.getMap("sharedSyncMap");
+  },
+
+  setupBidirectionalSync() {
+    const syncMap = this.getSharedSyncMap();
+    if (!syncMap) return;
+    if (this._bidirectionalSyncActive) return; // Prevent double setup
+    this._bidirectionalSyncActive = true;
+
+    // --- Granular, bidirectional sync for messages ---
+    this.sharedMessages = this.ydoc.getArray("sharedMessages");
+    let hasAppliedInitialMessages = false;
+
+    // Initial sync: leader pushes all messages if array is empty
+    if (this.isLeader && this.sharedMessages.length === 0) {
+      try {
+        const messagesByChat = JSON.parse(
+          localStorage.getItem("messagesByChat") || "{}"
+        );
+        let count = 0;
+        Object.entries(messagesByChat).forEach(([chatId, msgArr]) => {
+          msgArr.forEach((msg) => {
+            // Create clean message structure for sync
+            const messageToSync = {
+              role: msg.role,
+              content: msg.content,
+              message_id: msg.message_id,
+              timestamp: msg.timestamp,
+              chatId: msg.chatId || chatId,
+            };
+            this.sharedMessages.push([messageToSync]);
+            count++;
+          });
+        });
+        if (count > 0) {
+          console.log("[COLLAB] 🚀 Leader synced", count, "messages");
+        }
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error during initial message sync:", e);
+      }
+    }
+
+    // On initial join, collaborator loads all messages from sharedMessages if local is empty
+    if (!this.isLeader) {
+      let messagesByChat = {};
+      try {
+        messagesByChat = JSON.parse(
+          localStorage.getItem("messagesByChat") || "{}"
+        );
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error parsing initial messagesByChat:", e);
+        messagesByChat = {};
+      }
+      const localMessageCount = Object.values(messagesByChat).reduce(
+        (acc, arr) => acc + arr.length,
+        0
+      );
+      if (localMessageCount === 0 && this.sharedMessages.length > 0) {
+        this.sharedMessages.toArray().forEach((msg, index) => {
+          const chatId = msg.chatId;
+          if (!chatId) {
+            console.warn("[COLLAB] ⚠️ Initial message missing chatId:", msg);
+            return;
+          }
+          if (!messagesByChat[chatId]) {
+            messagesByChat[chatId] = [];
+          }
+          messagesByChat[chatId].push(msg);
+        });
+
+        localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
+
+        if (window.memory && window.memory.loadAll) window.memory.loadAll();
+        if (window.views && window.views.renderCurrentView)
+          window.views.renderCurrentView(false);
+        if (window.memoryView && window.memoryView.refreshView)
+          window.memoryView.refreshView();
+        console.log(
+          "[COLLAB] ✅ Collaborator loaded",
+          this.sharedMessages.length,
+          "messages"
+        );
+      }
+    }
+
+    // On local message add (example: call this when sending a message)
+    this.pushMessageToCollab = (msgObj) => {
+      // Create a clean message structure with only essential fields
+      const messageToSync = {
+        role: msgObj.role,
+        content: msgObj.content,
+        message_id: msgObj.message_id,
+        timestamp: msgObj.timestamp,
+        chatId:
+          msgObj.chatId ||
+          window.context?.getActiveChatId() ||
+          localStorage.getItem("activeChatId"),
+      };
+
+      // If this is a collaborator, modify the role
+      if (!this.isLeader) {
+        messageToSync.role = "collab";
+        messageToSync.userId = "none";
+      }
+
+      // Push as individual message (Yjs will wrap it in ContentAny)
+      this.sharedMessages.push([messageToSync]);
+    };
+
+    // On remote message add (always process new messages)
+    this.sharedMessages.observe((event) => {
+      event.changes.added.forEach((item, itemIndex) => {
+        // Extract actual message from Yjs ContentAny wrapper
+        let newMessages = [];
+        if (
+          item.content &&
+          item.content.arr &&
+          Array.isArray(item.content.arr)
+        ) {
+          // Yjs wraps content in ContentAny with arr property
+          newMessages = item.content.arr;
+        } else if (Array.isArray(item.content)) {
+          // Direct array
+          newMessages = item.content;
+        } else {
+          // Single message
+          newMessages = [item.content];
+        }
+
+        newMessages.forEach((newMsg, msgIndex) => {
+          // Get current messagesByChat state
+          let messagesByChat = {};
+          try {
+            messagesByChat = JSON.parse(
+              localStorage.getItem("messagesByChat") || "{}"
+            );
+          } catch (e) {
+            console.warn("[COLLAB] ⚠️ Error parsing messagesByChat:", e);
+            messagesByChat = {};
+          }
+
+          const chatId = newMsg.chatId;
+          if (!chatId) {
+            console.warn("[COLLAB] ⚠️ Message missing chatId:", newMsg);
+            return;
+          }
+
+          // Ensure chatId array exists
+          if (!messagesByChat[chatId]) {
+            messagesByChat[chatId] = [];
+          }
+
+          // Check for duplicates using message_id
+          const exists = messagesByChat[chatId].some(
+            (m) => m.message_id === newMsg.message_id
+          );
+
+          if (!exists) {
+            // Add message to the correct chatId array
+            messagesByChat[chatId].push(newMsg);
+
+            // Save to localStorage
+            localStorage.setItem(
+              "messagesByChat",
+              JSON.stringify(messagesByChat)
+            );
+
+            // Update UI/state
+            if (window.memory && window.memory.loadAll) {
+              window.memory.loadAll();
+            }
+            if (window.views && window.views.renderCurrentView) {
+              window.views.renderCurrentView(false);
+            }
+            if (window.memoryView && window.memoryView.refreshView) {
+              window.memoryView.refreshView();
+            }
+
+            console.log("[COLLAB] 🟢 Message synced");
+          }
+        });
+      });
+    });
+
+    let isApplyingRemote = false;
+    let hasAppliedInitialSync = false;
+    let isSyncingInitialState = false;
+
+    // 1. Listen for local changes and push to Yjs (only after initial sync)
+    if (window.memory && window.memory.events) {
+      window.memory.events.addEventListener("dataChanged", (e) => {
+        if (isApplyingRemote || isSyncingInitialState) return; // Prevent loop or premature push
+        // Only allow bidirectional sync after initial leader push and initial sync for collaborators
+        if (!syncMap.get("initializedByLeader")) return;
+        if (!this.isLeader && !hasAppliedInitialSync) return;
+        const { type, data } = e.detail;
+        if (type === "all") {
+          // Merge local change with latest shared state
+          const latestChats = JSON.parse(syncMap.get("chats") || "[]");
+          const latestMessagesByChat = JSON.parse(
+            syncMap.get("messagesByChat") || "{}"
+          );
+          const latestArtifacts = JSON.parse(syncMap.get("artifacts") || "[]");
+          const latestUserPreferences = JSON.parse(
+            syncMap.get("userPreferences") || "{}"
+          );
+          const latestActiveChatId = syncMap.get("activeChatId") || null;
+
+          // Only overwrite with local value if it's not undefined
+          const mergedChats =
+            typeof data.chats !== "undefined" ? data.chats : latestChats;
+          const mergedMessagesByChat =
+            typeof data.messagesByChat !== "undefined"
+              ? data.messagesByChat
+              : latestMessagesByChat;
+          const mergedArtifacts =
+            typeof data.artifacts !== "undefined"
+              ? data.artifacts
+              : latestArtifacts;
+          const mergedUserPreferences =
+            typeof data.userPreferences !== "undefined"
+              ? data.userPreferences
+              : latestUserPreferences;
+          const mergedActiveChatId =
+            localStorage.getItem("activeChatId") || latestActiveChatId;
+
+          syncMap.set("chats", JSON.stringify(mergedChats));
+          syncMap.set("messagesByChat", JSON.stringify(mergedMessagesByChat));
+          syncMap.set("artifacts", JSON.stringify(mergedArtifacts));
+          syncMap.set("userPreferences", JSON.stringify(mergedUserPreferences));
+          syncMap.set("activeChatId", mergedActiveChatId);
+          console.log(
+            `[COLLAB] 🔄 ${this.isLeader ? "Leader" : "Collab"} data updated`
+          );
+        }
+      });
+    }
+
+    // 2. Listen for remote changes and update local state
+    let lastRemoteSummary = "";
+    syncMap.observeDeep(() => {
+      isApplyingRemote = true;
+      try {
+        const chats = JSON.parse(syncMap.get("chats") || "[]");
+        const messagesByChat = JSON.parse(
+          syncMap.get("messagesByChat") || "{}"
+        );
+        const artifacts = JSON.parse(syncMap.get("artifacts") || "[]");
+        const userPreferences = JSON.parse(
+          syncMap.get("userPreferences") || "{}"
+        );
+        const activeChatId = syncMap.get("activeChatId") || null;
+        const summary = `chats:${chats.length}, messages:${
+          Object.keys(messagesByChat).length
+        }, artifacts:${artifacts.length}, activeChatId:${activeChatId}`;
+
+        // Collaborator: Only apply leader's data the first time
+        if (
+          !this.isLeader &&
+          !hasAppliedInitialSync &&
+          syncMap.get("initializedByLeader")
+        ) {
+          isSyncingInitialState = true;
+          localStorage.setItem("chats", JSON.stringify(chats));
+          localStorage.setItem(
+            "messagesByChat",
+            JSON.stringify(messagesByChat)
+          );
+          localStorage.setItem("artifacts", JSON.stringify(artifacts));
+          localStorage.setItem(
+            "userPreferences",
+            JSON.stringify(userPreferences)
+          );
+          if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+          hasAppliedInitialSync = true;
+          // Refresh UI
+          if (window.memory && window.memory.loadAll) window.memory.loadAll();
+          if (window.views && window.views.renderCurrentView)
+            window.views.renderCurrentView(false);
+          if (window.memoryView && window.memoryView.refreshView)
+            window.memoryView.refreshView();
+          setTimeout(() => {
+            isSyncingInitialState = false;
+          }, 100);
+          console.log("[COLLAB] ✅ Collaborator synced with leader data");
+        } else if (this.isLeader || hasAppliedInitialSync) {
+          // After initial sync, all changes are bidirectional
+          localStorage.setItem("chats", JSON.stringify(chats));
+          localStorage.setItem(
+            "messagesByChat",
+            JSON.stringify(messagesByChat)
+          );
+          localStorage.setItem("artifacts", JSON.stringify(artifacts));
+          localStorage.setItem(
+            "userPreferences",
+            JSON.stringify(userPreferences)
+          );
+          if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+          // Only log if the data actually changed
+          if (summary !== lastRemoteSummary) {
+            console.log(
+              `[COLLAB] 🟢 ${this.isLeader ? "Leader" : "Collab"} data synced`
+            );
+            lastRemoteSummary = summary;
+          }
+        }
+      } catch (err) {
+        console.error("[COLLAB] Error syncing remote Yjs data:", err);
+      }
+      isApplyingRemote = false;
+    });
+
+    // 3. On initial join, only the leader initializes the shared map
+    if (syncMap.size === 0 && this.isLeader) {
+      if (window.memory && window.memory.loadAll) window.memory.loadAll();
+      const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+      const messagesByChat = JSON.parse(
+        localStorage.getItem("messagesByChat") || "{}"
+      );
+      const artifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+      const userPreferences = JSON.parse(
+        localStorage.getItem("userPreferences") || "{}"
+      );
+      const activeChatId = localStorage.getItem("activeChatId");
+      syncMap.set("chats", JSON.stringify(chats));
+      syncMap.set("messagesByChat", JSON.stringify(messagesByChat));
+      syncMap.set("artifacts", JSON.stringify(artifacts));
+      syncMap.set("userPreferences", JSON.stringify(userPreferences));
+      syncMap.set("activeChatId", activeChatId);
+      syncMap.set("initializedByLeader", true);
+      console.log("[COLLAB] 🚀 Leader pushed initial data to sharedSyncMap");
+    } else if (syncMap.size === 0 && !this.isLeader) {
+      // Collaborator waits for leader's data
+      console.log(
+        "[COLLAB] ⏳ Waiting for leader to initialize sharedSyncMap..."
+      );
+    }
+
+    console.log("[COLLAB] 🔄 Bidirectional sync enabled");
+  },
+
   // Leave collaboration
   leaveSession() {
     console.log("[COLLAB] Leaving session...");
@@ -411,6 +784,9 @@ const collaboration = {
     this.collaborationId = null;
     this.peers.clear();
     this.isLeader = false;
+
+    // Clear collaboration protection
+    this.clearCollaborationProtection();
 
     // Update UI
     this.updateUI();
@@ -842,6 +1218,14 @@ const collaboration = {
         Object.keys(data.userPreferences || {}).length
       );
 
+      // Set collaboration protection flag
+      localStorage.setItem("COLLABORATION_ACTIVE", "true");
+      localStorage.setItem(
+        "COLLABORATION_DATA_TIMESTAMP",
+        Date.now().toString()
+      );
+      console.log("[COLLAB] 🛡️ Collaboration protection activated");
+
       // Apply data to localStorage
       if (data.activeChatId) {
         localStorage.setItem("activeChatId", data.activeChatId);
@@ -877,21 +1261,69 @@ const collaboration = {
         localStorage.setItem("userId", data.userId);
       }
 
-      // Update application state if memory module is available
+      // Update application state and refresh UI
+      console.log("[COLLAB] 🔄 Refreshing application state and UI...");
+
+      // Reload memory data
       if (window.memory && window.memory.loadAll) {
-        console.log("[COLLAB] 🔄 Refreshing application state...");
         window.memory.loadAll();
       }
 
-      console.log("[COLLAB] ✅ Database data applied successfully");
+      // Update context state
+      if (window.context && window.context.setState) {
+        window.context.setState({
+          chats: data.chats || [],
+          messagesByChat: data.messagesByChat || {},
+          artifacts: data.artifacts || [],
+          activeChatId: data.activeChatId,
+          userPreferences: data.userPreferences || {},
+        });
+      }
 
-      // Suggest page reload for full effect
-      console.log("[COLLAB] 💡 Suggestion: Reload page to see all changes");
+      // Set active chat if provided
+      if (data.activeChatId && window.context && window.context.setActiveChat) {
+        window.context.setActiveChat(data.activeChatId);
+      }
+
+      // Refresh the current view to show updated data
+      if (window.views && window.views.renderCurrentView) {
+        console.log("[COLLAB] 🎨 Refreshing current view...");
+        window.views.renderCurrentView(false); // No transition for data update
+      }
+
+      // Specifically refresh memory view if it's active
+      if (window.memoryView && window.memoryView.refreshView) {
+        console.log("[COLLAB] 📊 Refreshing memory view...");
+        window.memoryView.refreshView();
+      } else if (window.memoryView && window.memoryView.renderMemoryView) {
+        // Fallback: re-render memory view
+        const activeView = window.context?.getActiveView();
+        if (!activeView || activeView.type === "memory") {
+          console.log("[COLLAB] 📊 Re-rendering memory view...");
+          const viewElement = window.context?.getViewElement();
+          if (viewElement) {
+            viewElement.innerHTML = window.memoryView.renderMemoryView();
+          }
+        }
+      }
+
+      // Trigger collaboration update event for UI refresh
+      const event = new CustomEvent("collaborationDataUpdate", {
+        detail: {
+          summary: databaseData.summary,
+          timestamp: Date.now(),
+        },
+      });
+      document.dispatchEvent(event);
+
+      console.log(
+        "[COLLAB] ✅ Database data applied and UI refreshed successfully"
+      );
 
       return {
         success: true,
         summary: databaseData.summary,
-        suggestion: "Reload page to see all changes",
+        uiRefreshed: true,
       };
     } catch (error) {
       console.error("[COLLAB] ❌ Error applying database data:", error);
@@ -935,6 +1367,94 @@ const collaboration = {
     } catch (error) {
       console.error("[COLLAB] ❌ Error receiving test data:", error);
       return null;
+    }
+  },
+
+  // Check if collaboration data protection is active
+  isCollaborationProtected() {
+    const isActive = localStorage.getItem("COLLABORATION_ACTIVE") === "true";
+    const timestamp = localStorage.getItem("COLLABORATION_DATA_TIMESTAMP");
+    const isRecent =
+      timestamp && Date.now() - parseInt(timestamp) < 24 * 60 * 60 * 1000; // 24 hours
+
+    return isActive && isRecent;
+  },
+
+  // Clear collaboration protection (when leaving session)
+  clearCollaborationProtection() {
+    localStorage.removeItem("COLLABORATION_ACTIVE");
+    localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
+    console.log("[COLLAB] 🛡️ Collaboration protection cleared");
+  },
+
+  // Global function to check if data overwrites should be prevented
+  shouldPreventDataOverwrite() {
+    const isProtected = this.isCollaborationProtected();
+    const isCollaborating = this.isCollaborating;
+
+    if (isProtected || isCollaborating) {
+      console.log(
+        "[COLLAB] 🛡️ Preventing data overwrite - collaboration active"
+      );
+      return true;
+    }
+
+    return false;
+  },
+
+  // Force refresh the entire UI state with current data
+  async forceRefreshUI() {
+    console.log("[COLLAB] 🔄 Force refreshing entire UI state...");
+
+    try {
+      // Reload all data from localStorage
+      if (window.memory && window.memory.loadAll) {
+        window.memory.loadAll();
+        console.log("[COLLAB] ✅ Memory data reloaded");
+      }
+
+      // Update context with fresh localStorage data
+      if (window.context && window.context.setState) {
+        const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+        const messagesByChat = JSON.parse(
+          localStorage.getItem("messagesByChat") || "{}"
+        );
+        const artifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+        const activeChatId = localStorage.getItem("activeChatId");
+        const userPreferences = JSON.parse(
+          localStorage.getItem("userPreferences") || "{}"
+        );
+
+        window.context.setState({
+          chats,
+          messagesByChat,
+          artifacts,
+          activeChatId,
+          userPreferences,
+        });
+
+        console.log("[COLLAB] ✅ Context state updated with:", {
+          chats: chats.length,
+          messageGroups: Object.keys(messagesByChat).length,
+          artifacts: artifacts.length,
+          activeChatId,
+        });
+      }
+
+      // Force re-render current view
+      if (window.views && window.views.renderCurrentView) {
+        window.views.renderCurrentView(false);
+        console.log("[COLLAB] ✅ Views re-rendered");
+      }
+
+      // Trigger UI update events
+      this.updateUI();
+
+      console.log("[COLLAB] ✅ Complete UI refresh finished");
+      return { success: true, message: "UI refreshed successfully" };
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error during UI refresh:", error);
+      return { success: false, error: error.message };
     }
   },
 
@@ -1037,6 +1557,24 @@ const collaboration = {
         console.log("[COLLAB] ✅ Test map listener set up");
       }
 
+      // Listen for collaboration data updates to refresh UI
+      document.addEventListener("collaborationDataUpdate", (event) => {
+        console.log(
+          "[COLLAB] 🔔 Collaboration data update event received:",
+          event.detail
+        );
+
+        // Force refresh memory view if needed
+        setTimeout(() => {
+          if (window.views && window.views.renderCurrentView) {
+            console.log(
+              "[COLLAB] 🎨 Forcing view refresh after data update..."
+            );
+            window.views.renderCurrentView(false);
+          }
+        }, 100); // Small delay to ensure state is updated
+      });
+
       console.log("[COLLAB] ✅ All data listeners configured");
     } catch (error) {
       console.error("[COLLAB] ❌ Error setting up data listeners:", error);
@@ -1075,6 +1613,15 @@ window.applyLeaderData = function () {
   return window.collaboration.applyLeaderData();
 };
 
+window.refreshCollaborationUI = function () {
+  console.log("[COLLAB] 🧪 Force refreshing UI from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.forceRefreshUI();
+};
+
 window.sendTestData = function () {
   console.log("[COLLAB] 🧪 Sending test data from console...");
   if (!window.collaboration) {
@@ -1101,6 +1648,11 @@ window.getCollaborationStatus = function () {
   return window.collaboration.getStatus();
 };
 
+// Global protection function for other modules to check
+window.isCollaborationProtected = function () {
+  return window.collaboration?.shouldPreventDataOverwrite() || false;
+};
+
 console.log("[COLLAB] 🎯 Database functions available:");
 console.log(
   "[COLLAB] - sendDatabaseData() - Send leader's database to collaborators"
@@ -1111,10 +1663,17 @@ console.log(
 console.log(
   "[COLLAB] - applyLeaderData() - Apply leader's data to local storage"
 );
+console.log(
+  "[COLLAB] - refreshCollaborationUI() - Force refresh UI after data sync"
+);
 console.log("[COLLAB] 🎯 Test functions available:");
 console.log("[COLLAB] - sendTestData() - Send test data to collaborators");
 console.log("[COLLAB] - receiveTestData() - Check for received test data");
 console.log("[COLLAB] - getCollaborationStatus() - Get collaboration status");
+console.log("[COLLAB] 🛡️ Protection function available:");
+console.log(
+  "[COLLAB] - isCollaborationProtected() - Check if data should be protected"
+);
 
 // Auto-initialize when script loads
 collaboration.init();

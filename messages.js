@@ -952,16 +952,34 @@ function addMessage(role, content, options = {}) {
   const randPart = Math.random().toString(36).slice(2, 8);
   const message_id = `${userId.slice(-4)}_${timePart}_${randPart}`;
   const message = { role, content, timestamp, message_id };
-  if (artifactIds !== null) {
-    message.artifactIds = artifactIds;
-  }
-  if (structuredData) {
-    message.structuredData = structuredData;
+
+  // Only add extra fields if NOT in collaboration mode
+  const isCollaborating =
+    window.collaboration && window.collaboration.isCollaborating;
+  if (!isCollaborating) {
+    if (artifactIds !== null) {
+      message.artifactIds = artifactIds;
+    }
+    if (structuredData) {
+      message.structuredData = structuredData;
+    }
+  } else {
+    console.log(
+      "[COLLAB] 🧹 Skipping structuredData/artifactIds during collaboration"
+    );
   }
 
   messages.push(message);
   window.context.setActiveMessages(messages);
   window.context.setActiveMessageIndex(messages.length - 1);
+
+  // --- COLLABORATION SYNC ---
+  if (window.collaboration && window.collaboration.pushMessageToCollab) {
+    const chatId = window.context.getActiveChatId();
+    if (chatId && !message.chatId) message.chatId = chatId;
+    window.collaboration.pushMessageToCollab(message);
+  }
+  // --- END COLLABORATION SYNC ---
 
   window.inputModule.hide();
 
