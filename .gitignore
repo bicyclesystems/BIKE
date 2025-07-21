@@ -1,4 +1,5 @@
 # Configuration files with sensitive data
+config.js
 
 # Environment variables
 .env
