@@ -353,6 +353,9 @@ const collaboration = {
     });
 
     console.log("[COLLAB] Event listeners set up successfully");
+
+    // Set up data listeners for automatic data sync
+    this.setupDataListeners();
   },
 
   // Update UI to show collaboration status
@@ -617,9 +620,180 @@ const collaboration = {
       return { success: false, error: error.message };
     }
   },
+
+  // Send test data from leader to collaborator
+  async sendTestData() {
+    console.log("[COLLAB] 📤 Sending test data...");
+
+    if (!this.ydoc) {
+      console.log("[COLLAB] ❌ No Yjs document available");
+      return { success: false, error: "No Yjs document" };
+    }
+
+    try {
+      // Create test data
+      const testData = {
+        timestamp: Date.now(),
+        sender: this.isLeader ? "leader" : "collaborator",
+        message: "Hello from " + (this.isLeader ? "leader" : "collaborator"),
+        localData: {
+          chats: JSON.parse(localStorage.getItem("chats") || "[]").length,
+          messages: Object.keys(
+            JSON.parse(localStorage.getItem("messagesByChat") || "{}")
+          ).length,
+          artifacts: JSON.parse(localStorage.getItem("artifacts") || "[]")
+            .length,
+        },
+      };
+
+      console.log("[COLLAB] 📦 Test data to send:", testData);
+
+      // Get shared text and send data
+      const sharedText = this.getSharedText("test-data");
+      if (sharedText) {
+        // Clear existing content and insert new data
+        sharedText.delete(0, sharedText.length);
+        sharedText.insert(0, JSON.stringify(testData));
+        console.log("[COLLAB] ✅ Test data sent successfully");
+      }
+
+      // Also send via shared map
+      const sharedMap = this.getSharedMap("test-map");
+      if (sharedMap) {
+        sharedMap.set("lastTestData", testData);
+        console.log("[COLLAB] ✅ Test data sent via shared map");
+      }
+
+      return { success: true, data: testData };
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error sending test data:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Receive and log test data
+  receiveTestData() {
+    console.log("[COLLAB] 📥 Checking for test data...");
+
+    if (!this.ydoc) {
+      console.log("[COLLAB] ❌ No Yjs document available");
+      return null;
+    }
+
+    try {
+      // Get shared text data
+      const sharedText = this.getSharedText("test-data");
+      if (sharedText && sharedText.length > 0) {
+        const textData = sharedText.toString();
+        if (textData) {
+          const parsedData = JSON.parse(textData);
+          console.log(
+            "[COLLAB] 📥 Received test data from shared text:",
+            parsedData
+          );
+        }
+      }
+
+      // Get shared map data
+      const sharedMap = this.getSharedMap("test-map");
+      if (sharedMap && sharedMap.has("lastTestData")) {
+        const mapData = sharedMap.get("lastTestData");
+        console.log("[COLLAB] 📥 Received test data from shared map:", mapData);
+        return mapData;
+      }
+
+      console.log("[COLLAB] ❌ No test data found");
+      return null;
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error receiving test data:", error);
+      return null;
+    }
+  },
+
+  // Set up automatic data listeners
+  setupDataListeners() {
+    if (!this.ydoc) {
+      console.log("[COLLAB] ❌ No Yjs document for data listeners");
+      return;
+    }
+
+    try {
+      // Listen to shared text changes
+      const sharedText = this.getSharedText("test-data");
+      if (sharedText) {
+        sharedText.observe((event) => {
+          console.log("[COLLAB] 🔔 Shared text changed:", event);
+          if (sharedText.length > 0) {
+            try {
+              const data = JSON.parse(sharedText.toString());
+              console.log("[COLLAB] 📥 Auto-received data:", data);
+            } catch (e) {
+              console.log(
+                "[COLLAB] 📥 Raw text change:",
+                sharedText.toString()
+              );
+            }
+          }
+        });
+        console.log("[COLLAB] ✅ Shared text listener set up");
+      }
+
+      // Listen to shared map changes
+      const sharedMap = this.getSharedMap("test-map");
+      if (sharedMap) {
+        sharedMap.observe((event) => {
+          console.log("[COLLAB] 🔔 Shared map changed:", event);
+          event.changes.keys.forEach((change, key) => {
+            if (change.action === "add" || change.action === "update") {
+              const value = sharedMap.get(key);
+              console.log(`[COLLAB] 📥 Map key '${key}' changed:`, value);
+            }
+          });
+        });
+        console.log("[COLLAB] ✅ Shared map listener set up");
+      }
+
+      console.log("[COLLAB] ✅ All data listeners configured");
+    } catch (error) {
+      console.error("[COLLAB] ❌ Error setting up data listeners:", error);
+    }
+  },
 };
 
 // Make collaboration available globally
 window.collaboration = collaboration;
+
+// Add global test functions for easy console access
+window.sendTestData = function () {
+  console.log("[COLLAB] 🧪 Sending test data from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.sendTestData();
+};
+
+window.receiveTestData = function () {
+  console.log("[COLLAB] 🧪 Receiving test data from console...");
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.receiveTestData();
+};
+
+window.getCollaborationStatus = function () {
+  if (!window.collaboration) {
+    return { error: "Collaboration module not found" };
+  }
+
+  return window.collaboration.getStatus();
+};
+
+console.log("[COLLAB] 🎯 Test functions available:");
+console.log("[COLLAB] - sendTestData() - Send test data to collaborators");
+console.log("[COLLAB] - receiveTestData() - Check for received test data");
+console.log("[COLLAB] - getCollaborationStatus() - Get collaboration status");
+
 // Auto-initialize when script loads
 collaboration.init();
