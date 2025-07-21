@@ -199,41 +199,85 @@ function renderMemoryView() {
       content
     )}</span>`;
 
-  // Get collaboration status
+  // Get collaboration status with detailed info
   const collabStatus = window.collaboration?.getStatus() || {};
   const isCollaborating = collabStatus.isCollaborating || false;
   const collaborationId = collabStatus.collaborationId;
-  const peerCount = collabStatus.peerCount || 0;
-  const isLeader = collabStatus.isLeader || false;
+  const peersCount = collabStatus.peersCount || 0;
+  const peerIds = collabStatus.peerIds || [];
+  const role = collabStatus.role || "UNKNOWN";
+  const syncStatus = collabStatus.syncStatus || "disconnected";
+  const connected = collabStatus.connected || false;
+  const documentId = collabStatus.documentId;
+  const clientId = collabStatus.clientId;
+  const sharedMapSize = collabStatus.sharedMapSize || 0;
 
-  // Create collaboration UI
+  // Create collaboration UI with detailed info
   const collaborationUI = isCollaborating
     ? `
       <div class="background-secondary padding-m radius-m">
         <div class="row align-center justify-between">
           <div class="column gap-xs">
             <div class="text-m">🤝 Live Collaboration Active</div>
-            <div class="text-s opacity-s">Session: ${collaborationId}</div>
-            <div class="text-s opacity-s">${peerCount} peer${
-        peerCount === 1 ? "" : "s"
-      } connected</div>
-            <div class="text-s opacity-s">Role: ${
-              isLeader ? "Leader" : "Collaborator"
+            
+            <!-- Room Info -->
+            <div class="text-s opacity-s"><strong>🏠 Room:</strong> ${collaborationId}</div>
+            <div class="text-s opacity-s"><strong>👑 Role:</strong> ${role}</div>
+            
+            <!-- Connection Info -->
+            <div class="text-s opacity-s"><strong>🌐 Connection:</strong> ${
+              connected ? "✅ Connected" : "❌ Disconnected"
             }</div>
+            <div class="text-s opacity-s"><strong>🔄 Sync:</strong> ${
+              syncStatus === "synced"
+                ? "✅ Synced"
+                : syncStatus === "connecting"
+                ? "⏳ Connecting..."
+                : "❌ " + syncStatus
+            }</div>
+            
+            <!-- Peer Info -->
+            <div class="text-s opacity-s"><strong>👥 Peers:</strong> ${peersCount} connected</div>
             ${
-              isLeader
-                ? `<div class="text-s opacity-s">Share this link: ${window.location.origin}${window.location.pathname}#/collab-${collaborationId}</div>`
+              peerIds.length > 0
+                ? `<div class="text-s opacity-s"><strong>🆔 Peer IDs:</strong> ${peerIds.join(
+                    ", "
+                  )}</div>`
+                : ""
+            }
+            
+            <!-- Document Info -->
+            ${
+              documentId
+                ? `<div class="text-s opacity-s"><strong>📄 Doc ID:</strong> ${documentId.substring(
+                    0,
+                    8
+                  )}...</div>`
+                : ""
+            }
+            ${
+              clientId
+                ? `<div class="text-s opacity-s"><strong>👤 Client ID:</strong> ${clientId}</div>`
+                : ""
+            }
+            <div class="text-s opacity-s"><strong>🗺️ Shared Data:</strong> ${sharedMapSize} items</div>
+            
+            <!-- Share Link -->
+            ${
+              role === "LEADER"
+                ? `
+              <div class="text-s opacity-s" style="margin-top: 8px;">
+                <strong>🔗 Share Link:</strong><br/>
+                <code style="font-size: 11px; background: rgba(0,0,0,0.1); padding: 2px 4px; border-radius: 3px;">
+                  ${window.location.origin}${window.location.pathname}#/collab-${collaborationId}
+                </code>
+              </div>
+            `
                 : ""
             }
           </div>
-          <button class="button-secondary" onclick="window.collaboration.leaveSession()">
+          <button class="button-secondary" style="color: #000000; background-color: #f0f0f0; font-weight: 600; border: 1px solid #ccc;" onclick="window.collaboration.leaveSession()">
             Leave Session
-          </button>
-          <button class="button-secondary" onclick="handleTestConnection()">
-            Test Connection
-          </button>
-          <button class="button-secondary" onclick="handleTriggerDiscovery()">
-            Trigger Discovery
           </button>
         </div>
       </div>
@@ -346,62 +390,6 @@ async function handleCreateCollaboration() {
   } catch (error) {
     console.error("[COLLAB] Error creating collaboration:", error);
     alert(`Error creating collaboration: ${error.message}`);
-  }
-}
-
-async function handleTestConnection() {
-  console.log("[COLLAB] handleTestConnection called");
-
-  if (!window.collaboration) {
-    console.error("[COLLAB] Collaboration module not available");
-    alert("Collaboration module not loaded");
-    return;
-  }
-
-  try {
-    console.log("[COLLAB] Testing connection...");
-    const result = await window.collaboration.testConnection();
-
-    console.log("[COLLAB] testConnection result:", result);
-
-    if (result.success) {
-      console.log("[COLLAB] Connection test completed");
-      alert("Connection test completed. Check console for details.");
-    } else {
-      console.error("[COLLAB] Connection test failed:", result.error);
-      alert(`Connection test failed: ${result.error}`);
-    }
-  } catch (error) {
-    console.error("[COLLAB] Error testing connection:", error);
-    alert(`Error testing connection: ${error.message}`);
-  }
-}
-
-async function handleTriggerDiscovery() {
-  console.log("[COLLAB] handleTriggerDiscovery called");
-
-  if (!window.collaboration) {
-    console.error("[COLLAB] Collaboration module not available");
-    alert("Collaboration module not loaded");
-    return;
-  }
-
-  try {
-    console.log("[COLLAB] Triggering peer discovery...");
-    const result = await window.collaboration.triggerPeerDiscovery();
-
-    console.log("[COLLAB] triggerPeerDiscovery result:", result);
-
-    if (result.success) {
-      console.log("[COLLAB] Peer discovery triggered");
-      alert("Peer discovery triggered. Check console for details.");
-    } else {
-      console.error("[COLLAB] Peer discovery failed:", result.error);
-      alert(`Peer discovery failed: ${result.error}`);
-    }
-  } catch (error) {
-    console.error("[COLLAB] Error triggering peer discovery:", error);
-    alert(`Error triggering peer discovery: ${error.message}`);
   }
 }
 

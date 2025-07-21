@@ -27,7 +27,7 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
-    <!-- Yjs and y-webrtc for real-time collaboration -->
+    <!-- Yjs and y-webrtc for real-time collaboration with stable configuration -->
     <script type="module">
       import * as Y from "https://cdn.skypack.dev/yjs@13.6.8";
       import { WebrtcProvider } from "https://cdn.skypack.dev/y-webrtc@10.2.5";
@@ -37,6 +37,45 @@
 
       console.log("✅ Yjs loaded:", Y.VERSION);
       console.log("✅ WebrtcProvider loaded");
+
+      // Enhanced WebrtcProvider with stable configuration
+      window.createStableWebrtcProvider = function (
+        roomName,
+        doc,
+        options = {}
+      ) {
+        const stableOptions = {
+          // Use your running signaling server as primary
+          signaling: [
+            "ws://localhost:4444", // Your local server (already running)
+            "wss://signaling.yjs.dev", // Fallback public server
+          ],
+          // Fixed connection count for stability (no randomization)
+          maxConns: 5,
+          // Enable BroadcastChannel filtering for better performance
+          filterBcConns: true,
+          // Optimized peer connection settings
+          peerOpts: {
+            config: {
+              iceServers: [
+                { urls: "stun:stun.l.google.com:19302" },
+                { urls: "stun:stun1.l.google.com:19302" },
+              ],
+            },
+            // Reduce timeouts for faster connection detection
+            connectionTimeout: 15000,
+            // Enable trickle ICE for better connection establishment
+            trickle: true,
+          },
+          ...options,
+        };
+
+        console.log(
+          "[COLLAB] Creating stable WebRTC provider with options:",
+          stableOptions
+        );
+        return new WebrtcProvider(roomName, doc, stableOptions);
+      };
     </script>
 
     <script src="config.js"></script>
@@ -90,4 +129,3 @@
     </script>
   </body>
 </html>
-);

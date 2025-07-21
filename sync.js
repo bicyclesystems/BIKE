@@ -10,7 +10,7 @@ class SupabaseSync {
     this.userId = null;
     this.sessionId = null;
     this.syncQueue = [];
-    this.realtimeSubscriptions = [];
+    this.realtimeSubscriptions = new Map();
     this.isProcessingQueue = false;
     this.lastSyncTime = null;
     this.retryAttempts = 0;
@@ -912,7 +912,9 @@ class SupabaseSync {
 
     // Unsubscribe from real-time
     this.realtimeSubscriptions.forEach((subscription) => {
-      subscription.unsubscribe();
+      if (subscription && typeof subscription.unsubscribe === "function") {
+        subscription.unsubscribe();
+      }
     });
     this.realtimeSubscriptions.clear();
   }
