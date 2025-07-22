@@ -64,9 +64,32 @@
     <script src="collaboration.js"></script>
 
     <script>
+      // Set up collaboration protection EARLY (before auth runs)
+      window.isCollaborationProtected = function () {
+        const isActive =
+          localStorage.getItem("collaborationActive") === "true" ||
+          localStorage.getItem("COLLABORATION_ACTIVE") === "true";
+        const timestamp = localStorage.getItem("COLLABORATION_DATA_TIMESTAMP");
+        const isRecent =
+          !timestamp || Date.now() - parseInt(timestamp) < 24 * 60 * 60 * 1000;
+
+        console.log(
+          "[COLLAB] 🛡️ Early protection check - Active:",
+          isActive,
+          "Recent:",
+          isRecent
+        );
+        return isActive && isRecent;
+      };
+
       // Simple, distributed initialization
       document.addEventListener("DOMContentLoaded", async function () {
-        // Initialize authentication FIRST to determine user state
+        // Initialize collaboration module FIRST to ensure protection is active
+        if (window.collaboration) {
+          await window.collaboration.init();
+        }
+
+        // Initialize authentication SECOND to respect collaboration protection
         const session = await user.initAuth();
 
         // Initialize context with knowledge of auth state (loads data appropriately)
@@ -78,6 +101,8 @@
         // Initialize modules (they handle their own click handlers and UI)
         artifacts.init();
         views.init();
+
+        // Note: collaboration.init() already called at the top
       });
 
       // Listen for URL hash changes to auto-join collaboration

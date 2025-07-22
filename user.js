@@ -304,16 +304,40 @@ function initializeMainApp() {
   const chats = window.context.getChats() || [];
   const activeChatId = window.context.getActiveChatId();
 
+  // Check for existing chats in localStorage before creating new ones
+  const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+  const hasStoredChats = storedChats.length > 0;
+
+  // Check collaboration protection status
+  const isCollabProtected = window.isCollaborationProtected
+    ? window.isCollaborationProtected()
+    : false;
+
   console.log(
-    `[AUTH] Found ${chats.length} chats, active: ${activeChatId || "none"}`
+    `[AUTH] Found ${chats.length} chats in context, ${
+      storedChats.length
+    } in localStorage, active: ${
+      activeChatId || "none"
+    }, collabProtected: ${isCollabProtected}`
   );
 
-  if (chats.length === 0) {
-    console.log("[AUTH] Creating new chat");
+  // Only create new chat if no chats exist in BOTH context AND localStorage
+  if (chats.length === 0 && !hasStoredChats) {
+    console.log("[AUTH] No chats found anywhere - creating new chat");
     window.actions.executeAction("chat.create", {});
   } else if (!activeChatId) {
-    console.log("[AUTH] Setting first chat as active");
-    window.context.setActiveChat(chats[0].id);
+    if (chats.length > 0) {
+      console.log("[AUTH] Setting first chat as active");
+      window.context.setActiveChat(chats[0].id);
+    } else if (hasStoredChats) {
+      console.log("[AUTH] Using first stored chat as active");
+      // Load stored data first, then set active chat
+      window.memory?.loadAll();
+      const reloadedChats = window.context.getChats() || [];
+      if (reloadedChats.length > 0) {
+        window.context.setActiveChat(reloadedChats[0].id);
+      }
+    }
   }
 
   if (window.context.getActiveChatId()) {
@@ -405,8 +429,28 @@ function handleUnauthenticatedState() {
   // removeIntroScreen(); // Don't remove intro screen immediately
   toggleUI(true); // Enable UI so users can interact
 
-  // Create chat BEFORE setting memory view to ensure active chat exists
-  window.actions.executeAction("chat.create", {});
+  // Check for existing chats in localStorage before creating new ones
+  const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+  const hasStoredChats = storedChats.length > 0;
+
+  if (!hasStoredChats) {
+    // Create chat BEFORE setting memory view to ensure active chat exists
+    console.log(
+      "[AUTH] No stored chats found - creating new chat for guest mode"
+    );
+    window.actions.executeAction("chat.create", {});
+  } else {
+    console.log(
+      "[AUTH] Found stored chats - loading existing data for guest mode"
+    );
+    // Load existing data instead of creating new
+    window.memory?.loadAll();
+    const reloadedChats = window.context.getChats() || [];
+    if (reloadedChats.length > 0 && !window.context.getActiveChatId()) {
+      window.context.setActiveChat(reloadedChats[0].id);
+    }
+  }
+
   window.context.setActiveView("memory", {}, { withTransition: false });
   window.views.renderCurrentView(false); // No transition during initialization
 

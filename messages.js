@@ -964,9 +964,6 @@ function addMessage(role, content, options = {}) {
       message.structuredData = structuredData;
     }
   } else {
-    console.log(
-      "[COLLAB] 🧹 Skipping structuredData/artifactIds during collaboration"
-    );
   }
 
   messages.push(message);

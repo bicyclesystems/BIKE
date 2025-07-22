@@ -14,7 +14,7 @@ const INITIAL_CONTEXT_STATE = {
   viewElement: null,
   activeView: null, // { type: 'artifact', data: { artifactId: 'xxx' } } or { type: 'calendar', data: {} }
   activeVersionIdxByArtifact: {},
-  showAllMessages: false
+  showAllMessages: false,
 };
 
 // Global Context State
@@ -32,7 +32,7 @@ function resetAppStateForChat() {
     activeVersionIdxByArtifact: {},
     messages: [],
     activeMessageIndex: -1,
-    activeView: null
+    activeView: null,
   });
 }
 
@@ -41,10 +41,10 @@ function resetAppStateForChat() {
 function getViewTypes() {
   // Simple wrapper around views registry
   if (window.views?.getAllViews) {
-    return window.views.getAllViews().map(view => ({
+    return window.views.getAllViews().map((view) => ({
       id: view.id,
       title: view.name,
-      type: view.type
+      type: view.type,
     }));
   }
   // Return empty array if views not loaded yet
@@ -52,10 +52,12 @@ function getViewTypes() {
 }
 
 function clearUI() {
-  if (!AppState.messagesContainer) AppState.messagesContainer = document.getElementById('messages');
-  if (!AppState.viewElement) AppState.viewElement = document.getElementById('view');
-  if (AppState.messagesContainer) AppState.messagesContainer.innerHTML = '';
-  if (AppState.viewElement) AppState.viewElement.innerHTML = '';
+  if (!AppState.messagesContainer)
+    AppState.messagesContainer = document.getElementById("messages");
+  if (!AppState.viewElement)
+    AppState.viewElement = document.getElementById("view");
+  if (AppState.messagesContainer) AppState.messagesContainer.innerHTML = "";
+  if (AppState.viewElement) AppState.viewElement.innerHTML = "";
   // Clear input through input module
   if (window.inputModule) {
     window.inputModule.clear();
@@ -74,24 +76,20 @@ function getActiveMessages() {
 }
 
 function setActiveMessages(messages) {
-  setState({ messagesByChat: { ...AppState.messagesByChat, [AppState.activeChatId]: messages } });
+  setState({
+    messagesByChat: {
+      ...AppState.messagesByChat,
+      [AppState.activeChatId]: messages,
+    },
+  });
   window.memory?.saveAll();
 }
-
-
-
-
-
-
-
-
-
 
 function loadChat() {
   const messages = getActiveMessages();
   setState({
     messages: messages,
-    activeMessageIndex: messages.length - 1
+    activeMessageIndex: messages.length - 1,
   });
   if (window.messages && window.messages.updateMessagesDisplay) {
     window.messages.updateMessagesDisplay();
@@ -102,7 +100,7 @@ function loadChat() {
 
 function setActiveView(viewType, data = {}, options = {}) {
   const { withTransition = true } = options;
-  
+
   // Handle null viewType by setting activeView to null (shows chat or empty state)
   if (viewType === null || viewType === undefined) {
     if (AppState.activeView === null) return; // Already null, no change needed
@@ -113,28 +111,36 @@ function setActiveView(viewType, data = {}, options = {}) {
     }
     return;
   }
-  
+
   const newView = { type: viewType, data };
-  
+
   // Simple comparison for view objects
-  if (AppState.activeView && 
-      AppState.activeView.type === newView.type &&
-      JSON.stringify(AppState.activeView.data) === JSON.stringify(newView.data)) {
+  if (
+    AppState.activeView &&
+    AppState.activeView.type === newView.type &&
+    JSON.stringify(AppState.activeView.data) === JSON.stringify(newView.data)
+  ) {
     return;
   }
-  
+
   setState({ activeView: newView });
   window.memory?.saveActiveView(newView);
-  
+
   // Handle version tracking for artifact views
-  if (viewType === 'artifact' && data.artifactId) {
+  if (viewType === "artifact" && data.artifactId) {
     const artifactId = data.artifactId;
     if (!(artifactId in AppState.activeVersionIdxByArtifact)) {
       const artifact = getArtifact(artifactId);
-      if (artifact) setState({ activeVersionIdxByArtifact: { ...AppState.activeVersionIdxByArtifact, [artifactId]: artifact.versions.length - 1 } });
+      if (artifact)
+        setState({
+          activeVersionIdxByArtifact: {
+            ...AppState.activeVersionIdxByArtifact,
+            [artifactId]: artifact.versions.length - 1,
+          },
+        });
     }
   }
-  
+
   // Render the view with transition option
   if (window.views?.renderCurrentView) {
     window.views.renderCurrentView(withTransition);
@@ -144,19 +150,19 @@ function setActiveView(viewType, data = {}, options = {}) {
 function setActiveArtifactId(id) {
   // Check if this is a link artifact
   const artifact = getArtifact(id);
-  
-  if (artifact && artifact.type === 'link') {
+
+  if (artifact && artifact.type === "link") {
     // For link artifacts, open in new tab instead of setting as active view
     const latestVersion = artifact.versions[artifact.versions.length - 1];
     if (latestVersion && latestVersion.content) {
       const url = latestVersion.content.trim();
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(url, "_blank", "noopener,noreferrer");
     }
     return;
   }
-  
+
   // For all other artifact types, set as active view
-  setActiveView('artifact', { artifactId: id });
+  setActiveView("artifact", { artifactId: id });
 }
 
 // =================== User Preferences Management ===================
@@ -171,7 +177,7 @@ function setUserPreferences(preferences) {
   if (window.memory?.setUserPreferences) {
     window.memory.setUserPreferences(preferences);
   }
-  
+
   // Sync to Supabase database if available
   if (window.syncManager) {
     window.syncManager.syncUserPreferences(preferences);
@@ -181,7 +187,7 @@ function setUserPreferences(preferences) {
 // =================== Persistence & Storage Layer ===================
 
 function getArtifact(id) {
-  return AppState.artifacts.find(a => a.id === id);
+  return AppState.artifacts.find((a) => a.id === id);
 }
 
 // =================== AI Context Integration ===================
@@ -189,31 +195,33 @@ function getArtifact(id) {
 function getContext() {
   // Get all memory-related data through single endpoint
   const memoryData = window.memory?.getContextData() || {};
-  
+
   // Get authentication status
   const session = window.user?.getActiveSession();
   const authStatus = {
     isLoggedIn: session ? true : false,
-    currentUser: session?.user?.email || null
+    currentUser: session?.user?.email || null,
   };
-  
+
   // Return curated context including memory data and current state
   return {
     // Authentication status - critical for AI decisions
     authStatus,
-    
+
     // Memory-managed data
     userPreferences: memoryData.userPreferences || {},
     chats: memoryData.chats || [],
-    artifacts: (memoryData.artifacts || []).filter(a => a.chatId === AppState.activeChatId),
-    
+    artifacts: (memoryData.artifacts || []).filter(
+      (a) => a.chatId === AppState.activeChatId
+    ),
+
     // Current state from context
     activeView: AppState.activeView,
     availableViews: getViewTypes(),
     availableActions: window.actions?.buildActionContext() || {},
     activeChatId: AppState.activeChatId,
     messages: AppState.messages,
-    activeVersionIdxByArtifact: AppState.activeVersionIdxByArtifact
+    activeVersionIdxByArtifact: AppState.activeVersionIdxByArtifact,
   };
 }
 
@@ -224,38 +232,73 @@ async function init(session = null) {
   if (window.memory && window.memory.initMemory) {
     await window.memory.initMemory();
   }
-  
+
   const isAuthenticated = !!session;
-  
+
   if (isAuthenticated) {
     // AUTHENTICATED: Load existing data normally
-    console.log('[CONTEXT] Initializing for authenticated user');
+    console.log("[CONTEXT] Initializing for authenticated user");
     window.memory?.loadAll();
-    
+
     // Set up initial active chat from existing data
-    const initialChatId = window.memory?.loadActiveChatId() || (AppState.chats[0] && AppState.chats[0].id);
+    const initialChatId =
+      window.memory?.loadActiveChatId() ||
+      (AppState.chats[0] && AppState.chats[0].id);
     setState({ activeChatId: initialChatId });
-    
-    // Create new chat if none exist
-    if (!AppState.activeChatId && AppState.chats.length === 0) {
-      window.actions?.executeAction('chat.create', {});
+
+    // Check localStorage before creating new chats
+    const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+    const hasStoredChats = storedChats.length > 0;
+
+    // Check collaboration protection status
+    const isCollabProtected = window.isCollaborationProtected
+      ? window.isCollaborationProtected()
+      : false;
+    console.log(
+      `[CONTEXT] Authenticated init - storedChats: ${storedChats.length}, hasStoredChats: ${hasStoredChats}, collabProtected: ${isCollabProtected}`
+    );
+
+    // Create new chat only if no chats exist in BOTH context AND localStorage
+    if (
+      !AppState.activeChatId &&
+      AppState.chats.length === 0 &&
+      !hasStoredChats
+    ) {
+      console.log(
+        "[CONTEXT] No chats found anywhere - creating new chat for authenticated user"
+      );
+      window.actions?.executeAction("chat.create", {});
     } else if (!AppState.activeChatId) {
-      setState({ activeChatId: AppState.chats[0].id });
+      if (AppState.chats.length > 0) {
+        setState({ activeChatId: AppState.chats[0].id });
+      } else if (hasStoredChats) {
+        console.log("[CONTEXT] Using stored chats for authenticated user");
+        // Reload data to get stored chats into context
+        window.memory?.loadAll();
+        const reloadedChats = AppState.chats;
+        if (reloadedChats.length > 0) {
+          setState({ activeChatId: reloadedChats[0].id });
+        }
+      }
     }
-    
+
     // Restore active view for current chat
     if (AppState.activeChatId) {
       const restoredView = window.memory?.loadActiveView();
       if (restoredView) {
         // Validate the restored view
-        if (restoredView.type === 'artifact' && restoredView.data.artifactId) {
-          const artifact = AppState.artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === AppState.activeChatId);
+        if (restoredView.type === "artifact" && restoredView.data.artifactId) {
+          const artifact = AppState.artifacts.find(
+            (a) =>
+              a.id === restoredView.data.artifactId &&
+              a.chatId === AppState.activeChatId
+          );
           if (artifact) {
             setState({ activeView: restoredView });
           } else {
             setState({ activeView: null });
           }
-        } else if (restoredView.type !== 'artifact') {
+        } else if (restoredView.type !== "artifact") {
           // System views (calendar, etc.) are always valid
           setState({ activeView: restoredView });
         } else {
@@ -266,27 +309,50 @@ async function init(session = null) {
       }
     }
   } else {
-    // GUEST: Start fresh with empty state
-    console.log('[CONTEXT] Initializing fresh session for guest user');
-    
-    // Initialize with empty state (no data loading)
-    setState({
-      chats: [],
-      messagesByChat: {},
-      artifacts: [],
-      activeChatId: null,
-      messages: [],
-      activeMessageIndex: -1,
-      messagesContainer: null,
-      viewElement: null,
-      activeView: null,
-      activeVersionIdxByArtifact: {},
-      showAllMessages: false,
-      userPreferences: {}
-    });
-    
-    // Create a new chat for the fresh guest session
-    window.actions?.executeAction('chat.create', {});
+    // GUEST: Check for existing data before starting fresh
+    console.log("[CONTEXT] Initializing session for guest user");
+
+    // Check localStorage for existing data
+    const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+    const hasStoredChats = storedChats.length > 0;
+
+    if (hasStoredChats) {
+      console.log("[CONTEXT] Found existing data for guest user - loading it");
+      // Load existing data instead of starting fresh
+      window.memory?.loadAll();
+
+      // Set up initial active chat from loaded data
+      const initialChatId =
+        window.memory?.loadActiveChatId() ||
+        (AppState.chats[0] && AppState.chats[0].id);
+      setState({ activeChatId: initialChatId });
+
+      if (!AppState.activeChatId && AppState.chats.length > 0) {
+        setState({ activeChatId: AppState.chats[0].id });
+      }
+    } else {
+      console.log(
+        "[CONTEXT] No existing data - starting fresh session for guest user"
+      );
+      // Initialize with empty state (no data loading)
+      setState({
+        chats: [],
+        messagesByChat: {},
+        artifacts: [],
+        activeChatId: null,
+        messages: [],
+        activeMessageIndex: -1,
+        messagesContainer: null,
+        viewElement: null,
+        activeView: null,
+        activeVersionIdxByArtifact: {},
+        showAllMessages: false,
+        userPreferences: {},
+      });
+
+      // Create a new chat for the fresh guest session
+      window.actions?.executeAction("chat.create", {});
+    }
   }
 }
 
@@ -297,7 +363,7 @@ window.context = {
   init,
   setState,
   getContext,
-  
+
   // Chat management
   setActiveChat,
   loadChat,
@@ -306,39 +372,49 @@ window.context = {
   getChats: () => AppState.chats,
   getMessages: () => AppState.messages,
   getMessagesByChat: () => AppState.messagesByChat,
-  
+
   // View management
   setActiveView,
   setActiveArtifactId,
   getActiveView: () => AppState.activeView,
   getViewTypes,
   clearUI,
-  
+
   // Artifact management
   getArtifact,
-  findCurrentChatArtifact: (artifactId) => AppState.artifacts.find(a => a.id === artifactId && a.chatId === AppState.activeChatId),
+  findCurrentChatArtifact: (artifactId) =>
+    AppState.artifacts.find(
+      (a) => a.id === artifactId && a.chatId === AppState.activeChatId
+    ),
   getArtifacts: () => AppState.artifacts,
-  getCurrentChatArtifacts: () => AppState.artifacts.filter(a => a.chatId === AppState.activeChatId),
-  getActiveVersionIndex: (artifactId) => AppState.activeVersionIdxByArtifact[artifactId],
-  setActiveVersionIndex: (artifactId, index) => setState({ 
-    activeVersionIdxByArtifact: { ...AppState.activeVersionIdxByArtifact, [artifactId]: index } 
-  }),
-  
+  getCurrentChatArtifacts: () =>
+    AppState.artifacts.filter((a) => a.chatId === AppState.activeChatId),
+  getActiveVersionIndex: (artifactId) =>
+    AppState.activeVersionIdxByArtifact[artifactId],
+  setActiveVersionIndex: (artifactId, index) =>
+    setState({
+      activeVersionIdxByArtifact: {
+        ...AppState.activeVersionIdxByArtifact,
+        [artifactId]: index,
+      },
+    }),
+
   // User preferences
   getUserPreferences,
   setUserPreferences,
-  
+
   // Message navigation
   getActiveMessageIndex: () => AppState.activeMessageIndex,
   setActiveMessageIndex: (index) => setState({ activeMessageIndex: index }),
   getShowAllMessages: () => AppState.showAllMessages,
   setShowAllMessages: (show) => setState({ showAllMessages: show }),
-  
+
   // UI elements (these may be needed by other modules)
   getMessagesContainer: () => AppState.messagesContainer,
-  setMessagesContainer: (container) => setState({ messagesContainer: container }),
+  setMessagesContainer: (container) =>
+    setState({ messagesContainer: container }),
   getViewElement: () => AppState.viewElement,
-  setViewElement: (element) => setState({ viewElement: element })
+  setViewElement: (element) => setState({ viewElement: element }),
 };
 
 // AppState is now properly encapsulated - all external access goes through window.context interface

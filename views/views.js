@@ -194,16 +194,26 @@ function renderCurrentView(withTransition = true) {
     }
   }
 
-  //  Fetch Supabase session and update URL hash
+  //  Fetch Supabase session and update URL hash (but not during collaboration)
   try {
     const session = window.user?.getActiveSession();
     const sessionId = session?.user?.id;
-    if (sessionId) {
+
+    // Check if collaboration is active before changing URL
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isCollaborationActive =
+      localStorage.getItem("collaborationActive") === "true";
+
+    if (sessionId && !isCollaborating && !isCollaborationActive) {
       const viewType = activeView?.type;
       const newHash = `/${sessionId}/${viewType}`;
       if (location.hash !== `#${newHash}`) {
         history.replaceState(null, "", `#/${sessionId}/${viewType}`);
       }
+    } else if (isCollaborating || isCollaborationActive) {
+      console.log(
+        "[VIEWS] 🛡️ Collaboration active - preserving collaboration URL"
+      );
     }
   } catch (error) {
     console.error("Error getting Supabase session:", error);
