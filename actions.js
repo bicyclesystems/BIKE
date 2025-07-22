@@ -5,10 +5,10 @@
 // =================== Action Categories ===================
 
 const ACTION_CATEGORIES = {
-  CHAT: 'chat',
-  ARTIFACTS: 'artifacts', 
-  VIEWS: 'views',
-  AUTH: 'auth'
+  CHAT: "chat",
+  ARTIFACTS: "artifacts",
+  VIEWS: "views",
+  AUTH: "auth",
 };
 
 // =================== Action Execution Tracking ===================
@@ -17,7 +17,7 @@ const ACTION_CATEGORIES = {
 const ACTION_HISTORY = {
   global: [], // All actions performed in current app session
   byChat: {}, // Actions per chat ID
-  lastExecutedAction: null
+  lastExecutedAction: null,
 };
 
 // Action tracking utilities
@@ -26,12 +26,12 @@ function trackActionExecution(actionResult) {
   const trackedAction = {
     ...actionResult,
     timestamp: new Date().toISOString(),
-    chatId: activeChatId
+    chatId: activeChatId,
   };
-  
+
   // Add to global history
   ACTION_HISTORY.global.push(trackedAction);
-  
+
   // Add to chat-specific history
   if (activeChatId) {
     if (!ACTION_HISTORY.byChat[activeChatId]) {
@@ -39,17 +39,19 @@ function trackActionExecution(actionResult) {
     }
     ACTION_HISTORY.byChat[activeChatId].push(trackedAction);
   }
-  
+
   // Keep only last N actions per context to prevent memory bloat
   const maxActions = 100;
   if (ACTION_HISTORY.global.length > maxActions) {
     ACTION_HISTORY.global = ACTION_HISTORY.global.slice(-maxActions);
   }
-  
+
   if (activeChatId && ACTION_HISTORY.byChat[activeChatId].length > maxActions) {
-    ACTION_HISTORY.byChat[activeChatId] = ACTION_HISTORY.byChat[activeChatId].slice(-maxActions);
+    ACTION_HISTORY.byChat[activeChatId] = ACTION_HISTORY.byChat[
+      activeChatId
+    ].slice(-maxActions);
   }
-  
+
   return actionResult;
 }
 
@@ -76,15 +78,22 @@ function clearActionHistory(chatId = null) {
 }
 
 // Simplified result formatting
-function createStandardizedResult(actionId, actionName, success, result = {}, error = null, message = '') {
+function createStandardizedResult(
+  actionId,
+  actionName,
+  success,
+  result = {},
+  error = null,
+  message = ""
+) {
   return {
     actionId,
     actionName: actionName.toLowerCase(),
     success,
     timestamp: new Date().toISOString(),
     result: result || {},
-    message: message || '',
-    error: error || null
+    message: message || "",
+    error: error || null,
   };
 }
 
@@ -92,90 +101,119 @@ function createStandardizedResult(actionId, actionName, success, result = {}, er
 
 const ACTIONS_REGISTRY = {
   // =================== Chat Actions ===================
-  
-  'chat.create': {
-    id: 'chat.create',
-    name: 'Create New Chat',
-    description: 'Create a new chat conversation with optional custom title, description, and duration',
+
+  "chat.create": {
+    id: "chat.create",
+    name: "Create New Chat",
+    description:
+      "Create a new chat conversation with optional custom title, description, and duration",
     category: ACTION_CATEGORIES.CHAT,
     requiredParams: [],
-    optionalParams: ['timestamp', 'title', 'description', 'endTime'],
+    optionalParams: ["timestamp", "title", "description", "endTime"],
     availableData: () => ({
       totalChats: window.context?.getChats().length || 0,
       maxChats: 50,
-      defaultTitle: 'New Chat'
+      defaultTitle: "New Chat",
     }),
     handler: async (params = {}) => {
       const { timestamp, title, description, endTime } = params;
-      
+
       // Create new chat logic moved from context
       window.context?.setState({
         activeVersionIdxByArtifact: {},
         messages: [],
         activeMessageIndex: -1,
-        activeView: null
+        activeView: null,
       });
-      
+
       const id = Date.now().toString();
-      const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
-      const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
-      const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-      const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
-      
+      const chatTitle =
+        title && typeof title === "string" && title.trim()
+          ? title.trim()
+          : "New Chat";
+      const chatDescription =
+        description && typeof description === "string" && description.trim()
+          ? description.trim()
+          : "";
+      const chatTimestamp = timestamp
+        ? new Date(timestamp).toISOString()
+        : new Date().toISOString();
+      const chat = {
+        id,
+        title: chatTitle,
+        description: chatDescription,
+        timestamp: chatTimestamp,
+      };
+
       if (endTime) {
         chat.endTime = new Date(endTime).toISOString();
       }
-      
+
       const currentChats = window.context?.getChats() || [];
       const currentMessagesByChat = window.context?.getMessagesByChat() || {};
-      
+
       window.context?.setState({
         chats: [...currentChats, chat],
-        messagesByChat: { ...currentMessagesByChat, [id]: [] }
+        messagesByChat: { ...currentMessagesByChat, [id]: [] },
       });
       window.memory?.saveAll();
-      
+
+      // --- COLLABORATION SYNC ---
+      if (window.collaboration && window.collaboration.pushChatToCollab) {
+        window.collaboration.pushChatToCollab(chat);
+      }
+      // --- END COLLABORATION SYNC ---
+
       // Switch to the new chat
-      await window.actions.executeAction('chat.switch', { chatId: id });
-      
+      await window.actions.executeAction("chat.switch", { chatId: id });
+
       return createStandardizedResult(
-        'chat.create',
-        'Create New Chat',
+        "chat.create",
+        "Create New Chat",
         true,
-        { 
-          chatId: id, 
+        {
+          chatId: id,
           chatTitle,
-          chatDescription, 
-          action: 'Created new chat',
-          type: 'chat'
+          chatDescription,
+          action: "Created new chat",
+          type: "chat",
         },
         null,
-        `Created new chat "${chatTitle}"${chatDescription ? ` with description "${chatDescription}"` : ''} with ID ${id}`
+        `Created new chat "${chatTitle}"${
+          chatDescription ? ` with description "${chatDescription}"` : ""
+        } with ID ${id}`
       );
-    }
+    },
   },
 
-  'chat.switch': {
-    id: 'chat.switch',
-    name: 'Switch Chat',
-    description: 'Switch to a different chat conversation',
+  "chat.switch": {
+    id: "chat.switch",
+    name: "Switch Chat",
+    description: "Switch to a different chat conversation",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['chatId'],
+    requiredParams: ["chatId"],
     optionalParams: [],
     availableData: () => ({
-      availableChats: (window.context?.getChats() || []).map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
-      currentChatId: window.context?.getActiveChatId()
+      availableChats: (window.context?.getChats() || []).map((c) => ({
+        id: c.id,
+        title: c.title,
+        description: c.description || "",
+        timestamp: c.timestamp,
+      })),
+      currentChatId: window.context?.getActiveChatId(),
     }),
     handler: async (params) => {
       const { chatId } = params;
-      const chat = (window.context?.getChats() || []).find(c => c.id === chatId);
+      const chat = (window.context?.getChats() || []).find(
+        (c) => c.id === chatId
+      );
       if (!chat) {
         return createStandardizedResult(
-          'chat.switch',
-          'Switch Chat',
+          "chat.switch",
+          "Switch Chat",
           false,
           {},
-          'Chat not found',
+          "Chat not found",
           `Chat ${chatId} does not exist`
         );
       }
@@ -183,29 +221,31 @@ const ACTIONS_REGISTRY = {
       if (window.context?.getActiveChatId()) {
         window.memory?.saveActiveView(window.context?.getActiveView() || null);
       }
-      
+
       // Reset app state for chat
       window.context?.setState({
         activeVersionIdxByArtifact: {},
         messages: [],
         activeMessageIndex: -1,
-        activeView: null
+        activeView: null,
       });
-      
+
       window.context?.setActiveChat(chatId);
-      
+
       const restoredView = window.memory?.loadActiveView();
       if (restoredView) {
         // Validate the restored view
-        if (restoredView.type === 'artifact' && restoredView.data.artifactId) {
+        if (restoredView.type === "artifact" && restoredView.data.artifactId) {
           const artifacts = window.context?.getArtifacts() || [];
-          const artifact = artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === chatId);
+          const artifact = artifacts.find(
+            (a) => a.id === restoredView.data.artifactId && a.chatId === chatId
+          );
           if (artifact) {
             window.context?.setState({ activeView: restoredView });
           } else {
             window.context?.setState({ activeView: null });
           }
-        } else if (restoredView.type !== 'artifact') {
+        } else if (restoredView.type !== "artifact") {
           // System views (calendar, etc.) are always valid
           window.context?.setState({ activeView: restoredView });
         } else {
@@ -214,479 +254,500 @@ const ACTIONS_REGISTRY = {
       } else {
         window.context?.setState({ activeView: null });
       }
-      
+
       window.context?.clearUI();
       window.context?.loadChat();
-      
+
       const messagesByChat = window.context?.getMessagesByChat() || {};
       const messages = messagesByChat[chatId] || [];
       if (messages.length === 0) {
         // Show input for new chats, but not if intro screen is active
-        const introScreen = document.getElementById('intro');
+        const introScreen = document.getElementById("intro");
         if (window.inputModule && !introScreen) {
           window.inputModule.show();
         }
       }
-      
+
       // Render the current view (memory if activeView is null)
       if (window.views?.renderCurrentView) {
         window.views.renderCurrentView(false); // No transition when switching chats
       }
-      
+
       return createStandardizedResult(
-        'chat.switch',
-        'Switch Chat',
+        "chat.switch",
+        "Switch Chat",
         true,
-        { 
-          chatId, 
-          chatTitle: chat.title, 
-          action: 'Switched to chat',
-          type: 'chat'
+        {
+          chatId,
+          chatTitle: chat.title,
+          action: "Switched to chat",
+          type: "chat",
         },
         null,
         `Switched to chat "${chat.title}"`
       );
-    }
+    },
   },
 
-  'chat.addMessage': {
-    id: 'chat.addMessage',
-    name: 'Add Message',
-    description: 'Add a message to the current chat',
+  "chat.addMessage": {
+    id: "chat.addMessage",
+    name: "Add Message",
+    description: "Add a message to the current chat",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['role', 'content'],
-    optionalParams: ['artifactIds'],
+    requiredParams: ["role", "content"],
+    optionalParams: ["artifactIds"],
     availableData: () => ({
       currentChatId: window.context?.getActiveChatId(),
-      messageCount: (window.context?.getMessages() || []).length
+      messageCount: (window.context?.getMessages() || []).length,
     }),
     handler: (params) => {
       const { role, content, artifactIds = {} } = params;
       if (window.messages && window.messages.addMessage) {
-        window.messages.addMessage(role, content, { 
-          artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null 
+        window.messages.addMessage(role, content, {
+          artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null,
         });
         return createStandardizedResult(
-          'chat.addMessage',
-          'Add Message',
+          "chat.addMessage",
+          "Add Message",
           true,
-          { 
-            role, 
-            content, 
-            action: 'Added message to chat',
-            type: 'message'
+          {
+            role,
+            content,
+            action: "Added message to chat",
+            type: "message",
           },
           null,
           `Added ${role} message to chat`
         );
       }
       return createStandardizedResult(
-        'chat.addMessage',
-        'Add Message',
+        "chat.addMessage",
+        "Add Message",
         false,
         {},
-        'Chat module not available',
-        'Chat module not available'
+        "Chat module not available",
+        "Chat module not available"
       );
-    }
+    },
   },
 
-  'chat.rename': {
-    id: 'chat.rename',
-    name: 'Rename Chat',
-    description: 'Rename a chat conversation with a new title',
+  "chat.rename": {
+    id: "chat.rename",
+    name: "Rename Chat",
+    description: "Rename a chat conversation with a new title",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['title'],
-    optionalParams: ['chatId'],
+    requiredParams: ["title"],
+    optionalParams: ["chatId"],
     availableData: () => {
       const activeChatId = window.context?.getActiveChatId();
       const chats = window.context?.getChats() || [];
-      const currentChat = chats.find(c => c.id === activeChatId);
-      
+      const currentChat = chats.find((c) => c.id === activeChatId);
+
       return {
         currentChatId: activeChatId,
-        currentChatTitle: currentChat?.title || 'Unknown',
-        availableChats: chats.map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
-        totalChats: chats.length
+        currentChatTitle: currentChat?.title || "Unknown",
+        availableChats: chats.map((c) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description || "",
+          timestamp: c.timestamp,
+        })),
+        totalChats: chats.length,
       };
     },
     handler: (params) => {
       const { title, chatId = null } = params;
-      
+
       // Validate title
-      if (!title || typeof title !== 'string') {
+      if (!title || typeof title !== "string") {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
-          'Title is required and must be a string',
-          'Title is required and must be a string'
+          "Title is required and must be a string",
+          "Title is required and must be a string"
         );
       }
-      
+
       const trimmedTitle = title.trim();
       if (trimmedTitle.length === 0) {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
-          'Title cannot be empty',
-          'Chat title cannot be empty'
+          "Title cannot be empty",
+          "Chat title cannot be empty"
         );
       }
-      
+
       // Use provided chatId or current active chat
       const targetChatId = chatId || window.context?.getActiveChatId();
       if (!targetChatId) {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
-          'No chat ID provided and no active chat',
-          'No chat to rename - provide chatId or ensure there is an active chat'
+          "No chat ID provided and no active chat",
+          "No chat to rename - provide chatId or ensure there is an active chat"
         );
       }
-      
+
       // Find the chat
       const chats = window.context?.getChats() || [];
-      const chat = chats.find(c => c.id === targetChatId);
+      const chat = chats.find((c) => c.id === targetChatId);
       if (!chat) {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
-          'Chat not found',
+          "Chat not found",
           `Chat ${targetChatId} does not exist`
         );
       }
-      
+
       const oldTitle = chat.title;
-      
+
       // Check if the title is actually different
       if (oldTitle === trimmedTitle) {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
-          'Title unchanged',
+          "Title unchanged",
           `Chat title is already "${trimmedTitle}"`
         );
       }
-      
+
       // Update the chat directly
       try {
         const chats = window.context?.getChats() || [];
-        const chatIndex = chats.findIndex(c => c.id === targetChatId);
-        
+        const chatIndex = chats.findIndex((c) => c.id === targetChatId);
+
         const updatedChats = [...chats];
         updatedChats[chatIndex] = {
           ...updatedChats[chatIndex],
-          title: trimmedTitle
+          title: trimmedTitle,
         };
-        
+
         // Update state
         window.context?.setState({ chats: updatedChats });
-        
+
         // Persist changes
         window.memory?.saveAll();
-        
+
         // Re-render views to reflect the change
         if (window.views?.renderCurrentView) {
           window.views.renderCurrentView();
         }
-        
+
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           true,
-          { 
+          {
             chatId: targetChatId,
             oldTitle,
             newTitle: trimmedTitle,
-            action: 'Renamed chat',
-            type: 'chat'
+            action: "Renamed chat",
+            type: "chat",
           },
           null,
           `Renamed chat from "${oldTitle}" to "${trimmedTitle}"`
         );
       } catch (error) {
         return createStandardizedResult(
-          'chat.rename',
-          'Rename Chat',
+          "chat.rename",
+          "Rename Chat",
           false,
           {},
           error.message,
           `Failed to rename chat: ${error.message}`
         );
       }
-    }
+    },
   },
 
-  'chat.setDescription': {
-    id: 'chat.setDescription',
-    name: 'Set Chat Description',
-    description: 'Set or update a chat conversation description',
+  "chat.setDescription": {
+    id: "chat.setDescription",
+    name: "Set Chat Description",
+    description: "Set or update a chat conversation description",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['description'],
-    optionalParams: ['chatId'],
+    requiredParams: ["description"],
+    optionalParams: ["chatId"],
     availableData: () => {
       const activeChatId = window.context?.getActiveChatId();
       const chats = window.context?.getChats() || [];
-      const currentChat = chats.find(c => c.id === activeChatId);
-      
+      const currentChat = chats.find((c) => c.id === activeChatId);
+
       return {
         currentChatId: activeChatId,
-        currentChatTitle: currentChat?.title || 'Unknown',
-        currentChatDescription: currentChat?.description || '',
-        availableChats: chats.map(c => ({ id: c.id, title: c.title, description: c.description || '', timestamp: c.timestamp })),
-        totalChats: chats.length
+        currentChatTitle: currentChat?.title || "Unknown",
+        currentChatDescription: currentChat?.description || "",
+        availableChats: chats.map((c) => ({
+          id: c.id,
+          title: c.title,
+          description: c.description || "",
+          timestamp: c.timestamp,
+        })),
+        totalChats: chats.length,
       };
     },
     handler: (params) => {
       const { description, chatId = null } = params;
-      
+
       // Validate description (allow empty string to clear description)
-      if (description !== null && typeof description !== 'string') {
+      if (description !== null && typeof description !== "string") {
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           false,
           {},
-          'Description must be a string or null',
-          'Description must be a string or null'
+          "Description must be a string or null",
+          "Description must be a string or null"
         );
       }
-      
+
       const trimmedDescription = description ? description.trim() : "";
-      
+
       // Use provided chatId or current active chat
       const targetChatId = chatId || window.context?.getActiveChatId();
       if (!targetChatId) {
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           false,
           {},
-          'No chat ID provided and no active chat',
-          'No chat to update - provide chatId or ensure there is an active chat'
+          "No chat ID provided and no active chat",
+          "No chat to update - provide chatId or ensure there is an active chat"
         );
       }
-      
+
       // Find the chat
       const chats = window.context?.getChats() || [];
-      const chat = chats.find(c => c.id === targetChatId);
+      const chat = chats.find((c) => c.id === targetChatId);
       if (!chat) {
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           false,
           {},
-          'Chat not found',
+          "Chat not found",
           `Chat ${targetChatId} does not exist`
         );
       }
-      
+
       const oldDescription = chat.description || "";
-      
+
       // Check if the description is actually different
       if (oldDescription === trimmedDescription) {
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           false,
           {},
-          'Description unchanged',
+          "Description unchanged",
           `Chat description is already "${trimmedDescription}"`
         );
       }
-      
+
       // Update the chat directly
       try {
         const chats = window.context?.getChats() || [];
-        const chatIndex = chats.findIndex(c => c.id === targetChatId);
-        
+        const chatIndex = chats.findIndex((c) => c.id === targetChatId);
+
         const updatedChats = [...chats];
         updatedChats[chatIndex] = {
           ...updatedChats[chatIndex],
-          description: trimmedDescription
+          description: trimmedDescription,
         };
-        
+
         // Update state
         window.context?.setState({ chats: updatedChats });
-        
+
         // Persist changes
         window.memory?.saveAll();
-        
+
         // Re-render views to reflect the change
         if (window.views?.renderCurrentView) {
           window.views.renderCurrentView();
         }
-        
+
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           true,
-          { 
+          {
             chatId: targetChatId,
             chatTitle: chat.title,
             oldDescription,
             newDescription: trimmedDescription,
-            action: 'Set chat description',
-            type: 'chat'
+            action: "Set chat description",
+            type: "chat",
           },
           null,
-          trimmedDescription ? 
-            `Set chat "${chat.title}" description to "${trimmedDescription}"` :
-            `Cleared chat "${chat.title}" description`
+          trimmedDescription
+            ? `Set chat "${chat.title}" description to "${trimmedDescription}"`
+            : `Cleared chat "${chat.title}" description`
         );
       } catch (error) {
         return createStandardizedResult(
-          'chat.setDescription',
-          'Set Chat Description',
+          "chat.setDescription",
+          "Set Chat Description",
           false,
           {},
           error.message,
           `Failed to set chat description: ${error.message}`
         );
       }
-    }
+    },
   },
 
-  'chat.schedule': {
-    id: 'chat.schedule',
-    name: 'Schedule Chat',
-    description: 'Schedule a new chat conversation with specific start and end times',
+  "chat.schedule": {
+    id: "chat.schedule",
+    name: "Schedule Chat",
+    description:
+      "Schedule a new chat conversation with specific start and end times",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['startTime', 'endTime'],
-    optionalParams: ['title', 'description'],
+    requiredParams: ["startTime", "endTime"],
+    optionalParams: ["title", "description"],
     availableData: () => ({
       totalChats: window.context?.getChats().length || 0,
       maxChats: 50,
-      defaultTitle: 'Scheduled Chat'
+      defaultTitle: "Scheduled Chat",
     }),
     handler: async (params = {}) => {
       const { startTime, endTime, title, description } = params;
-      
+
       // Validate required parameters
       if (!startTime || !endTime) {
         return createStandardizedResult(
-          'chat.schedule',
-          'Schedule Chat',
+          "chat.schedule",
+          "Schedule Chat",
           false,
           {},
-          'startTime and endTime are required',
-          'Both startTime and endTime must be provided'
+          "startTime and endTime are required",
+          "Both startTime and endTime must be provided"
         );
       }
-      
+
       // Parse and validate times
       const start = new Date(startTime);
       const end = new Date(endTime);
-      
+
       if (isNaN(start) || isNaN(end)) {
         return createStandardizedResult(
-          'chat.schedule',
-          'Schedule Chat',
+          "chat.schedule",
+          "Schedule Chat",
           false,
           {},
-          'Invalid date format',
-          'startTime and endTime must be valid ISO date strings'
+          "Invalid date format",
+          "startTime and endTime must be valid ISO date strings"
         );
       }
-      
+
       if (end <= start) {
         return createStandardizedResult(
-          'chat.schedule',
-          'Schedule Chat',
+          "chat.schedule",
+          "Schedule Chat",
           false,
           {},
-          'End time must be after start time',
-          'The end time must be later than the start time'
+          "End time must be after start time",
+          "The end time must be later than the start time"
         );
       }
-      
+
       // Calculate duration for display
-      const durationText = window.chatView?.formatDuration?.(start, end) || 
+      const durationText =
+        window.chatView?.formatDuration?.(start, end) ||
         (() => {
           const durationMs = end - start;
           const durationHours = Math.floor(durationMs / (1000 * 60 * 60));
-          const durationMinutes = Math.floor((durationMs % (1000 * 60 * 60)) / (1000 * 60));
-          return durationHours > 0 ? `${durationHours}h ${durationMinutes}m` : `${durationMinutes}m`;
+          const durationMinutes = Math.floor(
+            (durationMs % (1000 * 60 * 60)) / (1000 * 60)
+          );
+          return durationHours > 0
+            ? `${durationHours}h ${durationMinutes}m`
+            : `${durationMinutes}m`;
         })();
-      
+
       // Create the scheduled chat
-      const result = await window.actions.executeAction('chat.create', {
+      const result = await window.actions.executeAction("chat.create", {
         timestamp: start.toISOString(),
         endTime: end.toISOString(),
-        title: title || 'Scheduled Chat',
-        description: description || ''
+        title: title || "Scheduled Chat",
+        description: description || "",
       });
-      
+
       if (result.success) {
         return createStandardizedResult(
-          'chat.schedule',
-          'Schedule Chat',
+          "chat.schedule",
+          "Schedule Chat",
           true,
-          { 
+          {
             chatId: result.result.chatId,
             chatTitle: result.result.chatTitle,
             startTime: start.toISOString(),
             endTime: end.toISOString(),
             duration: durationText,
-            action: 'Scheduled new chat',
-            type: 'chat'
+            action: "Scheduled new chat",
+            type: "chat",
           },
           null,
-          `Scheduled chat "${result.result.chatTitle}" for ${start.toLocaleString()} - ${end.toLocaleString()} (${durationText})`
+          `Scheduled chat "${
+            result.result.chatTitle
+          }" for ${start.toLocaleString()} - ${end.toLocaleString()} (${durationText})`
         );
       } else {
         return createStandardizedResult(
-          'chat.schedule',
-          'Schedule Chat',
+          "chat.schedule",
+          "Schedule Chat",
           false,
           {},
-          result.error || 'Failed to create scheduled chat',
-          'Failed to create the scheduled chat'
+          result.error || "Failed to create scheduled chat",
+          "Failed to create the scheduled chat"
         );
       }
-    }
+    },
   },
 
-  'chat.delete': {
-    id: 'chat.delete',
-    name: 'Delete Chat',
-    description: 'Permanently delete a chat conversation and all its messages and artifacts',
+  "chat.delete": {
+    id: "chat.delete",
+    name: "Delete Chat",
+    description:
+      "Permanently delete a chat conversation and all its messages and artifacts",
     category: ACTION_CATEGORIES.CHAT,
-    requiredParams: ['chatId'],
-    optionalParams: ['confirmDelete'],
+    requiredParams: ["chatId"],
+    optionalParams: ["confirmDelete"],
     availableData: () => ({
-      availableChats: (window.context?.getChats() || []).map(c => ({ 
-        id: c.id, 
-        title: c.title, 
+      availableChats: (window.context?.getChats() || []).map((c) => ({
+        id: c.id,
+        title: c.title,
         timestamp: c.timestamp,
         messageCount: (window.context?.getMessagesByChat()[c.id] || []).length,
-        artifactCount: (window.context?.getArtifacts() || []).filter(a => a.chatId === c.id).length
+        artifactCount: (window.context?.getArtifacts() || []).filter(
+          (a) => a.chatId === c.id
+        ).length,
       })),
       currentChatId: window.context?.getActiveChatId(),
-      totalChats: window.context?.getChats().length || 0
+      totalChats: window.context?.getChats().length || 0,
     }),
     handler: async (params) => {
       const { chatId, confirmDelete = false } = params;
       const chats = window.context?.getChats() || [];
-      const chat = chats.find(c => c.id === chatId);
-      
+      const chat = chats.find((c) => c.id === chatId);
+
       if (!chat) {
         return createStandardizedResult(
-          'chat.delete',
-          'Delete Chat',
+          "chat.delete",
+          "Delete Chat",
           false,
           {},
-          'Chat not found',
+          "Chat not found",
           `Chat ${chatId} does not exist`
         );
       }
@@ -694,20 +755,22 @@ const ACTIONS_REGISTRY = {
       // Safety check - require confirmation for non-empty chats
       const messagesByChat = window.context?.getMessagesByChat() || {};
       const messages = messagesByChat[chatId] || [];
-      const artifacts = (window.context?.getArtifacts() || []).filter(a => a.chatId === chatId);
-      
+      const artifacts = (window.context?.getArtifacts() || []).filter(
+        (a) => a.chatId === chatId
+      );
+
       if ((messages.length > 0 || artifacts.length > 0) && !confirmDelete) {
         return createStandardizedResult(
-          'chat.delete',
-          'Delete Chat',
+          "chat.delete",
+          "Delete Chat",
           false,
-          { 
+          {
             requiresConfirmation: true,
             chatTitle: chat.title,
             messageCount: messages.length,
-            artifactCount: artifacts.length
+            artifactCount: artifacts.length,
           },
-          'Confirmation required',
+          "Confirmation required",
           `Chat "${chat.title}" contains ${messages.length} messages and ${artifacts.length} artifacts. Set confirmDelete=true to proceed.`
         );
       }
@@ -715,12 +778,12 @@ const ACTIONS_REGISTRY = {
       // Prevent deleting the last chat
       if (chats.length <= 1) {
         return createStandardizedResult(
-          'chat.delete',
-          'Delete Chat',
+          "chat.delete",
+          "Delete Chat",
           false,
           {},
-          'Cannot delete last chat',
-          'Cannot delete the last remaining chat. Create a new chat first.'
+          "Cannot delete last chat",
+          "Cannot delete the last remaining chat. Create a new chat first."
         );
       }
 
@@ -729,65 +792,74 @@ const ACTIONS_REGISTRY = {
         console.log(`[ACTIONS] Deleting chat "${chat.title}" (${chatId})`);
 
         // 1. Remove chat from chats array
-        const updatedChats = chats.filter(c => c.id !== chatId);
-        
+        const updatedChats = chats.filter((c) => c.id !== chatId);
+
         // 2. Remove all messages for this chat
         const currentMessagesByChat = window.context?.getMessagesByChat() || {};
         const updatedMessagesByChat = { ...currentMessagesByChat };
         delete updatedMessagesByChat[chatId];
-        
+
         // 3. Remove all artifacts for this chat
         const currentArtifacts = window.context?.getArtifacts() || [];
-        const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
-        const deletedArtifactCount = currentArtifacts.length - updatedArtifacts.length;
-        
+        const updatedArtifacts = currentArtifacts.filter(
+          (a) => a.chatId !== chatId
+        );
+        const deletedArtifactCount =
+          currentArtifacts.length - updatedArtifacts.length;
+
         // 4. Clear action history for this chat
         window.actions?.clearActionHistory?.(chatId);
-        
+
         // 5. Update state
         window.context?.setState({
           chats: updatedChats,
           messagesByChat: updatedMessagesByChat,
-          artifacts: updatedArtifacts
+          artifacts: updatedArtifacts,
         });
-        
+
         // 6. Handle active chat switching
         let newActiveChatId = null;
         if (window.context?.getActiveChatId() === chatId) {
           // Switch to the most recent chat or create a new one
           if (updatedChats.length > 0) {
             // Find the most recent chat by timestamp
-            const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            const sortedChats = updatedChats.sort(
+              (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
+            );
             newActiveChatId = sortedChats[0].id;
-            console.log(`[ACTIONS] Switching to most recent chat: ${newActiveChatId}`);
+            console.log(
+              `[ACTIONS] Switching to most recent chat: ${newActiveChatId}`
+            );
           } else {
             // This shouldn't happen due to our check above, but handle gracefully
-            console.log('[ACTIONS] No chats remaining, creating new chat');
-            await window.actions.executeAction('chat.create', {});
+            console.log("[ACTIONS] No chats remaining, creating new chat");
+            await window.actions.executeAction("chat.create", {});
             return createStandardizedResult(
-              'chat.delete',
-              'Delete Chat',
+              "chat.delete",
+              "Delete Chat",
               true,
-              { 
+              {
                 chatId,
                 chatTitle: chat.title,
                 deletedMessageCount: messages.length,
                 deletedArtifactCount,
-                action: 'Deleted chat and created new one',
-                type: 'chat'
+                action: "Deleted chat and created new one",
+                type: "chat",
               },
               null,
               `Deleted chat "${chat.title}" and created new chat (last one deleted)`
             );
           }
         }
-        
+
         // 7. Persist changes
         window.memory?.saveAll();
-        
+
         // 8. Switch to new active chat if needed
         if (newActiveChatId) {
-          await window.actions.executeAction('chat.switch', { chatId: newActiveChatId });
+          await window.actions.executeAction("chat.switch", {
+            chatId: newActiveChatId,
+          });
         } else {
           // If no chat to switch to, make sure view is updated
           window.context?.setState({ activeView: null });
@@ -795,20 +867,22 @@ const ACTIONS_REGISTRY = {
             window.views.renderCurrentView();
           }
         }
-        
-        console.log(`[ACTIONS] Successfully deleted chat "${chat.title}" and ${deletedArtifactCount} artifacts`);
-        
+
+        console.log(
+          `[ACTIONS] Successfully deleted chat "${chat.title}" and ${deletedArtifactCount} artifacts`
+        );
+
         return createStandardizedResult(
-          'chat.delete',
-          'Delete Chat',
+          "chat.delete",
+          "Delete Chat",
           true,
-          { 
+          {
             chatId,
             chatTitle: chat.title,
             deletedMessageCount: messages.length,
             deletedArtifactCount,
-            action: 'Deleted chat',
-            type: 'chat'
+            action: "Deleted chat",
+            type: "chat",
           },
           null,
           `Deleted chat "${chat.title}" with ${messages.length} messages and ${deletedArtifactCount} artifacts`
@@ -816,79 +890,97 @@ const ACTIONS_REGISTRY = {
       } catch (error) {
         console.error(`[ACTIONS] Error deleting chat:`, error);
         return createStandardizedResult(
-          'chat.delete',
-          'Delete Chat',
+          "chat.delete",
+          "Delete Chat",
           false,
           {},
           error.message,
           `Failed to delete chat: ${error.message}`
         );
       }
-    }
+    },
   },
 
   // =================== User Actions ===================
 
-  'user.updatePreferences': {
-    id: 'user.updatePreferences',
-    name: 'Update User Preferences',
-    description: 'Update user onboarding preferences (name, role, usage context, AI traits array) with advanced trait management',
+  "user.updatePreferences": {
+    id: "user.updatePreferences",
+    name: "Update User Preferences",
+    description:
+      "Update user onboarding preferences (name, role, usage context, AI traits array) with advanced trait management",
     category: ACTION_CATEGORIES.CHAT,
     requiredParams: [],
-    optionalParams: ['name', 'role', 'usingFor', 'aiTraits', 'traitAction'],
+    optionalParams: ["name", "role", "usingFor", "aiTraits", "traitAction"],
     availableData: () => ({
       currentPreferences: window.context?.getUserPreferences() || {},
-      validUsageOptions: ['school', 'personal', 'work'],
-      supportedTraits: ['casual', 'professional', 'detailed', 'creative', 'technical', 'friendly', 'concise', 'analytical', 'empathetic', 'precise'],
-      traitActions: ['add', 'remove', 'replace'] // Available trait management actions
+      validUsageOptions: ["school", "personal", "work"],
+      supportedTraits: [
+        "casual",
+        "professional",
+        "detailed",
+        "creative",
+        "technical",
+        "friendly",
+        "concise",
+        "analytical",
+        "empathetic",
+        "precise",
+      ],
+      traitActions: ["add", "remove", "replace"], // Available trait management actions
     }),
     handler: (params) => {
       const { name, role, usingFor, aiTraits, traitAction } = params;
       const updates = {};
-      
+
       if (name !== undefined) updates.name = name;
       if (role !== undefined) updates.role = role;
       if (usingFor !== undefined) updates.usingFor = usingFor;
-      
+
       // Enhanced aiTraits handling with action support
       if (aiTraits !== undefined) {
         const currentPrefs = window.context?.getUserPreferences() || {};
-        const currentTraits = Array.isArray(currentPrefs.aiTraits) ? [...currentPrefs.aiTraits] : [];
-        
+        const currentTraits = Array.isArray(currentPrefs.aiTraits)
+          ? [...currentPrefs.aiTraits]
+          : [];
+
         if (traitAction) {
           // Advanced trait management mode
           const inputTraits = Array.isArray(aiTraits) ? aiTraits : [aiTraits];
-          const normalizedTraits = inputTraits.map(trait => String(trait).trim().toLowerCase()).filter(Boolean);
-          
+          const normalizedTraits = inputTraits
+            .map((trait) => String(trait).trim().toLowerCase())
+            .filter(Boolean);
+
           switch (traitAction.toLowerCase()) {
-            case 'add':
+            case "add":
               // Add new traits without duplicates
-              normalizedTraits.forEach(trait => {
+              normalizedTraits.forEach((trait) => {
                 if (!currentTraits.includes(trait)) {
                   currentTraits.push(trait);
                 }
               });
               updates.aiTraits = currentTraits;
               break;
-              
-            case 'remove':
+
+            case "remove":
               // Remove specified traits
-              updates.aiTraits = currentTraits.filter(trait => !normalizedTraits.includes(trait));
+              updates.aiTraits = currentTraits.filter(
+                (trait) => !normalizedTraits.includes(trait)
+              );
               break;
-              
-            case 'replace':
+
+            case "replace":
               // Replace all traits
               updates.aiTraits = normalizedTraits;
               break;
-              
+
             default:
               return createStandardizedResult(
-                'user.updatePreferences',
-                'Update User Preferences',
+                "user.updatePreferences",
+                "Update User Preferences",
                 false,
                 {},
-                'Invalid traitAction. Use: add, remove, or replace',
-                'Invalid traitAction. Use: add, remove, or replace'
+                "Invalid traitAction. Use: add, remove, or replace",
+                "Invalid traitAction. Use: add, remove, or replace"
               );
           }
         } else {
@@ -896,13 +988,20 @@ const ACTIONS_REGISTRY = {
           if (Array.isArray(aiTraits)) {
             // If input is array, replace entirely
             updates.aiTraits = aiTraits;
-          } else if (typeof aiTraits === 'string') {
+          } else if (typeof aiTraits === "string") {
             // If input is string, convert to array and merge with existing
-            const newTraits = aiTraits.split(',').map(trait => trait.trim().toLowerCase()).filter(Boolean);
-            const existingTraits = Array.isArray(currentTraits) ? currentTraits : [currentTraits].filter(Boolean);
-            
+            const newTraits = aiTraits
+              .split(",")
+              .map((trait) => trait.trim().toLowerCase())
+              .filter(Boolean);
+            const existingTraits = Array.isArray(currentTraits)
+              ? currentTraits
+              : [currentTraits].filter(Boolean);
+
             // Merge and deduplicate
-            const combinedTraits = [...new Set([...existingTraits, ...newTraits])];
+            const combinedTraits = [
+              ...new Set([...existingTraits, ...newTraits]),
+            ];
             updates.aiTraits = combinedTraits;
           } else {
             // Fallback: treat as single trait
@@ -910,267 +1009,301 @@ const ACTIONS_REGISTRY = {
           }
         }
       }
-      
+
       if (Object.keys(updates).length === 0) {
         return createStandardizedResult(
-          'user.updatePreferences',
-          'Update User Preferences',
+          "user.updatePreferences",
+          "Update User Preferences",
           false,
           {},
-          'No preferences provided to update',
-          'No preferences provided to update'
+          "No preferences provided to update",
+          "No preferences provided to update"
         );
       }
-      
+
       if (window.context && window.context.setUserPreferences) {
         window.context.setUserPreferences(updates);
-        
-        const updatedFields = Object.keys(updates).join(', ');
-        
+
+        const updatedFields = Object.keys(updates).join(", ");
+
         // Generate descriptive message based on operation
         let actionMessage = `Updated user preferences: ${updatedFields}`;
         if (updates.aiTraits && traitAction) {
-          const traitList = Array.isArray(aiTraits) ? aiTraits.join(', ') : aiTraits;
-          actionMessage = `${traitAction.charAt(0).toUpperCase() + traitAction.slice(1)} AI traits: ${traitList}`;
+          const traitList = Array.isArray(aiTraits)
+            ? aiTraits.join(", ")
+            : aiTraits;
+          actionMessage = `${
+            traitAction.charAt(0).toUpperCase() + traitAction.slice(1)
+          } AI traits: ${traitList}`;
         }
-        
+
         return createStandardizedResult(
-          'user.updatePreferences',
-          'Update User Preferences',
+          "user.updatePreferences",
+          "Update User Preferences",
           true,
-          { 
+          {
             updates,
             updatedFields,
-            traitAction: traitAction || 'update',
-            action: 'Updated user preferences',
-            type: 'user'
+            traitAction: traitAction || "update",
+            action: "Updated user preferences",
+            type: "user",
           },
           null,
           actionMessage
         );
       }
-      
+
       return createStandardizedResult(
-        'user.updatePreferences',
-        'Update User Preferences',
+        "user.updatePreferences",
+        "Update User Preferences",
         false,
         {},
-        'Context module not available',
-        'Context module not available'
+        "Context module not available",
+        "Context module not available"
       );
-    }
+    },
   },
 
   // =================== Artifact Actions ===================
 
-  'artifacts.create': {
-    id: 'artifacts.create',
-    name: 'Create Artifact',
-    description: 'Create a new artifact with content (used by action system, structured responses create artifacts directly)',
+  "artifacts.create": {
+    id: "artifacts.create",
+    name: "Create Artifact",
+    description:
+      "Create a new artifact with content (used by action system, structured responses create artifacts directly)",
     category: ACTION_CATEGORIES.ARTIFACTS,
-    requiredParams: ['content'],
-    optionalParams: ['type', 'messageId'],
+    requiredParams: ["content"],
+    optionalParams: ["type", "messageId"],
     availableData: () => ({
       currentChatArtifacts: window.context?.getCurrentChatArtifacts() || [],
-      supportedTypes: ['html', 'markdown', 'text', 'image', 'link']
+      supportedTypes: ["html", "markdown", "text", "image", "link"],
     }),
     handler: (params) => {
-      const { content, type = null, messageId = Date.now().toString() } = params;
+      const {
+        content,
+        type = null,
+        messageId = Date.now().toString(),
+      } = params;
       if (!window.artifactsModule || !window.artifactsModule.createArtifact) {
         return createStandardizedResult(
-          'artifacts.create',
-          'Create Artifact',
+          "artifacts.create",
+          "Create Artifact",
           false,
           {},
-          'Artifacts module not available',
-          'Artifacts module not available'
+          "Artifacts module not available",
+          "Artifacts module not available"
         );
       }
-      const artifact = window.artifactsModule.createArtifact(content, messageId, type);
+      const artifact = window.artifactsModule.createArtifact(
+        content,
+        messageId,
+        type
+      );
       return createStandardizedResult(
-        'artifacts.create',
-        'Create Artifact',
+        "artifacts.create",
+        "Create Artifact",
         true,
-        { 
-          artifactId: artifact.id, 
-          title: artifact.title, 
-          type: artifact.type, 
-          action: 'Created artifact'
+        {
+          artifactId: artifact.id,
+          title: artifact.title,
+          type: artifact.type,
+          action: "Created artifact",
         },
         null,
         `Created ${artifact.type} artifact "${artifact.title}"`
       );
-    }
+    },
   },
 
-  'artifacts.update': {
-    id: 'artifacts.update',
-    name: 'Update Artifact',
-    description: 'Update an existing artifact with new content',
+  "artifacts.update": {
+    id: "artifacts.update",
+    name: "Update Artifact",
+    description: "Update an existing artifact with new content",
     category: ACTION_CATEGORIES.ARTIFACTS,
-    requiredParams: ['artifactId', 'content'],
+    requiredParams: ["artifactId", "content"],
     optionalParams: [],
     availableData: () => ({
-      currentChatArtifacts: (window.context?.getCurrentChatArtifacts() || []).map(a => ({
-        id: a.id, title: a.title, type: a.type, versionCount: a.versions.length
-      }))
+      currentChatArtifacts: (
+        window.context?.getCurrentChatArtifacts() || []
+      ).map((a) => ({
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        versionCount: a.versions.length,
+      })),
     }),
     handler: (params) => {
       const { artifactId, content } = params;
       if (!window.artifactsModule || !window.artifactsModule.updateArtifact) {
         return createStandardizedResult(
-          'artifacts.update',
-          'Update Artifact',
+          "artifacts.update",
+          "Update Artifact",
           false,
           {},
-          'Artifacts module not available',
-          'Artifacts module not available'
+          "Artifacts module not available",
+          "Artifacts module not available"
         );
       }
-      const artifact = window.artifactsModule.updateArtifact(artifactId, content);
+      const artifact = window.artifactsModule.updateArtifact(
+        artifactId,
+        content
+      );
       if (!artifact) {
         return createStandardizedResult(
-          'artifacts.update',
-          'Update Artifact',
+          "artifacts.update",
+          "Update Artifact",
           false,
           {},
-          'Artifact not found or not in current chat',
-          'Artifact not found or not in current chat'
+          "Artifact not found or not in current chat",
+          "Artifact not found or not in current chat"
         );
       }
       return createStandardizedResult(
-        'artifacts.update',
-        'Update Artifact',
+        "artifacts.update",
+        "Update Artifact",
         true,
-        { 
-          artifactId, 
+        {
+          artifactId,
           title: artifact.title,
           type: artifact.type,
-          versionCount: artifact.versions.length, 
-          action: 'Updated artifact'
+          versionCount: artifact.versions.length,
+          action: "Updated artifact",
         },
         null,
         `Updated ${artifact.type} artifact "${artifact.title}" (now has ${artifact.versions.length} versions)`
       );
-    }
+    },
   },
 
-  'artifacts.view': {
-    id: 'artifacts.view',
-    name: 'View Artifact',
-    description: 'View a specific artifact',
+  "artifacts.view": {
+    id: "artifacts.view",
+    name: "View Artifact",
+    description: "View a specific artifact",
     category: ACTION_CATEGORIES.ARTIFACTS,
-    requiredParams: ['artifactId'],
+    requiredParams: ["artifactId"],
     optionalParams: [],
     availableData: () => ({
-      currentChatArtifacts: (window.context?.getCurrentChatArtifacts() || []).map(a => ({
-        id: a.id, title: a.title, type: a.type, createdAt: a.createdAt
+      currentChatArtifacts: (
+        window.context?.getCurrentChatArtifacts() || []
+      ).map((a) => ({
+        id: a.id,
+        title: a.title,
+        type: a.type,
+        createdAt: a.createdAt,
       })),
-      currentlyViewing: window.context?.getActiveView()?.type === 'artifact' ? window.context?.getActiveView()?.data?.artifactId : null
+      currentlyViewing:
+        window.context?.getActiveView()?.type === "artifact"
+          ? window.context?.getActiveView()?.data?.artifactId
+          : null,
     }),
     handler: (params) => {
       const { artifactId } = params;
       const artifact = window.context?.findCurrentChatArtifact(artifactId);
       if (!artifact) {
         return createStandardizedResult(
-          'artifacts.view',
-          'View Artifact',
+          "artifacts.view",
+          "View Artifact",
           false,
           {},
-          'Artifact not found in current chat',
-          'Artifact not found in current chat'
+          "Artifact not found in current chat",
+          "Artifact not found in current chat"
         );
       }
       window.context.setActiveArtifactId(artifactId);
       return createStandardizedResult(
-        'artifacts.view',
-        'View Artifact',
+        "artifacts.view",
+        "View Artifact",
         true,
-        { 
-          artifactId, 
-          title: artifact.title, 
-          type: artifact.type, 
-          action: 'Viewing artifact'
+        {
+          artifactId,
+          title: artifact.title,
+          type: artifact.type,
+          action: "Viewing artifact",
         },
         null,
         `Now viewing ${artifact.type} artifact "${artifact.title}"`
       );
-    }
+    },
   },
 
   // =================== View Actions ===================
 
-  'views.switch': {
-    id: 'views.switch',
-    name: 'Switch View',
-    description: 'Switch to a different view using the centralized views registry',
+  "views.switch": {
+    id: "views.switch",
+    name: "Switch View",
+    description:
+      "Switch to a different view using the centralized views registry",
     category: ACTION_CATEGORIES.VIEWS,
-    requiredParams: ['viewId'],
-    optionalParams: ['data'],
+    requiredParams: ["viewId"],
+    optionalParams: ["data"],
     availableData: () => {
       // Get all available views from the views registry
-      const availableViews = window.views ? window.views.getAllViews().map(v => ({
-        id: v.id,
-        name: v.name,
-        description: v.description,
-        type: v.type,
-        requiredParams: v.requiredParams,
-        optionalParams: v.optionalParams,
-        currentData: v.availableData ? v.availableData() : {}
-      })) : [];
-      
+      const availableViews = window.views
+        ? window.views.getAllViews().map((v) => ({
+            id: v.id,
+            name: v.name,
+            description: v.description,
+            type: v.type,
+            requiredParams: v.requiredParams,
+            optionalParams: v.optionalParams,
+            currentData: v.availableData ? v.availableData() : {},
+          }))
+        : [];
+
       return {
         availableViews,
         currentView: window.context?.getActiveView(),
-        totalAvailableViews: availableViews.length
+        totalAvailableViews: availableViews.length,
       };
     },
     handler: (params) => {
       const { viewId, data = {} } = params;
-      
+
       // Validate viewId
       if (!window.views) {
         return createStandardizedResult(
-          'views.switch',
-          'switch view',
+          "views.switch",
+          "switch view",
           false,
           {},
-          'Views module not loaded',
-          'Views system is not available'
+          "Views module not loaded",
+          "Views system is not available"
         );
       }
-      
+
       const validation = window.views.validateViewParams(viewId, data);
       if (!validation.valid) {
         return createStandardizedResult(
-          'views.switch',
-          'switch view',
+          "views.switch",
+          "switch view",
           false,
           {},
           validation.error,
           `View switch failed: ${validation.error}`
         );
       }
-      
+
       const view = window.views.getView(viewId);
       if (!view) {
         return createStandardizedResult(
-          'views.switch',
-          'switch view',
+          "views.switch",
+          "switch view",
           false,
           {},
           `View ${viewId} not found`,
           `View ${viewId} does not exist`
         );
       }
-      
+
       // Special handling for artifact view - validate artifact exists
-      if (viewId === 'artifact' && data.artifactId) {
-        const artifact = window.context?.findCurrentChatArtifact(data.artifactId);
+      if (viewId === "artifact" && data.artifactId) {
+        const artifact = window.context?.findCurrentChatArtifact(
+          data.artifactId
+        );
         if (!artifact) {
           return createStandardizedResult(
-            'views.switch',
-            'switch view',
+            "views.switch",
+            "switch view",
             false,
             {},
             `Artifact ${data.artifactId} not found`,
@@ -1178,32 +1311,32 @@ const ACTIONS_REGISTRY = {
           );
         }
       }
-      
+
       // Switch to the view
       window.context.setActiveView(view.type, data);
-      
+
       return createStandardizedResult(
-        'views.switch',
-        'switch view',
+        "views.switch",
+        "switch view",
         true,
-        { 
-          viewId, 
-          viewType: view.type, 
+        {
+          viewId,
+          viewType: view.type,
           viewName: view.name,
-          data 
+          data,
         },
         null,
         `Switched to ${view.name} view`
       );
-    }
+    },
   },
 
   // =================== Theme Actions ===================
 
-  'theme.toggle': {
-    id: 'theme.toggle',
-    name: 'Toggle Theme',
-    description: 'Toggle between system, light, and dark themes',
+  "theme.toggle": {
+    id: "theme.toggle",
+    name: "Toggle Theme",
+    description: "Toggle between system, light, and dark themes",
     category: ACTION_CATEGORIES.VIEWS,
     requiredParams: [],
     optionalParams: [],
@@ -1211,18 +1344,18 @@ const ACTIONS_REGISTRY = {
       const currentTheme = localStorage.getItem("theme") || "system";
       return {
         currentTheme,
-        availableThemes: ['system', 'light', 'dark']
+        availableThemes: ["system", "light", "dark"],
       };
     },
     handler: (params = {}) => {
       if (!window.themeManager) {
         return createStandardizedResult(
-          'theme.toggle',
-          'Toggle Theme',
+          "theme.toggle",
+          "Toggle Theme",
           false,
           {},
-          'Theme manager not available',
-          'Theme manager not available'
+          "Theme manager not available",
+          "Theme manager not available"
         );
       }
 
@@ -1250,30 +1383,31 @@ const ACTIONS_REGISTRY = {
       }
 
       return createStandardizedResult(
-        'theme.toggle',
-        'Toggle Theme',
+        "theme.toggle",
+        "Toggle Theme",
         true,
-        { 
+        {
           previousTheme: currentTheme,
           newTheme,
-          action: 'Theme toggled',
-          type: 'theme'
+          action: "Theme toggled",
+          type: "theme",
         },
         null,
         `Theme changed from ${currentTheme} to ${newTheme}`
       );
-    }
+    },
   },
 
   // =================== Data Management Actions ===================
 
-  'data.deleteUser': {
-    id: 'data.deleteUser',
-    name: 'Delete User Account',
-    description: 'Permanently delete user account and all associated data (cannot be undone)',
+  "data.deleteUser": {
+    id: "data.deleteUser",
+    name: "Delete User Account",
+    description:
+      "Permanently delete user account and all associated data (cannot be undone)",
     category: ACTION_CATEGORIES.VIEWS,
     requiredParams: [],
-    optionalParams: ['confirmationCode'],
+    optionalParams: ["confirmationCode"],
     availableData: () => {
       const contextData = window.memory?.getContextData() || {};
       const session = window.user?.getActiveSession();
@@ -1283,8 +1417,11 @@ const ACTIONS_REGISTRY = {
         hasRemoteAccess: !!(session && window.syncManager?.supabase),
         userEmail: session?.user?.email || null,
         totalChats: (contextData.chats || []).length,
-        totalMessages: Object.values(contextData.messagesByChat || {}).reduce((sum, messages) => sum + messages.length, 0),
-        totalArtifacts: (contextData.artifacts || []).length
+        totalMessages: Object.values(contextData.messagesByChat || {}).reduce(
+          (sum, messages) => sum + messages.length,
+          0
+        ),
+        totalArtifacts: (contextData.artifacts || []).length,
       };
     },
     handler: async (params = {}) => {
@@ -1292,84 +1429,91 @@ const ACTIONS_REGISTRY = {
         // Check if memory and sync systems are available
         if (!window.memory) {
           return createStandardizedResult(
-            'data.clearAll',
-            'Clear All User Data',
+            "data.clearAll",
+            "Clear All User Data",
             false,
             {},
-            'Memory module not available',
-            'Memory system is not loaded'
+            "Memory module not available",
+            "Memory system is not loaded"
           );
         }
 
         if (!window.syncManager) {
           return createStandardizedResult(
-            'data.clearAll',
-            'Clear All User Data',
+            "data.clearAll",
+            "Clear All User Data",
             false,
             {},
-            'Sync manager not available',
-            'Sync system is not loaded'
+            "Sync manager not available",
+            "Sync system is not loaded"
           );
         }
 
         const session = window.user?.getActiveSession();
-        const userEmail = session?.user?.email || 'unknown user';
+        const userEmail = session?.user?.email || "unknown user";
         const userId = session?.user?.id || window.syncManager?.userId;
-        
+
         // First, delete all user data and then the user account
         let remoteCleared = false;
         let userDeleted = false;
-        
-        if (window.syncManager.isOnline && window.syncManager.supabase && userId) {
+
+        if (
+          window.syncManager.isOnline &&
+          window.syncManager.supabase &&
+          userId
+        ) {
           try {
             // Delete all user data from database tables
             await window.syncManager.supabase
-              .from('messages')
+              .from("messages")
               .delete()
-              .eq('user_id', userId);
-              
+              .eq("user_id", userId);
+
             await window.syncManager.supabase
-              .from('chats')
+              .from("chats")
               .delete()
-              .eq('user_id', userId);
-              
+              .eq("user_id", userId);
+
             await window.syncManager.supabase
-              .from('artifacts')
+              .from("artifacts")
               .delete()
-              .eq('user_id', userId);
-              
+              .eq("user_id", userId);
+
             // Delete user record entirely
             await window.syncManager.supabase
-              .from('users')
+              .from("users")
               .delete()
-              .eq('id', userId);
-            
+              .eq("id", userId);
+
             // Delete the auth user account (this signs them out)
-            const { error: authError } = await window.syncManager.supabase.auth.admin.deleteUser(userId);
-            if (authError && !authError.message.includes('User not found')) {
-              console.error('[ACTIONS] Failed to delete auth user:', authError);
+            const { error: authError } =
+              await window.syncManager.supabase.auth.admin.deleteUser(userId);
+            if (authError && !authError.message.includes("User not found")) {
+              console.error("[ACTIONS] Failed to delete auth user:", authError);
               // Continue anyway since data is deleted
             } else {
               userDeleted = true;
             }
-              
+
             remoteCleared = true;
-            console.log('[ACTIONS] User account and data deleted from database');
+            console.log(
+              "[ACTIONS] User account and data deleted from database"
+            );
           } catch (error) {
-            console.error('[ACTIONS] Failed to delete user account:', error);
+            console.error("[ACTIONS] Failed to delete user account:", error);
             // Continue with local clearing even if remote fails
           }
         }
 
         // Clear local data
         window.memory.purgeAllData();
-        
+
         // Clear sync queue
         if (window.syncManager.syncQueue) {
           window.syncManager.syncQueue = [];
           window.memory.clearSyncQueue();
         }
-        
+
         // Reset app state
         if (window.context?.setState) {
           window.context.setState({
@@ -1377,7 +1521,7 @@ const ACTIONS_REGISTRY = {
             messagesByChat: {},
             artifacts: [],
             userPreferences: {},
-            activeView: null
+            activeView: null,
           });
         }
 
@@ -1386,44 +1530,49 @@ const ACTIONS_REGISTRY = {
           try {
             await window.user.logout();
           } catch (error) {
-            console.error('[ACTIONS] Failed to logout after user deletion:', error);
+            console.error(
+              "[ACTIONS] Failed to logout after user deletion:",
+              error
+            );
           }
         }
 
         return createStandardizedResult(
-          'data.deleteUser',
-          'Delete User Account',
+          "data.deleteUser",
+          "Delete User Account",
           true,
-          { 
+          {
             userEmail,
             localCleared: true,
             remoteCleared,
             userDeleted,
-            action: 'User account deleted',
-            type: 'account_deletion'
+            action: "User account deleted",
+            type: "account_deletion",
           },
           null,
-          `User account ${userEmail} permanently deleted${userDeleted ? ' (including auth account)' : ' (data only)'}`
+          `User account ${userEmail} permanently deleted${
+            userDeleted ? " (including auth account)" : " (data only)"
+          }`
         );
-
       } catch (error) {
-        console.error('[ACTIONS] Error deleting user account:', error);
+        console.error("[ACTIONS] Error deleting user account:", error);
         return createStandardizedResult(
-          'data.deleteUser',
-          'Delete User Account',
+          "data.deleteUser",
+          "Delete User Account",
           false,
           {},
           error.message,
           `Failed to delete user account: ${error.message}`
         );
       }
-    }
+    },
   },
 
-  'data.clearLocal': {
-    id: 'data.clearLocal',
-    name: 'Clear Local Data Only',
-    description: 'Clear only local storage data (data will sync back from remote if online)',
+  "data.clearLocal": {
+    id: "data.clearLocal",
+    name: "Clear Local Data Only",
+    description:
+      "Clear only local storage data (data will sync back from remote if online)",
     category: ACTION_CATEGORIES.VIEWS,
     requiredParams: [],
     optionalParams: [],
@@ -1432,204 +1581,208 @@ const ACTIONS_REGISTRY = {
       return {
         hasLocalData: Object.keys(contextData).length > 0,
         totalChats: (contextData.chats || []).length,
-        totalMessages: Object.values(contextData.messagesByChat || {}).reduce((sum, messages) => sum + messages.length, 0),
-        totalArtifacts: (contextData.artifacts || []).length
+        totalMessages: Object.values(contextData.messagesByChat || {}).reduce(
+          (sum, messages) => sum + messages.length,
+          0
+        ),
+        totalArtifacts: (contextData.artifacts || []).length,
       };
     },
     handler: async (params = {}) => {
       try {
         if (!window.memory) {
           return createStandardizedResult(
-            'data.clearLocal',
-            'Clear Local Data Only',
+            "data.clearLocal",
+            "Clear Local Data Only",
             false,
             {},
-            'Memory module not available',
-            'Memory system is not loaded'
+            "Memory module not available",
+            "Memory system is not loaded"
           );
         }
 
         // Clear local data only
         window.memory.purgeAllData();
-        
+
         return createStandardizedResult(
-          'data.clearLocal',
-          'Clear Local Data Only',
+          "data.clearLocal",
+          "Clear Local Data Only",
           true,
-          { 
-            action: 'Local data cleared',
-            type: 'data_management'
+          {
+            action: "Local data cleared",
+            type: "data_management",
           },
           null,
-          'Local data cleared successfully. Data will sync back from remote if online.'
+          "Local data cleared successfully. Data will sync back from remote if online."
         );
-
       } catch (error) {
-        console.error('[ACTIONS] Error clearing local data:', error);
+        console.error("[ACTIONS] Error clearing local data:", error);
         return createStandardizedResult(
-          'data.clearLocal',
-          'Clear Local Data Only',
+          "data.clearLocal",
+          "Clear Local Data Only",
           false,
           {},
           error.message,
           `Failed to clear local data: ${error.message}`
         );
       }
-    }
+    },
   },
 
   // =================== Auth Actions ===================
 
-  'auth.login': {
-    id: 'auth.login',
-    name: 'Login',
-    description: 'Login with email address (sends magic link)',
+  "auth.login": {
+    id: "auth.login",
+    name: "Login",
+    description: "Login with email address (sends magic link)",
     category: ACTION_CATEGORIES.AUTH,
-    requiredParams: ['email'],
+    requiredParams: ["email"],
     optionalParams: [],
     availableData: () => {
       const session = window.user?.getActiveSession();
       return {
         isLoggedIn: session ? true : false,
-        currentUser: session?.user?.email || null
+        currentUser: session?.user?.email || null,
       };
     },
     handler: async (params = {}) => {
       const { email } = params;
-      
+
       // Validate email format
-      if (!email || typeof email !== 'string') {
+      if (!email || typeof email !== "string") {
         return createStandardizedResult(
-          'auth.login',
-          'Login',
+          "auth.login",
+          "Login",
           false,
           {},
-          'Email is required',
-          'Please provide a valid email address'
+          "Email is required",
+          "Please provide a valid email address"
         );
       }
-      
+
       // Simple email validation regex
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email.trim())) {
         return createStandardizedResult(
-          'auth.login',
-          'Login',
+          "auth.login",
+          "Login",
           false,
           {},
-          'Invalid email format',
-          'Please enter a valid email address (e.g., user@example.com)'
+          "Invalid email format",
+          "Please enter a valid email address (e.g., user@example.com)"
         );
       }
-      
+
       // Check if already logged in
       const session = window.user?.getActiveSession();
       if (session) {
         return createStandardizedResult(
-          'auth.login',
-          'Login',
+          "auth.login",
+          "Login",
           false,
           {},
-          'Already logged in',
+          "Already logged in",
           `You are already logged in as ${session.user?.email}`
         );
       }
-      
+
       // Use the new clean login function
       try {
         const result = await window.user.loginWithEmail(email.trim());
-        
+
         return createStandardizedResult(
-          'auth.login',
-          'Login',
+          "auth.login",
+          "Login",
           true,
-          { 
-            action: 'Magic link sent', 
+          {
+            action: "Magic link sent",
             email: email.trim(),
-            type: 'auth'
+            type: "auth",
           },
           null,
           result.message
         );
       } catch (error) {
         return createStandardizedResult(
-          'auth.login',
-          'Login',
+          "auth.login",
+          "Login",
           false,
           {},
-          'Login failed',
+          "Login failed",
           error.message
         );
       }
-    }
+    },
   },
 
-  'auth.logout': {
-    id: 'auth.logout',
-    name: 'Logout',
-    description: 'Log out the current user and clear authentication session',
+  "auth.logout": {
+    id: "auth.logout",
+    name: "Logout",
+    description: "Log out the current user and clear authentication session",
     category: ACTION_CATEGORIES.AUTH,
     requiredParams: [],
-    optionalParams: ['redirectUrl'],
+    optionalParams: ["redirectUrl"],
     availableData: () => {
       const session = window.user?.getActiveSession();
       return {
         isLoggedIn: session ? true : false,
-        currentUser: session?.user?.email || null
+        currentUser: session?.user?.email || null,
       };
     },
     handler: async (params = {}) => {
-      const { redirectUrl = '/' } = params;
-      
+      const { redirectUrl = "/" } = params;
+
       // Check if user is logged in using the proper session check
       const session = window.user?.getActiveSession();
       if (session && window.user?.logout) {
-        const username = session.user?.email || 'User';
-        
+        const username = session.user?.email || "User";
+
         // Use the app's built-in logout function which handles Supabase auth
         try {
           await window.user.logout();
           return createStandardizedResult(
-            'auth.logout',
-            'Logout',
+            "auth.logout",
+            "Logout",
             true,
-            { 
-              action: 'Logged out', 
+            {
+              action: "Logged out",
               redirectUrl,
-              type: 'auth',
-              username
+              type: "auth",
+              username,
             },
             null,
             `Successfully logged out ${username}`
           );
         } catch (error) {
           return createStandardizedResult(
-            'auth.logout',
-            'Logout',
+            "auth.logout",
+            "Logout",
             false,
             {},
-            'Logout failed',
+            "Logout failed",
             `Failed to logout: ${error.message}`
           );
         }
       } else {
         return createStandardizedResult(
-          'auth.logout',
-          'Logout',
+          "auth.logout",
+          "Logout",
           false,
           {},
-          'No user currently logged in',
-          'No active authentication session to logout from'
+          "No user currently logged in",
+          "No active authentication session to logout from"
         );
       }
-    }
-  }
+    },
+  },
 };
 
 // =================== Action Registry API ===================
 
 function getActionsByCategory(category) {
-  return Object.values(ACTIONS_REGISTRY).filter(action => action.category === category);
+  return Object.values(ACTIONS_REGISTRY).filter(
+    (action) => action.category === category
+  );
 }
 
 function getAction(actionId) {
@@ -1643,7 +1796,7 @@ async function executeAction(actionId, params = {}) {
   if (!action) {
     const errorResult = createStandardizedResult(
       actionId,
-      'Unknown Action',
+      "Unknown Action",
       false,
       {},
       `Action ${actionId} not found`,
@@ -1653,15 +1806,17 @@ async function executeAction(actionId, params = {}) {
   }
 
   // Validate required parameters
-  const missingParams = action.requiredParams.filter(param => !(param in params));
+  const missingParams = action.requiredParams.filter(
+    (param) => !(param in params)
+  );
   if (missingParams.length > 0) {
     const errorResult = createStandardizedResult(
       actionId,
       action.name,
       false,
       {},
-      `Missing required parameters: ${missingParams.join(', ')}`,
-      `Action ${actionId} requires: ${missingParams.join(', ')}`
+      `Missing required parameters: ${missingParams.join(", ")}`,
+      `Action ${actionId} requires: ${missingParams.join(", ")}`
     );
     return trackActionExecution(errorResult);
   }
@@ -1671,27 +1826,27 @@ async function executeAction(actionId, params = {}) {
 
   try {
     const result = await action.handler(params);
-    
+
     // Log successful execution
     console.log(`[ACTIONS] ${actionId} completed:`, result);
-    
+
     // Track and return the result
     trackActionExecution(result);
-    
+
     return result;
   } catch (error) {
     console.error(`[ACTIONS] ${actionId} failed:`, error);
     const errorResult = createStandardizedResult(
       actionId,
-      actionId.replace(/^[^.]+\./, ''),
+      actionId.replace(/^[^.]+\./, ""),
       false,
       {},
       error.message,
       `Failed to execute ${actionId}: ${error.message}`
     );
-    
+
     trackActionExecution(errorResult);
-    
+
     return errorResult;
   }
 }
@@ -1702,71 +1857,81 @@ function buildActionContext() {
   return {
     categories: ACTION_CATEGORIES,
     totalActions: Object.keys(ACTIONS_REGISTRY).length,
-    actionsByCategory: Object.keys(ACTION_CATEGORIES).reduce((acc, category) => {
-      acc[category] = getActionsByCategory(ACTION_CATEGORIES[category]).map(a => ({
-        id: a.id,
-        name: a.name,
-        description: a.description,
-        requiredParams: a.requiredParams,
-        optionalParams: a.optionalParams,
-        currentData: a.availableData ? a.availableData() : {}
-      }));
-      return acc;
-    }, {}),
+    actionsByCategory: Object.keys(ACTION_CATEGORIES).reduce(
+      (acc, category) => {
+        acc[category] = getActionsByCategory(ACTION_CATEGORIES[category]).map(
+          (a) => ({
+            id: a.id,
+            name: a.name,
+            description: a.description,
+            requiredParams: a.requiredParams,
+            optionalParams: a.optionalParams,
+            currentData: a.availableData ? a.availableData() : {},
+          })
+        );
+        return acc;
+      },
+      {}
+    ),
     currentState: {
       activeChatId: window.context?.getActiveChatId(),
       activeView: window.context?.getActiveView(),
       artifactCount: (window.context?.getCurrentChatArtifacts() || []).length,
-              messageCount: (window.context?.getMessages() || []).length
-    }
+      messageCount: (window.context?.getMessages() || []).length,
+    },
   };
 }
 
 // =================== Action Summary and Formatting ===================
 
 function formatActionSummary(actions, options = {}) {
-  const { groupByType = true, includeTimestamps = false, maxActions = null } = options;
-  
+  const {
+    groupByType = true,
+    includeTimestamps = false,
+    maxActions = null,
+  } = options;
+
   if (!actions || actions.length === 0) {
     return [];
   }
 
   let actionsToFormat = maxActions ? actions.slice(-maxActions) : actions;
-  
+
   if (groupByType) {
     const grouped = {};
-    actionsToFormat.forEach(action => {
-      const category = action.category || 'other';
+    actionsToFormat.forEach((action) => {
+      const category = action.category || "other";
       if (!grouped[category]) grouped[category] = [];
       grouped[category].push(action);
     });
     return grouped;
   }
-  
-  return actionsToFormat.map(action => ({
+
+  return actionsToFormat.map((action) => ({
     id: action.actionId,
     name: action.actionName,
     type: action.artifactType || action.result?.type || action.category,
     success: action.success,
     description: action.actionDescription || action.message,
     timestamp: includeTimestamps ? action.timestamp : undefined,
-    details: action.result
+    details: action.result,
   }));
 }
 
 function createActionDisplayData(chatId = null) {
   const actions = getActionHistory(chatId);
   const recentActions = getLastActions(10, chatId);
-  
+
   return {
     totalActions: actions.length,
-    recentActions: formatActionSummary(recentActions, { groupByType: false, includeTimestamps: true }),
+    recentActions: formatActionSummary(recentActions, {
+      groupByType: false,
+      includeTimestamps: true,
+    }),
     actionsByCategory: formatActionSummary(actions, { groupByType: true }),
-    lastAction: ACTION_HISTORY.lastExecutedAction
+    lastAction: ACTION_HISTORY.lastExecutedAction,
   };
 }
-
-
 
 // =================== Export API ===================
 
@@ -1774,31 +1939,31 @@ window.actions = {
   // Registry access
   getActionsByCategory,
   getAction,
-  
+
   // Execution
   executeAction,
-  
+
   // Tracking and History
   getActionHistory,
   getLastActions,
   clearActionHistory,
   trackActionExecution,
-  
+
   // Formatting and Display
   formatActionSummary,
   createActionDisplayData,
-  
+
   // Context
   buildActionContext,
-  
+
   // Utilities
   createStandardizedResult,
-  
+
   // Constants
   ACTION_CATEGORIES,
   ACTIONS_REGISTRY,
-  ACTION_HISTORY
+  ACTION_HISTORY,
 };
 
 // Make actions available globally for easy access
-window.Actions = ACTIONS_REGISTRY; 
+window.Actions = ACTIONS_REGISTRY;

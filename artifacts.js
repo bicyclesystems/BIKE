@@ -87,6 +87,12 @@ function createArtifactBase(
   window.context?.setState({ artifacts: [...currentArtifacts, artifact] });
   window.memory?.saveArtifacts();
 
+  // --- COLLABORATION SYNC ---
+  if (window.collaboration && window.collaboration.pushArtifactToCollab) {
+    window.collaboration.pushArtifactToCollab(artifact);
+  }
+  // --- END COLLABORATION SYNC ---
+
   if (shouldSetActive) {
     window.context?.setActiveArtifactId(id);
   }

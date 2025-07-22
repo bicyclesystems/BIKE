@@ -12,6 +12,12 @@ const collaboration = {
   collaborationId: null,
   peers: new Set(),
   isLeader: false,
+  messageQueue: [], // Queue for messages during reconnection
+  chatQueue: [], // Queue for chats during reconnection
+  artifactQueue: [], // Queue for artifacts during reconnection
+  lastSyncPing: 0,
+  isReconnecting: false,
+  databaseSyncQueue: [], // Queue for ordered database sync
 
   // Initialize collaboration
   async init() {
@@ -282,24 +288,38 @@ const collaboration = {
       return;
     }
 
-    // Listen for peer connections
+    // Listen for peer connections with monitoring
     this.provider.on("peers", (event) => {
       event.added.forEach((peerId) => {
         if (!this.peers.has(peerId)) {
           this.peers.add(peerId);
+          console.log(
+            `[COLLAB] 🟢 Peer connected: ${peerId.substring(0, 8)}... (total: ${
+              this.peers.size
+            })`
+          );
         }
       });
 
       event.removed.forEach((peerId) => {
         if (this.peers.has(peerId)) {
           this.peers.delete(peerId);
+          console.log(
+            `[COLLAB] 🔴 Peer disconnected: ${peerId.substring(
+              0,
+              8
+            )}... (total: ${this.peers.size})`
+          );
+
+          // If we lose all peers, attempt reconnection after delay
+          if (this.peers.size === 0) {
+            console.log(
+              "[COLLAB] ⚠️ All peers lost - scheduling reconnection..."
+            );
+            this.scheduleReconnection();
+          }
         }
       });
-
-      console.log(
-        "[COLLAB] Current peers after update:",
-        Array.from(this.peers)
-      );
 
       // Trigger UI update
       this.updateUI();
@@ -393,6 +413,291 @@ const collaboration = {
     // Set up data listeners for automatic data sync
     this.setupDataListeners();
     this.setupBidirectionalSync();
+
+    // Start connection health monitoring
+    this.startConnectionMonitoring();
+  },
+
+  // Connection monitoring and reconnection
+  scheduleReconnection(delay = 5000) {
+    if (this.reconnectionTimeout) {
+      clearTimeout(this.reconnectionTimeout);
+    }
+
+    this.reconnectionTimeout = setTimeout(() => {
+      console.log("[COLLAB] 🔄 Attempting reconnection...");
+      this.attemptReconnection();
+    }, delay); // Configurable delay for immediate or delayed reconnection
+  },
+
+  async attemptReconnection() {
+    if (!this.isCollaborating) {
+      console.log("[COLLAB] 🚫 Not collaborating - skipping reconnection");
+      return;
+    }
+
+    this.isReconnecting = true; // Flag to queue messages during reconnection
+
+    try {
+      console.log("[COLLAB] 🔄 Reconnecting provider...");
+
+      const roomName = this.collaborationId;
+      if (!roomName) {
+        console.error("[COLLAB] ❌ No room name for reconnection");
+        return;
+      }
+
+      // Disconnect current provider but keep the document
+      if (this.provider) {
+        this.provider.disconnect();
+        this.provider.destroy();
+        this.provider = null;
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+
+      // Create new provider with existing document (don't create new doc)
+      console.log(`[COLLAB] 🔄 Recreating provider for room: ${roomName}`);
+
+      if (!this.ydoc) {
+        console.error("[COLLAB] ❌ No Yjs document exists for reconnection");
+        return;
+      }
+
+      // Create new WebRTC provider with existing document
+      const signalingServers = ["ws://localhost:4444"];
+      this.provider = new window.WebrtcProvider(roomName, this.ydoc, {
+        signaling: signalingServers,
+        maxConns: 20,
+        filterBcConns: false,
+        peerOpts: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            { urls: "stun:stun2.l.google.com:19302" },
+            { urls: "stun:stun3.l.google.com:19302" },
+            { urls: "stun:stun4.l.google.com:19302" },
+          ],
+        },
+      });
+
+      // Re-setup event listeners
+      this.setupEventListeners();
+
+      console.log(`[COLLAB] ✅ Provider reconnected to room: ${roomName}`);
+
+      this.isReconnecting = false; // Clear reconnection flag
+
+      // Process queued messages after successful reconnection
+      this.processMessageQueue();
+    } catch (error) {
+      console.error("[COLLAB] ❌ Reconnection failed:", error);
+      this.isReconnecting = false; // Clear flag on failure too
+      // Schedule another attempt
+      this.scheduleReconnection();
+    }
+  },
+
+  // Process queued messages, chats, and artifacts after reconnection
+  processMessageQueue() {
+    const totalQueued =
+      this.messageQueue.length +
+      this.chatQueue.length +
+      this.artifactQueue.length;
+    if (totalQueued === 0) return;
+
+    console.log(
+      `[COLLAB] 📤 Processing ${totalQueued} queued items (${this.messageQueue.length} messages, ${this.chatQueue.length} chats, ${this.artifactQueue.length} artifacts)...`
+    );
+
+    let delay = 0;
+
+    // Process messages
+    const messageQueue = [...this.messageQueue];
+    this.messageQueue = [];
+    messageQueue.forEach((messageToSync, index) => {
+      try {
+        setTimeout(() => {
+          this.sharedMessages.push([messageToSync]);
+          console.log(
+            `[COLLAB] ✅ Queued message sent: "${messageToSync.content}"`
+          );
+        }, delay);
+        delay += 100;
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Failed to send queued message:", error);
+        this.messageQueue.push(messageToSync);
+      }
+    });
+
+    // Process chats
+    const chatQueue = [...this.chatQueue];
+    this.chatQueue = [];
+    chatQueue.forEach((chatToSync, index) => {
+      try {
+        setTimeout(() => {
+          this.sharedChats.push([chatToSync]);
+          console.log(`[COLLAB] ✅ Queued chat sent: "${chatToSync.title}"`);
+        }, delay);
+        delay += 100;
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Failed to send queued chat:", error);
+        this.chatQueue.push(chatToSync);
+      }
+    });
+
+    // Process artifacts
+    const artifactQueue = [...this.artifactQueue];
+    this.artifactQueue = [];
+    artifactQueue.forEach((artifactToSync, index) => {
+      try {
+        setTimeout(() => {
+          this.sharedArtifacts.push([artifactToSync]);
+          console.log(
+            `[COLLAB] ✅ Queued artifact sent: "${artifactToSync.title}"`
+          );
+        }, delay);
+        delay += 100;
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Failed to send queued artifact:", error);
+        this.artifactQueue.push(artifactToSync);
+      }
+    });
+
+    // After all items are sent to Yjs, process database sync queue in order
+    setTimeout(() => {
+      this.processDatabaseSyncQueue();
+    }, delay + 100); // Wait for all Yjs operations to complete
+  },
+
+  // Process database sync queue in the correct order
+  processDatabaseSyncQueue() {
+    if (this.databaseSyncQueue.length === 0) return;
+
+    console.log(
+      `[COLLAB] 💾 Processing ${this.databaseSyncQueue.length} database sync operations in order...`
+    );
+
+    const queue = [...this.databaseSyncQueue];
+    this.databaseSyncQueue = [];
+
+    queue.forEach((operation, index) => {
+      setTimeout(() => {
+        const { type, data } = operation;
+        console.log(`[COLLAB] 💾 Database sync: ${type}`);
+
+        // Trigger database sync through memory system
+        if (window.memory?.events) {
+          window.memory.events.dispatchEvent(
+            new CustomEvent("dataChanged", {
+              detail: { type, data },
+            })
+          );
+        }
+      }, index * 50); // Stagger database operations by 50ms
+    });
+  },
+
+  startConnectionMonitoring() {
+    // Monitor connection health every 3 seconds for fast detection
+    if (this.connectionMonitorInterval) {
+      clearInterval(this.connectionMonitorInterval);
+    }
+
+    this.connectionMonitorInterval = setInterval(() => {
+      if (this.isCollaborating && this.provider) {
+        const isConnected = this.provider.connected;
+        const peerCount = this.peers.size;
+
+        console.log(
+          `[COLLAB] ❤️ Health check - Connected: ${isConnected}, Peers: ${peerCount}`
+        );
+
+        // Fast detection of problematic states
+        if (!isConnected && peerCount > 0) {
+          console.log(
+            "[COLLAB] ⚠️ Provider disconnected but peers exist - document sync broken!"
+          );
+          this.scheduleReconnection(100); // Immediate reconnection
+        } else if (isConnected && peerCount === 0 && this.isCollaborating) {
+          console.log(
+            "[COLLAB] ⚠️ Provider connected but no peers - peer discovery broken!"
+          );
+          this.refreshConnection(); // Try light refresh first
+        }
+
+        // Fast message sync timeout detection (reduced to 5 seconds)
+        if (this.lastSentMessage && this.isCollaborating) {
+          const messageAge = Date.now() - this.lastSentMessage.timestamp;
+          if (messageAge > 5000) {
+            // Reduced to 5 seconds for faster detection
+            console.log(
+              `[COLLAB] ⚠️ Message sync timeout - sent "${
+                this.lastSentMessage.content
+              }" ${Math.round(messageAge / 1000)}s ago with no echo`
+            );
+            this.lastSentMessage = null; // Clear to avoid spam
+            this.scheduleReconnection(100); // Immediate reconnection
+          }
+        }
+
+        // Proactive sync verification
+        this.verifySyncHealth();
+      }
+    }, 3000); // Check every 3 seconds for fast response
+  },
+
+  // Light connection refresh without full reconnection
+  refreshConnection() {
+    if (!this.provider || !this.isCollaborating) return;
+
+    console.log("[COLLAB] 🔄 Light connection refresh...");
+
+    // Use proper Yjs mechanism for connection refresh
+    try {
+      // Trigger a small document update to refresh the connection
+      const refreshMap = this.ydoc.getMap("connectionRefresh");
+      refreshMap.set("timestamp", Date.now());
+      console.log("[COLLAB] 📡 Connection refresh triggered via Yjs");
+    } catch (error) {
+      console.warn("[COLLAB] ⚠️ Connection refresh failed:", error);
+      // Fall back to full reconnection if light refresh fails
+      this.scheduleReconnection(100);
+    }
+  },
+
+  // Proactive sync health verification
+  verifySyncHealth() {
+    if (!this.isCollaborating || !this.provider) return;
+
+    // Check if the provider is stale
+    const now = Date.now();
+    if (this.provider.connected && this.peers.size > 0) {
+      // Send a lightweight sync ping every 10 seconds to maintain connection
+      if (!this.lastSyncPing || now - this.lastSyncPing > 10000) {
+        this.sendSyncPing();
+        this.lastSyncPing = now;
+      }
+    }
+  },
+
+  // Send lightweight sync ping to maintain connection
+  sendSyncPing() {
+    if (!this.provider?.connected || !this.sharedMessages) return;
+
+    try {
+      // Use Yjs document update mechanism instead of direct broadcast
+      // This is more reliable and uses the proper Yjs API
+      const syncPingMap = this.ydoc.getMap("syncPing");
+      syncPingMap.set("ping", {
+        type: "sync_ping",
+        timestamp: Date.now(),
+        from: this.userId || "unknown",
+      });
+
+      console.log("[COLLAB] 🏓 Sync ping sent via Yjs");
+    } catch (error) {
+      console.warn("[COLLAB] ⚠️ Sync ping failed:", error);
+    }
   },
 
   // Update UI to show collaboration status
@@ -433,6 +738,16 @@ const collaboration = {
   // Clear session data (helper function)
   clearSessionData() {
     console.log("[COLLAB] 🧹 Clearing old session data...");
+
+    // Clear monitoring intervals
+    if (this.connectionMonitorInterval) {
+      clearInterval(this.connectionMonitorInterval);
+      this.connectionMonitorInterval = null;
+    }
+    if (this.reconnectionTimeout) {
+      clearTimeout(this.reconnectionTimeout);
+      this.reconnectionTimeout = null;
+    }
 
     // Disconnect provider if exists
     if (this.provider) {
@@ -719,6 +1034,14 @@ const collaboration = {
     this.sharedMessages = this.ydoc.getArray("sharedMessages");
     let hasAppliedInitialMessages = false;
 
+    // --- Granular, bidirectional sync for chats ---
+    this.sharedChats = this.ydoc.getArray("sharedChats");
+    let hasAppliedInitialChats = false;
+
+    // --- Granular, bidirectional sync for artifacts ---
+    this.sharedArtifacts = this.ydoc.getArray("sharedArtifacts");
+    let hasAppliedInitialArtifacts = false;
+
     // Initial sync: leader pushes all messages if array is empty
     if (this.isLeader && this.sharedMessages.length === 0) {
       try {
@@ -791,18 +1114,137 @@ const collaboration = {
       }
     }
 
+    // Initial sync: leader pushes all chats if array is empty
+    if (this.isLeader && this.sharedChats.length === 0) {
+      try {
+        const chats = JSON.parse(localStorage.getItem("chats") || "[]");
+        chats.forEach((chat) => {
+          const chatToSync = {
+            id: chat.id,
+            title: chat.title,
+            description: chat.description || "",
+            timestamp: chat.timestamp,
+            endTime: chat.endTime,
+          };
+          this.sharedChats.push([chatToSync]);
+        });
+        if (chats.length > 0) {
+          console.log("[COLLAB] 🚀 Leader synced", chats.length, "chats");
+        }
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error during initial chats sync:", e);
+      }
+    }
+
+    // Collaborator loads all chats from sharedChats if local is empty
+    if (!this.isLeader) {
+      let localChats = [];
+      try {
+        localChats = JSON.parse(localStorage.getItem("chats") || "[]");
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error parsing initial chats:", e);
+        localChats = [];
+      }
+      if (localChats.length === 0 && this.sharedChats.length > 0) {
+        const chatsFromShared = this.sharedChats.toArray();
+        localStorage.setItem("chats", JSON.stringify(chatsFromShared));
+
+        if (window.memory && window.memory.loadAll) window.memory.loadAll();
+        if (window.views && window.views.renderCurrentView)
+          window.views.renderCurrentView(false);
+        console.log(
+          "[COLLAB] ✅ Collaborator loaded",
+          this.sharedChats.length,
+          "chats"
+        );
+      }
+    }
+
+    // Initial sync: leader pushes all artifacts if array is empty
+    if (this.isLeader && this.sharedArtifacts.length === 0) {
+      try {
+        const artifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+        artifacts.forEach((artifact) => {
+          const artifactToSync = {
+            id: artifact.id,
+            title: artifact.title,
+            type: artifact.type,
+            slug: artifact.slug,
+            versions: artifact.versions,
+            liveUrl: artifact.liveUrl,
+            createdAt: artifact.createdAt,
+            updatedAt: artifact.updatedAt,
+            messageId: artifact.messageId,
+            chatId: artifact.chatId,
+          };
+          this.sharedArtifacts.push([artifactToSync]);
+        });
+        if (artifacts.length > 0) {
+          console.log(
+            "[COLLAB] 🚀 Leader synced",
+            artifacts.length,
+            "artifacts"
+          );
+        }
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error during initial artifacts sync:", e);
+      }
+    }
+
+    // Collaborator loads all artifacts from sharedArtifacts if local is empty
+    if (!this.isLeader) {
+      let localArtifacts = [];
+      try {
+        localArtifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+      } catch (e) {
+        console.warn("[COLLAB] ⚠️ Error parsing initial artifacts:", e);
+        localArtifacts = [];
+      }
+      if (localArtifacts.length === 0 && this.sharedArtifacts.length > 0) {
+        const artifactsFromShared = this.sharedArtifacts.toArray();
+        localStorage.setItem("artifacts", JSON.stringify(artifactsFromShared));
+
+        if (window.memory && window.memory.loadAll) window.memory.loadAll();
+        if (window.views && window.views.renderCurrentView)
+          window.views.renderCurrentView(false);
+        console.log(
+          "[COLLAB] ✅ Collaborator loaded",
+          this.sharedArtifacts.length,
+          "artifacts"
+        );
+      }
+    }
+
     // On local message add (example: call this when sending a message)
     this.pushMessageToCollab = (msgObj) => {
+      // Determine correct chatId based on role
+      let chatId;
+      if (this.isLeader) {
+        // Leader uses their own activeChatId
+        chatId =
+          msgObj.chatId ||
+          window.context?.getActiveChatId() ||
+          localStorage.getItem("activeChatId");
+      } else {
+        // Collaborator uses the leader's shared activeChatId
+        const syncMap = this.getSharedSyncMap();
+        const sharedActiveChatId = syncMap ? syncMap.get("activeChatId") : null;
+        chatId =
+          sharedActiveChatId ||
+          msgObj.chatId ||
+          window.context?.getActiveChatId() ||
+          localStorage.getItem("activeChatId");
+
+        console.log(`[COLLAB] 🎯 Collab using shared chatId: ${chatId}`);
+      }
+
       // Create a clean message structure with only essential fields
       const messageToSync = {
         role: msgObj.role,
         content: msgObj.content,
         message_id: msgObj.message_id,
         timestamp: msgObj.timestamp,
-        chatId:
-          msgObj.chatId ||
-          window.context?.getActiveChatId() ||
-          localStorage.getItem("activeChatId"),
+        chatId: chatId,
       };
 
       // If this is a collaborator, modify the role
@@ -814,11 +1256,103 @@ const collaboration = {
       console.log(
         `[COLLAB] 📤 ${this.isLeader ? "Leader" : "Collab"} → "${
           msgObj.content
-        }"`
+        }" (peers: ${this.peers.size})`
       );
 
-      // Push as individual message (Yjs will wrap it in ContentAny)
-      this.sharedMessages.push([messageToSync]);
+      // Optimistic message sending with queueing during reconnection
+      if (this.isReconnecting || !this.provider?.connected) {
+        console.log("[COLLAB] 📋 Queueing message during reconnection...");
+        this.messageQueue.push(messageToSync);
+        return;
+      }
+
+      try {
+        // Push as individual message (Yjs will wrap it in ContentAny)
+        this.sharedMessages.push([messageToSync]);
+
+        // Track message for sync verification
+        this.lastSentMessage = {
+          id: messageToSync.message_id,
+          timestamp: Date.now(),
+          content: messageToSync.content,
+        };
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Message send failed, queueing:", error);
+        this.messageQueue.push(messageToSync);
+      }
+    };
+
+    // Push chat to collaboration (EXACTLY like messages)
+    this.pushChatToCollab = (chatObj) => {
+      const chatToSync = {
+        id: chatObj.id,
+        title: chatObj.title,
+        description: chatObj.description || "",
+        timestamp: chatObj.timestamp,
+        endTime: chatObj.endTime,
+        role: this.isLeader ? "leader" : "collab", // Track who created it
+        userId: this.userId || "unknown",
+      };
+
+      console.log(
+        `[COLLAB] 📤 ${this.isLeader ? "Leader" : "Collab"} → Chat "${
+          chatObj.title
+        }" (peers: ${this.peers.size})`
+      );
+
+      // Optimistic chat sending with queueing during reconnection (SAME as messages)
+      if (this.isReconnecting || !this.provider?.connected) {
+        console.log("[COLLAB] 📋 Queueing chat during reconnection...");
+        this.chatQueue.push(chatToSync);
+        return;
+      }
+
+      try {
+        this.sharedChats.push([chatToSync]);
+        console.log("[COLLAB] ✅ Chat synced to peers");
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Chat send failed, queueing:", error);
+        this.chatQueue.push(chatToSync);
+      }
+    };
+
+    // Push artifact to collaboration (EXACTLY like messages)
+    this.pushArtifactToCollab = (artifactObj) => {
+      const artifactToSync = {
+        id: artifactObj.id,
+        title: artifactObj.title,
+        type: artifactObj.type,
+        slug: artifactObj.slug,
+        versions: artifactObj.versions,
+        liveUrl: artifactObj.liveUrl,
+        createdAt: artifactObj.createdAt,
+        updatedAt: artifactObj.updatedAt,
+        messageId: artifactObj.messageId,
+        chatId: artifactObj.chatId,
+        role: this.isLeader ? "leader" : "collab", // Track who created it
+        userId: this.userId || "unknown",
+      };
+
+      console.log(
+        `[COLLAB] 📤 ${this.isLeader ? "Leader" : "Collab"} → Artifact "${
+          artifactObj.title
+        }" (peers: ${this.peers.size})`
+      );
+
+      // Optimistic artifact sending with queueing during reconnection (SAME as messages)
+      if (this.isReconnecting || !this.provider?.connected) {
+        console.log("[COLLAB] 📋 Queueing artifact during reconnection...");
+        this.artifactQueue.push(artifactToSync);
+        return;
+      }
+
+      try {
+        this.sharedArtifacts.push([artifactToSync]);
+        console.log("[COLLAB] ✅ Artifact synced to peers");
+      } catch (error) {
+        console.warn("[COLLAB] ⚠️ Artifact send failed, queueing:", error);
+        this.artifactQueue.push(artifactToSync);
+      }
     };
 
     // On remote message add (always process new messages)
@@ -842,6 +1376,16 @@ const collaboration = {
         }
 
         newMessages.forEach((newMsg, msgIndex) => {
+          // Skip processing our own messages (prevent self-echo)
+          if (newMsg.role === "collab" && !this.isLeader) {
+            // This is a collaborator message and we are the collaborator - skip
+            return;
+          }
+          if (newMsg.role !== "collab" && this.isLeader) {
+            // This is a leader message and we are the leader - skip
+            return;
+          }
+
           // Get current messagesByChat state
           let messagesByChat = {};
           try {
@@ -885,6 +1429,17 @@ const collaboration = {
               }"`
             );
 
+            // Clear last sent message (sync is working)
+            if (this.lastSentMessage) {
+              this.lastSentMessage = null;
+            }
+
+            // Queue database sync for later (maintain order)
+            this.databaseSyncQueue.push({
+              type: "message",
+              data: { chatId: chatId, message: newMsg },
+            });
+
             // Update UI/state with proper timing
             setTimeout(() => {
               if (window.memory && window.memory.loadAll) {
@@ -914,6 +1469,151 @@ const collaboration = {
       });
     });
 
+    // On remote chats add/change
+    this.sharedChats.observe((event) => {
+      event.changes.added.forEach((item, itemIndex) => {
+        // Extract actual chat from Yjs ContentAny wrapper
+        let newChats = [];
+        if (
+          item.content &&
+          item.content.arr &&
+          Array.isArray(item.content.arr)
+        ) {
+          newChats = item.content.arr;
+        } else if (Array.isArray(item.content)) {
+          newChats = item.content;
+        } else {
+          newChats = [item.content];
+        }
+
+        newChats.forEach((newChat) => {
+          // Get current chats state
+          let chats = [];
+          try {
+            chats = JSON.parse(localStorage.getItem("chats") || "[]");
+          } catch (e) {
+            console.warn("[COLLAB] ⚠️ Error parsing chats:", e);
+            chats = [];
+          }
+
+          // Check for duplicates using chat id
+          const exists = chats.some((c) => c.id === newChat.id);
+
+          if (!exists) {
+            // Add chat to the array
+            chats.push(newChat);
+
+            // Save to localStorage
+            localStorage.setItem("chats", JSON.stringify(chats));
+
+            console.log(
+              `[COLLAB] 📨 ${this.isLeader ? "Leader" : "Collab"} ← Chat "${
+                newChat.title
+              }"`
+            );
+
+            // Queue database sync for later (maintain order)
+            this.databaseSyncQueue.push({
+              type: "chat",
+              data: newChat,
+            });
+
+            // Update UI/state with proper timing
+            setTimeout(() => {
+              if (window.memory && window.memory.loadAll) {
+                window.memory.loadAll();
+              }
+              if (window.views && window.views.renderCurrentView) {
+                window.views.renderCurrentView(false);
+              }
+              if (window.memoryView && window.memoryView.refreshView) {
+                window.memoryView.refreshView();
+              }
+              document.dispatchEvent(
+                new CustomEvent("collaborationDataUpdate", {
+                  detail: { type: "chatReceived", chatId: newChat.id },
+                })
+              );
+            }, 100);
+          }
+        });
+      });
+    });
+
+    // On remote artifacts add/change
+    this.sharedArtifacts.observe((event) => {
+      event.changes.added.forEach((item, itemIndex) => {
+        // Extract actual artifact from Yjs ContentAny wrapper
+        let newArtifacts = [];
+        if (
+          item.content &&
+          item.content.arr &&
+          Array.isArray(item.content.arr)
+        ) {
+          newArtifacts = item.content.arr;
+        } else if (Array.isArray(item.content)) {
+          newArtifacts = item.content;
+        } else {
+          newArtifacts = [item.content];
+        }
+
+        newArtifacts.forEach((newArtifact) => {
+          // Get current artifacts state
+          let artifacts = [];
+          try {
+            artifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+          } catch (e) {
+            console.warn("[COLLAB] ⚠️ Error parsing artifacts:", e);
+            artifacts = [];
+          }
+
+          // Check for duplicates using artifact id
+          const exists = artifacts.some((a) => a.id === newArtifact.id);
+
+          if (!exists) {
+            // Add artifact to the array
+            artifacts.push(newArtifact);
+
+            // Save to localStorage
+            localStorage.setItem("artifacts", JSON.stringify(artifacts));
+
+            console.log(
+              `[COLLAB] 📨 ${this.isLeader ? "Leader" : "Collab"} ← Artifact "${
+                newArtifact.title
+              }"`
+            );
+
+            // Queue database sync for later (maintain order)
+            this.databaseSyncQueue.push({
+              type: "artifact",
+              data: newArtifact,
+            });
+
+            // Update UI/state with proper timing
+            setTimeout(() => {
+              if (window.memory && window.memory.loadAll) {
+                window.memory.loadAll();
+              }
+              if (window.views && window.views.renderCurrentView) {
+                window.views.renderCurrentView(false);
+              }
+              if (window.memoryView && window.memoryView.refreshView) {
+                window.memoryView.refreshView();
+              }
+              document.dispatchEvent(
+                new CustomEvent("collaborationDataUpdate", {
+                  detail: {
+                    type: "artifactReceived",
+                    artifactId: newArtifact.id,
+                  },
+                })
+              );
+            }, 100);
+          }
+        });
+      });
+    });
+
     let isApplyingRemote = false;
     let hasAppliedInitialSync = false;
     let isSyncingInitialState = false;
@@ -927,7 +1627,15 @@ const collaboration = {
         if (!this.isLeader && !hasAppliedInitialSync) return;
         const { type, data } = e.detail;
         if (type === "all") {
-          // Check if this is just a message addition (should use individual sync)
+          // COLLABORATORS: Only handle message-related changes, never chats structure
+          if (!this.isLeader) {
+            console.log(
+              "[COLLAB] 🚫 Collab skipping general sync - leaders manage chats structure"
+            );
+            return; // Collaborators should never modify chats structure
+          }
+
+          // LEADER ONLY: Check if this is just a message addition (should use individual sync)
           const currentChats = JSON.parse(
             localStorage.getItem("chats") || "[]"
           );
@@ -967,23 +1675,14 @@ const collaboration = {
           );
           const currentActiveChatId = localStorage.getItem("activeChatId");
 
-          // SMART MERGE: Only use local data if it has MORE content than shared
+          // SMART MERGE: Only handle non-message data (prevent race conditions)
           const mergedChats =
             currentChats.length >= latestChats.length
               ? currentChats
               : latestChats;
 
-          // For messagesByChat: merge by taking the version with more total messages
-          const currentTotalMessages = Object.values(
-            currentMessagesByChat
-          ).reduce((sum, msgs) => sum + msgs.length, 0);
-          const latestTotalMessages = Object.values(
-            latestMessagesByChat
-          ).reduce((sum, msgs) => sum + msgs.length, 0);
-          const mergedMessagesByChat =
-            currentTotalMessages >= latestTotalMessages
-              ? currentMessagesByChat
-              : latestMessagesByChat;
+          // SKIP messagesByChat - handled exclusively by individual message sync
+          // This prevents race conditions between sync mechanisms
 
           const mergedArtifacts =
             currentArtifacts.length >= latestArtifacts.length
@@ -997,7 +1696,7 @@ const collaboration = {
           const mergedActiveChatId = currentActiveChatId || latestActiveChatId;
 
           syncMap.set("chats", JSON.stringify(mergedChats));
-          syncMap.set("messagesByChat", JSON.stringify(mergedMessagesByChat));
+          // syncMap.set("messagesByChat", ...) - REMOVED to prevent conflicts
           syncMap.set("artifacts", JSON.stringify(mergedArtifacts));
           syncMap.set("userPreferences", JSON.stringify(mergedUserPreferences));
           syncMap.set("activeChatId", mergedActiveChatId);
@@ -1019,9 +1718,7 @@ const collaboration = {
           syncMap.get("userPreferences") || "{}"
         );
         const activeChatId = syncMap.get("activeChatId") || null;
-        const summary = `chats:${chats.length}, messages:${
-          Object.keys(messagesByChat).length
-        }, artifacts:${artifacts.length}, activeChatId:${activeChatId}`;
+        const summary = `chats:${chats.length}, artifacts:${artifacts.length}, activeChatId:${activeChatId}`;
 
         // Collaborator: Only apply leader's data the first time
         if (
@@ -1065,43 +1762,19 @@ const collaboration = {
             JSON.stringify(userPreferences)
           );
           if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
-          // Only log if the data actually changed
+          // Only refresh UI if non-message data actually changed
           if (summary !== lastRemoteSummary) {
-            console.log(
-              `[COLLAB] 🟢 ${
-                this.isLeader ? "Leader" : "Collab"
-              } data synced via general sync (syncMap.observeDeep)`
-            );
-            console.log("[COLLAB] 📊 Data summary:", summary);
-
-            // Add UI refresh for general data sync
             setTimeout(() => {
-              console.log(
-                "[COLLAB] 🔄 Refreshing UI after general data sync..."
-              );
               if (window.memory && window.memory.loadAll) {
                 window.memory.loadAll();
-                console.log(
-                  "[COLLAB] ✅ memory.loadAll() called (general sync)"
-                );
               }
               if (window.views && window.views.renderCurrentView) {
                 window.views.renderCurrentView(false);
-                console.log(
-                  "[COLLAB] ✅ views.renderCurrentView() called (general sync)"
-                );
               }
               if (window.memoryView && window.memoryView.refreshView) {
                 window.memoryView.refreshView();
-                console.log(
-                  "[COLLAB] ✅ memoryView.refreshView() called (general sync)"
-                );
               }
-              console.log(
-                "[COLLAB] 🟢 UI refresh completed after general data sync"
-              );
             }, 120);
-
             lastRemoteSummary = summary;
           }
         }
