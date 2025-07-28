@@ -35,7 +35,7 @@ class SessionManager {
   async triggerProcess(context = "unknown", delay = 0) {
     const triggerFn = () => {
       try {
-
+        console.log(`[SESSION] Triggering process for ${context}`);
 
         if (window.processModule?.process) {
           window.processModule.process();
@@ -224,8 +224,8 @@ function initAuth() {
   document.getElementById("auth-indicator")?.remove();
 
   return new Promise((resolve) => {
-    supabase.auth.onAuthStateChange((event, session) => {
-  
+        supabase.auth.onAuthStateChange((event, session) => {
+      console.log("[AUTH] State change:", event);
       const isNewLogin = event === "SIGNED_IN";
       userSession = session;
 
@@ -299,7 +299,7 @@ function removeIntroScreen() {
 
 // =================== App Initialization ===================
 function initializeMainApp() {
-
+  console.log('[AUTH] Initializing app');
 
   const chats = window.context.getChats() || [];
   const activeChatId = window.context.getActiveChatId();
@@ -309,10 +309,10 @@ function initializeMainApp() {
   );
 
   if (chats.length === 0) {
-  
-    window.actions.executeAction("chat.create", {});
+    console.log('[AUTH] Creating new chat');
+    window.actions.executeAction("messages.create", {});
   } else if (!activeChatId) {
-  
+    console.log('[AUTH] Setting first chat as active');
     window.context.setActiveChat(chats[0].id);
   }
 
@@ -339,6 +339,10 @@ async function handleAuthenticatedState() {
   }
 
   initializeMainApp();
+  
+  // Trigger contextual guidance for fresh logins only (not page refreshes)
+  await window.sessionManager.handleFreshLogin();
+  console.log('[AUTH] Authentication complete');
 }
 
 // =================== Sync Integration ===================
@@ -349,9 +353,9 @@ async function initializeSync() {
   }
 
   try {
-  
+    console.log('[AUTH] Initializing sync');
     await window.syncManager.initializeWithAuth(supabase, userSession);
-    
+    console.log('[AUTH] Sync complete');
   } catch (error) {
     console.error("[AUTH] Sync failed:", error);
   }
@@ -391,7 +395,7 @@ function handleUnauthenticatedState() {
   toggleUI(true); // Enable UI so users can interact
 
   // Create chat BEFORE setting memory view to ensure active chat exists
-  window.actions.executeAction("chat.create", {});
+  window.actions.executeAction("messages.create", {});
   window.context.setActiveView("memory", {}, { withTransition: false });
   window.views.renderCurrentView(false); // No transition during initialization
 }

@@ -143,10 +143,10 @@ function process(input = null) {
         }
       }
       
-      // If no input found anywhere, switch to contextual guidance mode
+            // If no input found anywhere, switch to contextual guidance mode
       if (!cleanText) {
         isContextualGuidance = true;
-
+        console.log('[PROCESS] No input found - switching to contextual guidance mode');
       }
       
       // Add user message only if we have input to display (not in contextual guidance mode)

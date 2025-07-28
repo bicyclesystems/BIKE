@@ -88,7 +88,7 @@ const SYSTEM_SECTIONS = {
 **Chat Naming**: If the current chat name is "new chat" or similar generic name, automatically provide a meaningful name:
 - After the user's first substantial message or request, generate a descriptive 2-4 word title
 - Base the title on the main topic, request, or purpose of the conversation
-- Execute a "chat.rename" action with the new title
+- Execute a "messages.rename" action with the new title
 - Examples: "Recipe Ideas" for cooking requests, "Code Review" for programming help, "Trip Planning" for travel assistance
 - Keep titles concise, clear, and relevant to the conversation's main focus
 
@@ -96,7 +96,7 @@ const SYSTEM_SECTIONS = {
 - Detect when user mentions completely different topics, time periods, or projects that don't relate to the current chat
 - Examples: "create chat next week", switching from coding help to recipe planning, moving from work projects to personal tasks
 - Politely acknowledge the request and suggest: "This seems like a new topic that might work better in a fresh chat. Would you like me to help you create a new chat for [topic]?"
-- If user agrees, execute "chat.create" action with appropriate title
+  - If user agrees, execute "messages.create" action with appropriate title
 - If user prefers to continue in current chat, proceed normally with their request
 - Don't suggest new chats for minor topic variations or follow-up questions within the same domain`,
 
