@@ -48,7 +48,7 @@ class SupabaseSync {
 
     await waitForMemory();
     window.memory.events.addEventListener("dataChanged", this.handleDataChange);
-    console.log("[SYNC] Memory event listeners established");
+
   }
 
   handleDataChange(event) {
@@ -119,7 +119,7 @@ class SupabaseSync {
         // Don't create Supabase client here - let auth system provide it
         // This ensures we use the same authenticated session
         this.isInitialized = true;
-        console.log("[SYNC] Basic initialization completed, waiting for auth");
+    
       } catch (error) {
         this.isOfflineOnly = true;
         this.sessionId = "fallback_" + Date.now();
@@ -142,7 +142,7 @@ class SupabaseSync {
   // =================== Authentication Integration ===================
   async initializeWithAuth(supabaseClient, session) {
     try {
-      console.log("[SYNC] Initializing with authenticated session");
+  
 
       this.supabase = supabaseClient;
       this.sessionId = session.access_token;
@@ -152,7 +152,7 @@ class SupabaseSync {
         this.userId = session.user.id;
         localStorage.setItem("userId", this.userId);
         window.userId = this.userId;
-        console.log("[SYNC] User ID set from session:", this.userId);
+    
       }
 
       // Initialize user in database
@@ -166,7 +166,7 @@ class SupabaseSync {
       // Set up real-time subscriptions
       await this.setupRealtime();
 
-      console.log("[SYNC] Full sync initialization completed");
+  
       return true;
     } catch (error) {
       console.error("[SYNC] Auth initialization failed:", error);
@@ -209,7 +209,7 @@ class SupabaseSync {
           window.memory.saveUserPreferences(existingUser.preferences);
         }
 
-        console.log("[SYNC] Existing user found:", this.userId);
+  
       } else {
         // Create new user with the authenticated user ID
         const currentPrefs = window.memory?.getUserPreferences() || {};
@@ -223,7 +223,7 @@ class SupabaseSync {
         if (error && !error.message.includes("duplicate")) {
           throw error;
         }
-        console.log("[SYNC] New user created:", this.userId);
+
       }
 
       // Store in global scope for easy access
@@ -233,7 +233,7 @@ class SupabaseSync {
       // Try to load from localStorage as fallback
       this.userId = localStorage.getItem("userId");
       if (this.userId) {
-        console.log("[SYNC] Fallback to localStorage user:", this.userId);
+  
       }
     }
   }
@@ -277,14 +277,14 @@ class SupabaseSync {
       this.realtimeSubscriptions.set("messages", messagesSubscription);
       this.realtimeSubscriptions.set("artifacts", artifactsSubscription);
 
-      console.log("[SYNC] Real-time subscriptions established");
+  
     } catch (error) {
       console.error("[SYNC] Real-time setup failed:", error);
     }
   }
 
   handleRealtimeChange(table, payload) {
-    console.log(`[SYNC] Real-time change in ${table}:`, payload);
+
 
     switch (payload.eventType) {
       case "INSERT":
@@ -412,7 +412,7 @@ class SupabaseSync {
   // =================== Local State Removal (for sync operations) ===================
 
   removeChatFromLocalState(chatId) {
-    console.log(`[SYNC] Removing chat ${chatId} from local state only`);
+
     const localChats = (window.context?.getChats() || []).filter(
       (c) => c.id !== chatId
     );
@@ -428,13 +428,11 @@ class SupabaseSync {
   removeMessageFromLocalState(messageId) {
     // Since we don't store message IDs locally, we can't remove specific messages
     // This would require a more sophisticated local storage structure
-    console.log(
-      `[SYNC] Message deletion from local state not implemented (messageId: ${messageId})`
-    );
+    // Not implemented - messages are removed at the chat level
   }
 
   removeArtifactFromLocalState(artifactId) {
-    console.log(`[SYNC] Removing artifact ${artifactId} from local state only`);
+
     const localArtifacts = (window.context?.getArtifacts() || []).filter(
       (a) => a.id !== artifactId
     );
@@ -451,7 +449,7 @@ class SupabaseSync {
     }
 
     try {
-      console.log(`[SYNC] Deleting chat ${chatId} from database`);
+
 
       // Delete messages first (due to foreign key constraints)
       const { error: messagesError } = await this.supabase
@@ -492,7 +490,7 @@ class SupabaseSync {
         throw chatError;
       }
 
-      console.log(`[SYNC] Successfully deleted chat ${chatId} from database`);
+
       return true;
     } catch (error) {
       console.error("[SYNC] Error deleting chat from database:", error);
@@ -509,7 +507,7 @@ class SupabaseSync {
     }
 
     try {
-      console.log(`[SYNC] Deleting message ${messageId} from database`);
+
 
       const { error } = await this.supabase
         .from("messages")
@@ -567,7 +565,7 @@ class SupabaseSync {
     if (!this.supabase || !this.userId) return;
 
     try {
-      console.log("[SYNC] Starting initial sync...");
+  
 
       // Sync chats
       await this.syncChats();
@@ -582,7 +580,7 @@ class SupabaseSync {
       await this.processQueue();
 
       this.lastSyncTimestamp = new Date().toISOString();
-      console.log("[SYNC] Initial sync completed");
+  
     } catch (error) {
       console.error("[SYNC] Initial sync failed:", error);
     }
@@ -788,7 +786,7 @@ class SupabaseSync {
       ]);
 
       if (error) throw error;
-      console.log("[SYNC] Chat uploaded:", chat.id);
+  
     } catch (error) {
       console.error("[SYNC] Chat upload failed:", error);
       this.queueOperation("uploadChat", chat);
@@ -813,7 +811,7 @@ class SupabaseSync {
       ]);
 
       if (error) throw error;
-      console.log("[SYNC] Message uploaded for chat:", chatId);
+      
     } catch (error) {
       console.error("[SYNC] Message upload failed:", error);
       this.queueOperation("uploadMessage", { chatId, message });
@@ -841,7 +839,7 @@ class SupabaseSync {
       ]);
 
       if (error) throw error;
-      console.log("[SYNC] Artifact uploaded:", artifact.id);
+      
     } catch (error) {
       console.error("[SYNC] Artifact upload failed:", error);
       this.queueOperation("uploadArtifact", artifact);
@@ -896,7 +894,7 @@ class SupabaseSync {
 
   // =================== Online/Offline Handling ===================
   async handleOnline() {
-    console.log("[SYNC] Back online");
+    
     this.isOnline = true;
 
     if (this.isInitialized && this.supabase) {
@@ -907,7 +905,7 @@ class SupabaseSync {
   }
 
   handleOffline() {
-    console.log("[SYNC] Gone offline");
+    
     this.isOnline = false;
 
     // Unsubscribe from real-time
@@ -935,7 +933,7 @@ class SupabaseSync {
         .eq("id", this.userId);
 
       if (error) throw error;
-      console.log("[SYNC] User preferences synced to database");
+
       return true;
     } catch (error) {
       console.error("[SYNC] Failed to sync user preferences:", error);

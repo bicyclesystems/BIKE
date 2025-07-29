@@ -216,7 +216,7 @@ async function logout() {
     toggleUI(false);
     await updateAuthState(null);
   } catch (error) {
-    alert(error.message);
+    // Handle error gracefully without alert - user will see login screen if data can't be loaded
   }
 }
 
@@ -224,7 +224,7 @@ function initAuth() {
   document.getElementById("auth-indicator")?.remove();
 
   return new Promise((resolve) => {
-    supabase.auth.onAuthStateChange((event, session) => {
+        supabase.auth.onAuthStateChange((event, session) => {
       console.log("[AUTH] State change:", event);
       const isNewLogin = event === "SIGNED_IN";
       userSession = session;
@@ -299,7 +299,7 @@ function removeIntroScreen() {
 
 // =================== App Initialization ===================
 function initializeMainApp() {
-  console.log("[AUTH] Initializing app");
+  console.log('[AUTH] Initializing app');
 
   const chats = window.context.getChats() || [];
   const activeChatId = window.context.getActiveChatId();
@@ -363,6 +363,10 @@ async function handleAuthenticatedState() {
   }
 
   initializeMainApp();
+  
+  // Trigger contextual guidance for fresh logins only (not page refreshes)
+  await window.sessionManager.handleFreshLogin();
+  console.log('[AUTH] Authentication complete');
 }
 
 // =================== Sync Integration ===================
@@ -373,9 +377,9 @@ async function initializeSync() {
   }
 
   try {
-    console.log("[AUTH] Initializing sync");
+    console.log('[AUTH] Initializing sync');
     await window.syncManager.initializeWithAuth(supabase, userSession);
-    console.log("[AUTH] Sync complete");
+    console.log('[AUTH] Sync complete');
   } catch (error) {
     console.error("[AUTH] Sync failed:", error);
   }
@@ -426,7 +430,6 @@ function handleUnauthenticatedState() {
   }
 
   // Keep intro screen visible for unauthenticated users
-  // removeIntroScreen(); // Don't remove intro screen immediately
   toggleUI(true); // Enable UI so users can interact
 
   // Check for existing chats in localStorage before creating new ones
@@ -453,8 +456,6 @@ function handleUnauthenticatedState() {
 
   window.context.setActiveView("memory", {}, { withTransition: false });
   window.views.renderCurrentView(false); // No transition during initialization
-
-  // Auto-processing for guest mode removed - users must initiate processing manually
 }
 
 // Track auth state to detect fresh logins
@@ -551,7 +552,7 @@ async function getUserMessages() {
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.log(error);
+
     console.error("[USER] Failed to fetch messages:", error);
     return [];
   }

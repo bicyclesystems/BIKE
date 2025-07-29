@@ -11,7 +11,27 @@ Messages create artifacts. Artifacts are memory. Views are display. Chat drives 
 ## Flow Architecture
 
 **Core Loop:**
-`[User + Context] → Input → Process → Orchestrate → [Actions | Messages] → [Artifacts ↔ View] → Memory → Sync`
+
+user + context ───► input ───► process ───► orchestrate
+          ▲                                      │
+          │                                      ▼
+          │ ◄─────────────────────────────────  chat ←→ view
+          │                                      │
+          │                                      ▼
+          │ ◄─────────────────────────────────  actions ←→ view
+          │                                      │
+          │                                      ▼
+          │ ◄─────────────────────────────────  artifacts ←→ view
+          │                                      │
+          │                                      ▼
+          │ ◄─────────────────────────────────  memory ←→ view
+                                                 │
+                                                 ▼
+                                                sync ←→ integrations
+                                                 │                                                  ├── external services
+                                                 ├── APIs
+                                                 └── webhooks
+
 
 **Always Active:**
 - Chat Interface
@@ -22,7 +42,8 @@ Core components:
 * **User** — owns data, initiates interactions. Supports organizations and roles.
 * **Context** — active conversation state. Tracks history, artifacts, and participants.
 * **Input** — visual interface for capturing messages. Handles UI/UX, context highlighting, and user input processing.
-* **Process** — unified intent engine. Handles message processing and content generation.
+* **System** — prompt builder. Converts app state into AI instructions using modular prompt sections.
+* **Process** — AI communication. Handles API calls, message flow, and response coordination.
 * **Orchestrate** — response coordinator. Orchestrates AI responses into system changes and operations.
 * **Actions** — system commands: create artifacts, switch views, manage chats.
 * **Messages** — chat interface (always available)
@@ -30,6 +51,7 @@ Core components:
 * **View** — current display renderer. Shows artifacts fullscreen with transitions.
 * **Memory** — data persistence for artifacts, chats, preferences, and state.
 * **Sync** — real-time synchronization between local storage and cloud with offline support.
+* **Integrations** — bridges to external services, APIs, and automation workflows.
 
 ## Artifacts
 
@@ -48,7 +70,7 @@ Artifacts are persistent conversation memory.
 * Modifiable through conversation
 * Linkable and versionable
 * Real-time collaboration
-* External sync (Google Drive, Notion, etc.)
+* External sync through integrations
 
 ## Display System
 
@@ -78,8 +100,31 @@ Living conversation thread containing:
 * Current processing flow
 * Error recovery state
 
+## Integrations
+
+Extensible bridges connecting BIKE to external services and automation workflows.
+
+### Types
+* **Storage** — Google Drive, Dropbox, OneDrive, GitHub repositories
+* **Productivity** — Notion, Airtable, Linear, Slack, Discord
+* **AI Services** — Custom models, specialized APIs, processing pipelines
+* **Webhooks** — Real-time triggers and event-driven automation
+* **APIs** — REST endpoints, GraphQL services, custom integrations
+
+### Features
+* **Bidirectional sync** — read from and write to external services
+* **Event-driven** — trigger actions based on external changes
+* **Contextual** — integrate with current conversation and artifacts
+* **Conversational** — manage integrations through chat interface
+* **Secure** — encrypted connections with proper authentication
+* **Extensible** — plugin architecture for custom integrations
+
 ### Operations
-Create, switch, merge, branch, and archive conversations.
+* Connect/disconnect services through chat commands
+* Automatic data synchronization with conflict resolution
+* Cross-platform artifact sharing and collaboration
+* Real-time notifications and webhook processing
+* Custom automation workflows and triggers
 
 ## Design Principles
 
@@ -113,12 +158,13 @@ Create, switch, merge, branch, and archive conversations.
 
 ### Data Flow
 1. User input → Input interface (UI/UX processing)
-2. Processed input → Process engine (AI communication, content generation & logic)
-3. AI response → Orchestrate coordinator (response handling)
-4. Actions triggered → Create/Modify artifacts
-5. Artifacts saved → Memory layer
-6. View updated → View engine
-7. Display rendered → User sees result
+2. Context + user state → System module (builds AI instructions)
+3. Processed input + system prompt → Process engine (AI communication, content generation & logic)
+4. AI response → Orchestrate coordinator (response handling)
+5. Actions triggered → Create/Modify artifacts
+6. Artifacts saved → Memory layer
+7. View updated → View engine
+8. Display rendered → User sees result
 
 ---
 
