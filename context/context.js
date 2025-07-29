@@ -234,8 +234,8 @@ async function init(session = null) {
   }
 
   const isAuthenticated = !!session;
-
-  if (isAuthenticated) {
+  
+    if (isAuthenticated) {
     // AUTHENTICATED: Load existing data normally
     console.log("[CONTEXT] Initializing for authenticated user");
     window.memory?.loadAll();

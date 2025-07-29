@@ -15,85 +15,51 @@
     </script>
   </head>
 
-  <body
-    class="view align-center justify-center"
-    style="
-      background-size: cover;
-      background-position: center center;
-      background-repeat: no-repeat;
-      background-attachment: fixed;
-    "
-  >
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<body class="view align-center justify-center"
+  style="background-size: cover; background-position: center center; background-repeat: no-repeat; background-attachment: fixed;">
 
-    <!-- Yjs and y-webrtc for real-time collaboration -->
-    <script type="module">
-      import * as Y from "https://cdn.skypack.dev/yjs@13.6.8";
-      import { WebrtcProvider } from "https://cdn.skypack.dev/y-webrtc@10.2.5";
 
-      window.Y = Y;
-      window.WebrtcProvider = WebrtcProvider;
 
-      console.log("✅ Yjs loaded:", Y.VERSION);
-      console.log("✅ WebrtcProvider loaded");
-    </script>
-
-    <script src="config.js"></script>
-    <script src="memory.js"></script>
-    <script src="sync.js"></script>
-    <script src="actions.js"></script>
-    <script src="context/context.js"></script>
-    <script src="context/context-highlight.js"></script>
-    <script src="user.js"></script>
-    <script src="artifacts.js"></script>
-    <script src="input.js"></script>
-    <script src="process/process.js"></script>
-    <script src="process/process-image.js"></script>
-    <script src="process/process-content.js"></script>
-    <script src="orchestrate.js"></script>
-    <script src="messages.js"></script>
-    <script src="views/view-artifact.js"></script>
-    <script src="views/view-artifacts.js"></script>
-    <script src="views/view-calendar.js"></script>
-    <script src="views/view-memory.js"></script>
-    <script src="views/view-services.js"></script>
-    <script src="views/view-chat.js"></script>
-    <script src="views/views.js"></script>
-    <script src="theme.js"></script>
-    <script src="collaboration.js"></script>
-
-    <script>
-      // Set up collaboration protection EARLY (before auth runs)
-      window.isCollaborationProtected = function () {
-        const isActive =
-          localStorage.getItem("collaborationActive") === "true" ||
-          localStorage.getItem("COLLABORATION_ACTIVE") === "true";
-        const timestamp = localStorage.getItem("COLLABORATION_DATA_TIMESTAMP");
-        const isRecent =
-          !timestamp || Date.now() - parseInt(timestamp) < 24 * 60 * 60 * 1000;
-
-        console.log(
-          "[COLLAB] 🛡️ Early protection check - Active:",
-          isActive,
-          "Recent:",
-          isRecent
-        );
-        return isActive && isRecent;
-      };
-
-      // Simple, distributed initialization
-      document.addEventListener("DOMContentLoaded", async function () {
-        // Initialize collaboration module FIRST to ensure protection is active
-        if (window.collaboration) {
-          await window.collaboration.init();
-        }
-
-        // Initialize authentication SECOND to respect collaboration protection
-        const session = await user.initAuth();
-
-        // Initialize context with knowledge of auth state (loads data appropriately)
-        await context.init(session);
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="config.js"></script>
+  <script src="memory.js"></script>
+  <script src="sync.js"></script>
+  <script src="actions/actions.js"></script>
+  <script src="actions/actions-messages.js"></script>
+  <script src="actions/actions-artifacts.js"></script>
+  <script src="actions/actions-views.js"></script>
+  <script src="actions/actions-user.js"></script>
+  <script src="actions/actions-memory.js"></script>
+  <script src="context/context.js"></script>
+  <script src="context/context-highlight.js"></script>
+  <script src="user.js"></script>
+  <script src="artifacts.js"></script>
+  <script src="input.js"></script>
+  <script src="system.js"></script>
+  <script src="process/process.js"></script>
+  <script src="process/process-image.js"></script>
+  <script src="process/process-content.js"></script>
+  <script src="orchestrate.js"></script>
+  <script src="messages.js"></script>
+  <script src="views/view-artifact.js"></script>
+  <script src="views/view-artifacts.js"></script>
+  <script src="views/view-calendar.js"></script>
+  <script src="views/view-memory.js"></script>
+  <script src="views/view-services.js"></script>
+  <script src="views/view-chat.js"></script>
+  <script src="views/view-actions.js"></script>
+  <script src="views/view-system.js"></script>
+  <script src="views/views.js"></script>
+  <script src="theme.js"></script>
+  <script>
+    // Simple, distributed initialization
+    document.addEventListener('DOMContentLoaded', async function () {
+      // Initialize authentication FIRST to determine user state
+      const session = await user.initAuth();
+      
+      // Initialize context with knowledge of auth state (loads data appropriately)
+      await context.init(session);
 
         // Handle UI based on auth state
         await user.updateAuthState(session);
