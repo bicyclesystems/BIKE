@@ -219,9 +219,10 @@ function renderCurrentView(withTransition = true) {
 
     if (sessionId && !isCollaborating && !isCollaborationActive) {
       const viewType = activeView?.type;
-      const newHash = `/${sessionId}/${viewType}`;
+      const activeChatId = window.context?.getActiveChatId();
+      const newHash = `/${activeChatId}/${viewType}`;
       if (location.hash !== `#${newHash}`) {
-        history.replaceState(null, "", `#/${sessionId}/${viewType}`);
+        history.replaceState(null, "", `#/${activeChatId}/${viewType}`);
       }
     } else if (isCollaborating || isCollaborationActive) {
       console.log(

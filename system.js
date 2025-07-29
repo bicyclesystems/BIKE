@@ -14,6 +14,13 @@ const SYSTEM_SECTIONS = {
 - Then naturally transition to asking for their email to get started
 - Keep the welcome friendly and concise (1-2 sentences)`,
 
+  COLLABORATION: `🤝 COLLABORATION MODE: CRITICAL - Check if user is in collaboration mode:
+- If user is a collaborator (collaborationActive: true or URL contains "collab-"), SKIP all authentication and setup steps
+- Collaborators should NOT be asked for email, preferences, or any setup information
+- Collaborators can immediately use all features without authentication
+- If collaboration is detected, proceed directly to normal conversation and feature usage
+- Do NOT show welcome step, authentication step, or user setup step for collaborators`,
+
   AUTHENTICATION: `🔐 AUTHENTICATION FLOW (STEP 2): Check context for user authentication status:
 - When user provides an email address: Immediately execute "auth.login" action with the email
 - During authentication, automatically extract a name from the email address and save it:
@@ -123,13 +130,14 @@ function createStructuredSystemPrompt(contextInfo = '', userResponseStyle = '', 
   if (isContextualGuidance) {
     sections.unshift(SYSTEM_SECTIONS.CONTEXTUAL_GUIDANCE);
   } else {
-    // Add normal flow sections
-    sections.push(
-      SYSTEM_SECTIONS.WELCOME,
-      SYSTEM_SECTIONS.AUTHENTICATION,
-      SYSTEM_SECTIONS.USER_SETUP,
-      SYSTEM_SECTIONS.PREFERENCES
-    );
+      // Add normal flow sections
+  sections.push(
+    SYSTEM_SECTIONS.COLLABORATION,
+    SYSTEM_SECTIONS.WELCOME,
+    SYSTEM_SECTIONS.AUTHENTICATION,
+    SYSTEM_SECTIONS.USER_SETUP,
+    SYSTEM_SECTIONS.PREFERENCES
+  );
   }
 
   // Add communication style if specified
@@ -177,6 +185,12 @@ function buildSystemMessage(contextData = null, isContextualGuidance = false) {
     if (contextData.authStatus) {
       parts.push(`Authentication: isLoggedIn: ${contextData.authStatus.isLoggedIn}, currentUser: ${contextData.authStatus.currentUser || 'null'}`);
     }
+    
+    // Collaboration status - critical for AI to know if user is a collaborator
+    const isCollaborating = window.collaboration?.isCollaborating || 
+      localStorage.getItem("collaborationActive") === "true" ||
+      window.location.hash.includes("collab-");
+    parts.push(`Collaboration: collaborationActive: ${isCollaborating}`);
     
     // Available actions - list actual action IDs
     if (contextData.availableActions && contextData.availableActions.actionsByCategory) {

@@ -346,8 +346,8 @@ const collaboration = {
           syncMap.set("chats", JSON.stringify(chats));
           syncMap.set("messagesByChat", JSON.stringify(messagesByChat));
           syncMap.set("artifacts", JSON.stringify(artifacts));
-          syncMap.set("userPreferences", JSON.stringify(userPreferences));
-          syncMap.set("activeChatId", activeChatId);
+          // Don't sync userPreferences - collaborators keep their own
+          // Don't sync activeChatId - collaborators keep their own
           syncMap.set("initializedByLeader", true);
           syncMap.set("lastUpdated", Date.now().toString());
 
@@ -923,14 +923,41 @@ const collaboration = {
         localStorage.setItem("chats", JSON.stringify(chats));
         localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
         localStorage.setItem("artifacts", JSON.stringify(artifacts));
-        localStorage.setItem(
-          "userPreferences",
-          JSON.stringify(userPreferences)
-        );
-        if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+        // Don't sync userPreferences - collaborators keep their own
+        
+        // Set default activeChatId for collaborator if not already set (use first available chat)
+        const currentActiveChatId = localStorage.getItem("activeChatId");
+        if (!currentActiveChatId && chats.length > 0) {
+          const defaultChatId = chats[0].id;
+          console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator:", defaultChatId);
+          localStorage.setItem("activeChatId", defaultChatId);
+          if (window.context?.setActiveChat) {
+            window.context.setActiveChat(defaultChatId);
+          }
+        }
 
         // Also sync messages from shared array
         this.syncMessagesFromSharedArray();
+
+        // Initialize default activeView for collaborator if not set
+        const currentView = window.context?.getActiveView();
+        if (!currentView) {
+          console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
+          window.context.setActiveView("memory", {}, { withTransition: false });
+        }
+
+        // Initialize default userPreferences for collaborator if not set
+        const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+        if (!currentPreferences.name) {
+          console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+          const defaultPreferences = {
+            name: "collaborator"
+          };
+          localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+          if (window.context?.setUserPreferences) {
+            window.context.setUserPreferences(defaultPreferences);
+          }
+        }
 
         // Refresh UI with proper timing
         setTimeout(() => {
@@ -1698,8 +1725,8 @@ const collaboration = {
           syncMap.set("chats", JSON.stringify(mergedChats));
           // syncMap.set("messagesByChat", ...) - REMOVED to prevent conflicts
           syncMap.set("artifacts", JSON.stringify(mergedArtifacts));
-          syncMap.set("userPreferences", JSON.stringify(mergedUserPreferences));
-          syncMap.set("activeChatId", mergedActiveChatId);
+          // Don't sync userPreferences - collaborators keep their own
+          // Don't sync activeChatId - collaborators keep their own
         }
       });
     }
@@ -1733,12 +1760,40 @@ const collaboration = {
             JSON.stringify(messagesByChat)
           );
           localStorage.setItem("artifacts", JSON.stringify(artifacts));
-          localStorage.setItem(
-            "userPreferences",
-            JSON.stringify(userPreferences)
-          );
-          if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+          // Don't sync userPreferences - collaborators keep their own
+          
+          // Set default activeChatId for collaborator if not already set (use first available chat)
+          const currentActiveChatId = localStorage.getItem("activeChatId");
+          if (!currentActiveChatId && chats.length > 0) {
+            const defaultChatId = chats[0].id;
+            console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator from bidirectional sync:", defaultChatId);
+            localStorage.setItem("activeChatId", defaultChatId);
+            if (window.context?.setActiveChat) {
+              window.context.setActiveChat(defaultChatId);
+            }
+          }
+          
           hasAppliedInitialSync = true;
+          // Initialize default activeView for collaborator if not set
+          const currentView = window.context?.getActiveView();
+          if (!currentView) {
+            console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
+            window.context.setActiveView("memory", {}, { withTransition: false });
+          }
+
+          // Initialize default userPreferences for collaborator if not set
+          const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+          if (!currentPreferences.name) {
+            console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+            const defaultPreferences = {
+              name: "collaborator"
+            };
+            localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+            if (window.context?.setUserPreferences) {
+              window.context.setUserPreferences(defaultPreferences);
+            }
+          }
+
           // Refresh UI
           if (window.memory && window.memory.loadAll) window.memory.loadAll();
           if (window.views && window.views.renderCurrentView)
@@ -1757,11 +1812,8 @@ const collaboration = {
             "[COLLAB] 🛡️ Skipping messagesByChat overwrite - using individual message sync"
           );
           localStorage.setItem("artifacts", JSON.stringify(artifacts));
-          localStorage.setItem(
-            "userPreferences",
-            JSON.stringify(userPreferences)
-          );
-          if (activeChatId) localStorage.setItem("activeChatId", activeChatId);
+          // Don't sync userPreferences - collaborators keep their own
+          // Don't sync activeChatId - collaborators keep their own
           // Only refresh UI if non-message data actually changed
           if (summary !== lastRemoteSummary) {
             setTimeout(() => {
@@ -1799,8 +1851,8 @@ const collaboration = {
       syncMap.set("chats", JSON.stringify(chats));
       syncMap.set("messagesByChat", JSON.stringify(messagesByChat));
       syncMap.set("artifacts", JSON.stringify(artifacts));
-      syncMap.set("userPreferences", JSON.stringify(userPreferences));
-      syncMap.set("activeChatId", activeChatId);
+      // Don't sync userPreferences - collaborators keep their own
+      // Don't sync activeChatId - collaborators keep their own
       syncMap.set("initializedByLeader", true);
     } else if (syncMap.size === 0 && !this.isLeader) {
       // Collaborator waits for leader's data
@@ -2055,7 +2107,6 @@ const collaboration = {
       );
 
       // Additional useful data
-      const activeView = localStorage.getItem("activeView");
       const userId = localStorage.getItem("userId");
 
       const databaseData = {
@@ -2068,7 +2119,7 @@ const collaboration = {
           messagesByChat,
           artifacts,
           userPreferences,
-          activeView,
+          // Don't sync activeView - collaborators keep their own
           userId,
         },
         summary: {
@@ -2266,9 +2317,15 @@ const collaboration = {
         Date.now().toString()
       );
 
-      // Apply data to localStorage
-      if (data.activeChatId) {
-        localStorage.setItem("activeChatId", data.activeChatId);
+      // Set default activeChatId for collaborator if not already set (use first available chat)
+      const currentActiveChatId = localStorage.getItem("activeChatId");
+      if (!currentActiveChatId && data.chats && data.chats.length > 0) {
+        const defaultChatId = data.chats[0].id;
+        console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator from database data:", defaultChatId);
+        localStorage.setItem("activeChatId", defaultChatId);
+        if (window.context?.setActiveChat) {
+          window.context.setActiveChat(defaultChatId);
+        }
       }
 
       if (data.chats) {
@@ -2293,12 +2350,30 @@ const collaboration = {
         );
       }
 
-      if (data.activeView) {
-        localStorage.setItem("activeView", data.activeView);
-      }
+      // Don't sync activeView - collaborators keep their own
 
       if (data.userId) {
         localStorage.setItem("userId", data.userId);
+      }
+
+      // Initialize default activeView for collaborator if not set
+      const currentView = window.context?.getActiveView();
+      if (!currentView) {
+        console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
+        window.context.setActiveView("memory", {}, { withTransition: false });
+      }
+
+      // Initialize default userPreferences for collaborator if not set
+      const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+      if (!currentPreferences.name) {
+        console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+        const defaultPreferences = {
+          name: "collaborator"
+        };
+        localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+        if (window.context?.setUserPreferences) {
+          window.context.setUserPreferences(defaultPreferences);
+        }
       }
 
       // Update application state and refresh UI

@@ -58,7 +58,7 @@ function createArtifactBase(
   }
   //  Generate slug
   const slug = Math.random().toString(36).substring(2, 10);
-  const localUrl = `${window.SUPABASE_CONFIG.url}/artifact/${id}?slug=${slug}&chatId=${activeChatId}`;
+  const localUrl = `https://say.bike/artifact/${id}?slug=${slug}&chatId=${activeChatId}`;
   const artifact = {
     id,
     title,

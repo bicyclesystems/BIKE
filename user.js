@@ -5,6 +5,14 @@ const supabase = window.supabase.createClient(
 );
 
 // =================== Session Management ===================
+
+// Helper function to check if user is joining as a collaborator
+function isJoiningAsCollaborator() {
+  return window.collaboration?.isCollaborating || 
+    localStorage.getItem("collaborationActive") === "true" ||
+    window.location.hash.includes("collab-");
+}
+
 class SessionManager {
   constructor() {
     this.SESSION_KEYS = {
@@ -364,8 +372,13 @@ async function handleAuthenticatedState() {
 
   initializeMainApp();
   
-  // Trigger contextual guidance for fresh logins only (not page refreshes)
-  await window.sessionManager.handleFreshLogin();
+  // Check if user is joining as a collaborator - skip fresh login process
+  if (!isJoiningAsCollaborator()) {
+    // Trigger contextual guidance for fresh logins only (not page refreshes)
+    await window.sessionManager.handleFreshLogin();
+  } else {
+    console.log('[AUTH] 🛡️ Collaborator detected - skipping fresh login process');
+  }
   console.log('[AUTH] Authentication complete');
 }
 
@@ -391,7 +404,8 @@ function handleUnauthenticatedState() {
     ? window.isCollaborationProtected()
     : false;
 
-  if (isCollabProtected) {
+  // Check if user is joining as a collaborator
+  if (isCollabProtected || isJoiningAsCollaborator()) {
     console.log(
       "[AUTH] 🛡️ Collaboration active - preserving state and skipping intro"
     );
@@ -464,9 +478,16 @@ let lastAuthState = null;
 async function updateAuthState(session, forceNewLogin = false) {
   const isLoggedIn = !!session;
 
+  // Check if user is joining as a collaborator
   if (isLoggedIn) {
     await handleAuthenticatedState();
   } else {
+    // For collaborators, don't show unauthenticated state (no intro screen)
+    if (isJoiningAsCollaborator()) {
+      console.log('[AUTH] 🛡️ Collaborator detected - bypassing unauthenticated state');
+      toggleUI(true); // Enable UI for collaborator
+      return;
+    }
     handleUnauthenticatedState();
     window.sessionManager.handleLogout();
   }

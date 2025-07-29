@@ -22,9 +22,23 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+  <!-- Yjs and y-webrtc for real-time collaboration -->
+  <script type="module">
+    import * as Y from "https://cdn.skypack.dev/yjs@13.6.8";
+    import { WebrtcProvider } from "https://cdn.skypack.dev/y-webrtc@10.2.5";
+
+    window.Y = Y;
+    window.WebrtcProvider = WebrtcProvider;
+
+    console.log("✅ Yjs loaded:", Y.VERSION);
+    console.log("✅ WebrtcProvider loaded");
+  </script>
+
   <script src="config.js"></script>
   <script src="memory.js"></script>
   <script src="sync.js"></script>
+  <script src="collaboration.js"></script>
   <script src="actions/actions.js"></script>
   <script src="actions/actions-messages.js"></script>
   <script src="actions/actions-artifacts.js"></script>
@@ -81,4 +95,3 @@
     </script>
   </body>
 </html>
-);
