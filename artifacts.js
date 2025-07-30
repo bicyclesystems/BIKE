@@ -243,13 +243,13 @@ async function updateArtifact(id, content) {
 }
 
 /**
- * Robust Supabase upsert function for artifacts using POST to replace entire artifact
- * @param {Object} artifact - The artifact object to save
+ * Robust Supabase PATCH function for artifacts - updates only versions array
+ * @param {Object} artifact - The artifact object to update
  * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
  * @returns {Promise<{success: boolean, error?: string, data?: any, status?: number}>}
  */
 async function updateArtifactInSupabase(artifact, maxRetries = 3) {
-  console.log("[SAVE] 🔄 Starting artifact save to Supabase:", artifact.id);
+  console.log("[SAVE] 🔄 Starting artifact PATCH to Supabase:", artifact.id);
   
   // Step 1: Initialize Supabase client
   console.log("[SAVE] Step 1: Checking Supabase client...");
@@ -263,40 +263,31 @@ async function updateArtifactInSupabase(artifact, maxRetries = 3) {
   
   console.log("[SAVE] ✅ Step 1 complete: Supabase client ready");
   
-  // Step 2: Prepare artifact data for database
-  console.log("[SAVE] Step 2: Preparing artifact data...");
-  const dbArtifact = {
-    id: artifact.id,
-    title: artifact.title,
-    type: artifact.type,
+  // Step 2: Prepare PATCH payload (only versions array)
+  console.log("[SAVE] Step 2: Preparing PATCH payload...");
+  const patchPayload = {
     versions: artifact.versions,
-    chat_id: artifact.chatId,
-    created_at: artifact.createdAt || new Date().toISOString(),
     updated_at: new Date().toISOString()
   };
   
-  console.log("[SAVE] ✅ Step 2 complete: Artifact data prepared");
-  console.log("[SAVE] 📋 Database payload:", {
-    id: dbArtifact.id,
-    title: dbArtifact.title,
-    type: dbArtifact.type,
-    versionsCount: dbArtifact.versions.length,
-    chat_id: dbArtifact.chat_id
+  console.log("[SAVE] ✅ Step 2 complete: PATCH payload prepared");
+  console.log("[SAVE] 📋 PATCH payload:", {
+    artifactId: artifact.id,
+    versionsCount: artifact.versions.length,
+    payload: patchPayload
   });
   
   // Step 3: Retry logic with exponential backoff
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`[SAVE] Step 3 (Attempt ${attempt}/${maxRetries}): Upserting artifact to database...`);
+      console.log(`[SAVE] Step 3 (Attempt ${attempt}/${maxRetries}): PATCHing artifact to database...`);
       
-      // Step 3a: Use upsert to insert or update the entire artifact
-      console.log(`[SAVE] Step 3a: Executing upsert operation...`);
+      // Step 3a: Use PATCH to update only versions array
+      console.log(`[SAVE] Step 3a: Executing PATCH operation...`);
       const { data, error, status, statusText } = await supabaseClient
         .from("artifacts")
-        .upsert(dbArtifact, { 
-          onConflict: 'id',
-          ignoreDuplicates: false 
-        })
+        .update(patchPayload)
+        .eq("id", artifact.id)
         .select()
         .single();
       
@@ -311,7 +302,7 @@ async function updateArtifactInSupabase(artifact, maxRetries = 3) {
         if (attempt === maxRetries) {
           return { 
             success: false, 
-            error: error.message || "Database upsert failed", 
+            error: error.message || "Database PATCH failed", 
             status: status,
             attempt: attempt 
           };
@@ -322,7 +313,7 @@ async function updateArtifactInSupabase(artifact, maxRetries = 3) {
       
       // Step 3d: Handle successful response
       if (status >= 200 && status < 300) {
-        console.log(`[SAVE] ✅ Step 3 complete: Artifact saved successfully - Status: ${status}`);
+        console.log(`[SAVE] ✅ Step 3 complete: Artifact PATCHed successfully - Status: ${status}`);
         return { 
           success: true, 
           data: data, 
@@ -331,8 +322,80 @@ async function updateArtifactInSupabase(artifact, maxRetries = 3) {
         };
       }
       
-      // Step 3e: Handle unexpected status codes
-      console.warn(`[SAVE] ⚠️ Step 3e: Unexpected status code: ${status}`);
+      // Step 3e: Handle 204 (No Content) response
+      if (status === 204) {
+        console.log(`[SAVE] ⚠️ Step 3e: Received 204 (No Content) - checking if update was applied...`);
+        
+        // Verify the artifact exists and check if update was applied
+        const verificationResult = await verifyArtifactExists(artifact.id);
+        if (!verificationResult.exists) {
+          console.error(`[SAVE] ❌ Artifact ${artifact.id} does not exist in database`);
+          if (attempt === maxRetries) {
+            return { 
+              success: false, 
+              error: "Artifact not found in database after 204 response", 
+              status: 404,
+              attempt: attempt 
+            };
+          }
+          continue;
+        }
+        
+        // Try an explicit PATCH with additional fields
+        console.log(`[SAVE] 🔄 Attempting explicit PATCH with additional fields...`);
+        const explicitPayload = {
+          ...patchPayload,
+          version_count: artifact.versions.length,
+          last_modified: new Date().toISOString()
+        };
+        
+        const { data: explicitData, error: explicitError, status: explicitStatus } = await supabaseClient
+          .from("artifacts")
+          .update(explicitPayload)
+          .eq("id", artifact.id)
+          .select()
+          .single();
+        
+        if (explicitError) {
+          console.error(`[SAVE] ❌ Explicit PATCH failed:`, explicitError);
+          if (attempt === maxRetries) {
+            return { 
+              success: false, 
+              error: "Explicit PATCH failed after 204 response", 
+              status: explicitStatus,
+              attempt: attempt 
+            };
+          }
+          continue;
+        }
+        
+        // Compare local vs database state
+        const dbState = await getCurrentArtifactState(artifact.id);
+        if (dbState && dbState.versions && dbState.versions.length === artifact.versions.length) {
+          console.log(`[SAVE] ✅ Explicit PATCH succeeded - versions match`);
+          return { 
+            success: true, 
+            data: explicitData, 
+            status: explicitStatus,
+            attempt: attempt,
+            usedExplicitPatch: true
+          };
+        } else {
+          console.warn(`[SAVE] ⚠️ Version count mismatch - Local: ${artifact.versions.length}, DB: ${dbState?.versions?.length || 0}`);
+          if (attempt === maxRetries) {
+            return { 
+              success: false, 
+              error: "Version count mismatch after explicit PATCH", 
+              status: explicitStatus,
+              attempt: attempt 
+            };
+          }
+          continue;
+        }
+      }
+      
+      // Step 3f: Handle unexpected status codes
+      console.warn(`[SAVE] ⚠️ Step 3f: Unexpected status code: ${status}`);
       if (attempt === maxRetries) {
         return { 
           success: false, 
@@ -347,7 +410,7 @@ async function updateArtifactInSupabase(artifact, maxRetries = 3) {
       if (attempt === maxRetries) {
         return { 
           success: false, 
-          error: "Exception during upsert: " + error.message, 
+          error: "Exception during PATCH: " + error.message, 
           attempt: attempt 
         };
       }
