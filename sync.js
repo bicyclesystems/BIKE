@@ -792,12 +792,15 @@ class SupabaseSync {
 
   // =================== Upload Functions ===================
   async uploadChat(chat) {
-    console.log("[COLLAB-DATA] 📤 Uploading chat to database...");
-    console.log("[COLLAB-DATA] 📋 Chat:", chat);
+    console.log("[COLLAB-DEBUG] 📤 === SYNC UPLOAD CHAT START ===");
+    console.log("[COLLAB-DEBUG] 📋 Chat:", chat);
 
     // Check if we have Supabase client
+    console.log("[COLLAB-DEBUG] 🔍 Checking Supabase client...");
+    console.log("[COLLAB-DEBUG] 📊 Supabase client available:", !!this.supabase);
+    
     if (!this.supabase) {
-      console.warn("[COLLAB-DATA] ⚠️ No Supabase client - queuing chat");
+      console.warn("[COLLAB-DEBUG] ⚠️ No Supabase client - queuing chat");
       this.queueOperation("uploadChat", chat);
       return;
     }
@@ -808,26 +811,34 @@ class SupabaseSync {
     const participantId = window.collaboration?.participantId || null;
     const isLeader = window.collaboration?.isLeader || false;
 
-    console.log("[COLLAB-DATA] 📋 Collaboration Context for Chat:");
+    console.log("[COLLAB-DEBUG] 📋 Collaboration Context for Chat:");
     console.log("  - Is Collaborating:", isCollaborating);
     console.log("  - Collaboration ID:", collaborationId);
     console.log("  - Participant ID:", participantId);
     console.log("  - Is Leader:", isLeader);
     console.log("  - User ID:", this.userId);
+    console.log("  - Will save as collaboration chat:", isCollaborating && collaborationId);
 
     // Bypass collaboration protection for collaboration data
     const isCollabProtected = window.isCollaborationProtected
       ? window.isCollaborationProtected()
       : false;
     
+    console.log("[COLLAB-DEBUG] 🛡️ Collaboration protection check:", {
+      isCollabProtected,
+      isCollaborating,
+      shouldSkip: isCollabProtected && !isCollaborating
+    });
+    
     if (isCollabProtected && !isCollaborating) {
-      console.log("[COLLAB-DATA] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
+      console.log("[COLLAB-DEBUG] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
       this.queueOperation("uploadChat", chat);
       return;
     }
 
     try {
       // Prepare chat data based on collaboration context
+      console.log("[COLLAB-DEBUG] 📝 === PREPARING CHAT DATA ===");
       let chatData = {
         id: chat.id,
         title: chat.title,
@@ -838,21 +849,24 @@ class SupabaseSync {
 
       if (isCollaborating && collaborationId) {
         // Collaboration chat
-        console.log("[COLLAB-DATA] 📝 Saving as collaboration chat");
+        console.log("[COLLAB-DEBUG] 📝 Saving as collaboration chat");
+        
+        // Get leader's userId for collaboration data
+        const leaderId = window.collaboration?.leaderId || this.userId;
         
         chatData = {
           ...chatData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_chat: true,
-          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+          user_id: leaderId, // Use leader's userId for all collaboration data
         };
       } else {
         // Regular user chat
-        console.log("[COLLAB-DATA] 📝 Saving as regular user chat");
+        console.log("[COLLAB-DEBUG] 📝 Saving as regular user chat");
         
         if (!this.userId) {
-          console.warn("[COLLAB-DATA] ⚠️ No user ID for regular chat - queuing");
+          console.warn("[COLLAB-DEBUG] ⚠️ No user ID for regular chat - queuing");
           this.queueOperation("uploadChat", chat);
           return;
         }
@@ -866,21 +880,27 @@ class SupabaseSync {
         };
       }
 
-      console.log("[COLLAB-DATA] 📋 Final chat data:", chatData);
+      console.log("[COLLAB-DEBUG] 📋 Final chat data:", chatData);
 
       // Insert chat into database
+      console.log("[COLLAB-DEBUG] 🗄️ === DATABASE INSERT ATTEMPT ===");
+      console.log("[COLLAB-DEBUG] 📋 Inserting into 'chats' table with data:", chatData);
+      
       const { data, error } = await this.supabase.from("chats").insert([chatData]);
+      console.log("[COLLAB-DEBUG] 📊 Database response:", { data, error });
 
       if (error) {
-        console.error("[COLLAB-DATA] ❌ Chat upload failed:", error);
+        console.error("[COLLAB-DEBUG] ❌ Chat upload failed:", error);
         throw error;
       }
 
-      console.log("[COLLAB-DATA] ✅ Chat uploaded successfully");
-      console.log("[COLLAB-DATA] 📋 Database response:", data);
+      console.log("[COLLAB-DEBUG] ✅ Chat uploaded successfully");
+      console.log("[COLLAB-DEBUG] 📋 Database response data:", data);
       
     } catch (error) {
-      console.error("[COLLAB-DATA] ❌ Exception during chat upload:", error);
+      console.error("[COLLAB-DEBUG] ❌ === SYNC UPLOAD CHAT ERROR ===");
+      console.error("[COLLAB-DEBUG] Exception during chat upload:", error);
+      console.error("[COLLAB-DEBUG] Error stack:", error.stack);
       this.queueOperation("uploadChat", chat);
     }
   }
@@ -946,12 +966,15 @@ class SupabaseSync {
         // Collaboration message
         console.log("[COLLAB-DEBUG] 📝 Saving as collaboration message");
         
+        // Get leader's userId for collaboration data
+        const leaderId = window.collaboration?.leaderId || this.userId;
+        
         messageData = {
           ...messageData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_message: true,
-          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+          user_id: leaderId, // Use leader's userId for all collaboration data
           metadata: {
             ...messageData.metadata,
             collaboration_room: window.collaboration?.collaborationId,
@@ -1057,12 +1080,15 @@ class SupabaseSync {
         // Collaboration artifact
         console.log("[COLLAB-DATA] 📝 Saving as collaboration artifact");
         
+        // Get leader's userId for collaboration data
+        const leaderId = window.collaboration?.leaderId || this.userId;
+        
         artifactData = {
           ...artifactData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_artifact: true,
-          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+          user_id: leaderId, // Use leader's userId for all collaboration data
         };
       } else {
         // Regular user artifact

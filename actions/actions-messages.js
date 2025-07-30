@@ -43,7 +43,22 @@ const MESSAGES_ACTIONS = {
         chats: [...currentChats, chat],
         messagesByChat: { ...currentMessagesByChat, [id]: [] }
       });
-      window.memory?.saveAll();
+      
+      // Save the new chat to database and local storage
+      if (window.memory?.saveChat) {
+        await window.memory.saveChat(chat);
+      } else {
+        window.memory?.saveAll();
+      }
+      
+      // Sync chat to collaboration (like messages do)
+      if (window.collaboration && window.collaboration.pushChatToCollab) {
+        console.log("[COLLAB-DEBUG] 📤 Pushing chat to collaboration...");
+        window.collaboration.pushChatToCollab(chat);
+        console.log("[COLLAB-DEBUG] ✅ Chat pushed to collaboration");
+      } else {
+        console.log("[COLLAB-DEBUG] ⚠️ Collaboration sync not available for chat");
+      }
       
       // Switch to the new chat
       await window.actions.executeAction('messages.switch', { chatId: id });
@@ -305,6 +320,13 @@ const MESSAGES_ACTIONS = {
         // Persist changes
         window.memory?.saveAll();
         
+        // Sync updated chat to collaboration
+        if (window.collaboration && window.collaboration.pushChatToCollab) {
+          console.log("[COLLAB-DEBUG] 📤 Pushing renamed chat to collaboration...");
+          window.collaboration.pushChatToCollab(updatedChats[chatIndex]);
+          console.log("[COLLAB-DEBUG] ✅ Renamed chat pushed to collaboration");
+        }
+        
         // Re-render views to reflect the change
         if (window.views?.renderCurrentView) {
           window.views.renderCurrentView();
@@ -431,6 +453,13 @@ const MESSAGES_ACTIONS = {
         
         // Persist changes
         window.memory?.saveAll();
+        
+        // Sync updated chat to collaboration
+        if (window.collaboration && window.collaboration.pushChatToCollab) {
+          console.log("[COLLAB-DEBUG] 📤 Pushing updated chat description to collaboration...");
+          window.collaboration.pushChatToCollab(updatedChats[chatIndex]);
+          console.log("[COLLAB-DEBUG] ✅ Updated chat description pushed to collaboration");
+        }
         
         // Re-render views to reflect the change
         if (window.views?.renderCurrentView) {

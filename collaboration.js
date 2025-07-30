@@ -277,6 +277,15 @@ const collaboration = {
       localStorage.setItem("collaborationId", roomName);
       localStorage.setItem("collaborationPermissions", permissions);
       localStorage.setItem("collaborationLeader", "true");
+      
+      // Store leader's userId in shared sync map for collaborators to access
+      if (window.userId) {
+        const sharedSyncMap = this.getSharedSyncMap();
+        if (sharedSyncMap) {
+          sharedSyncMap.set('leaderId', window.userId);
+          console.log("[COLLAB-DATA] 📋 Leader userId stored in shared map as 'leaderId':", window.userId);
+        }
+      }
 
       console.log("[COLLAB-DATA] ✅ Collaboration session created successfully");
       console.log("[COLLAB-DATA] 📋 Database Collaboration ID:", this.databaseCollaborationId);
@@ -329,6 +338,15 @@ const collaboration = {
 
       // Set up event listeners
       this.setupEventListeners();
+
+      // Wait for Yjs to be ready and retrieve leader's userId from shared map
+      await this.waitForYjs();
+      const sharedSyncMap = this.getSharedSyncMap();
+      if (sharedSyncMap) {
+        this.leaderId = sharedSyncMap.get('leaderId');
+        console.log("[COLLAB-DATA] 📋 Retrieved leaderId from shared map:", this.leaderId);
+        localStorage.setItem("collaborationLeaderId", this.leaderId);
+      }
 
       // Join collaboration session in database
       console.log("[COLLAB-DATA] 📝 Joining database record...");
@@ -1403,6 +1421,9 @@ const collaboration = {
 
     // Push chat to collaboration (EXACTLY like messages)
     this.pushChatToCollab = (chatObj) => {
+      console.log("[COLLAB-DEBUG] 📤 === PUSH CHAT TO COLLAB START ===");
+      console.log("[COLLAB-DEBUG] 📋 Chat object:", chatObj);
+      
       const chatToSync = {
         id: chatObj.id,
         title: chatObj.title,
@@ -1413,25 +1434,45 @@ const collaboration = {
         userId: this.userId || "unknown",
       };
 
+      console.log("[COLLAB-DEBUG] 📋 Chat to sync:", chatToSync);
+      console.log("[COLLAB-DEBUG] 🔍 Collaboration status:", {
+        isLeader: this.isLeader,
+        isReconnecting: this.isReconnecting,
+        providerConnected: this.provider?.connected || false,
+        peers: this.peers.size,
+        hasSharedChats: !!this.sharedChats
+      });
+
       console.log(
         `[COLLAB] 📤 ${this.isLeader ? "Leader" : "Collab"} → Chat "${
           chatObj.title
         }" (peers: ${this.peers.size})`
       );
 
-      // Optimistic chat sending with queueing during reconnection (SAME as messages)
-      if (this.isReconnecting || !this.provider?.connected) {
-        console.log("[COLLAB] 📋 Queueing chat during reconnection...");
-        this.chatQueue.push(chatToSync);
-        return;
-      }
+      // Check if we should force push even during reconnection
+      const shouldForcePush = this.provider?.connected && this.peers.size > 0;
+      console.log("[COLLAB-DEBUG] 🔍 Should force push:", shouldForcePush);
 
+      // Always try to push to shared array first, queue as fallback
       try {
+        console.log("[COLLAB-DEBUG] 📤 Attempting to push to sharedChats array...");
+        console.log("[COLLAB-DEBUG] 📊 Shared chats length before:", this.sharedChats.length);
         this.sharedChats.push([chatToSync]);
+        console.log("[COLLAB-DEBUG] 📊 Shared chats length after:", this.sharedChats.length);
         console.log("[COLLAB] ✅ Chat synced to peers");
+        console.log("[COLLAB-DEBUG] ✅ === PUSH CHAT TO COLLAB SUCCESS ===");
       } catch (error) {
         console.warn("[COLLAB] ⚠️ Chat send failed, queueing:", error);
+        console.error("[COLLAB-DEBUG] ❌ === PUSH CHAT TO COLLAB ERROR ===", error);
         this.chatQueue.push(chatToSync);
+        
+        // Try to process queue immediately if provider is actually connected
+        if (this.provider?.connected && this.chatQueue.length > 0) {
+          console.log("[COLLAB-DEBUG] 🔄 Provider is connected, attempting to process queue...");
+          setTimeout(() => {
+            this.processMessageQueue();
+          }, 100);
+        }
       }
     };
 
@@ -1590,7 +1631,13 @@ const collaboration = {
 
     // On remote chats add/change
     this.sharedChats.observe((event) => {
+      console.log("[COLLAB-DEBUG] 📨 === SHARED CHATS OBSERVER TRIGGERED ===");
+      console.log("[COLLAB-DEBUG] 📋 Event changes:", event.changes);
+      console.log("[COLLAB-DEBUG] 📋 Added items count:", event.changes.added.length);
+      
       event.changes.added.forEach((item, itemIndex) => {
+        console.log("[COLLAB-DEBUG] 📋 Processing added item:", itemIndex, item);
+        
         // Extract actual chat from Yjs ContentAny wrapper
         let newChats = [];
         if (
@@ -1599,17 +1646,23 @@ const collaboration = {
           Array.isArray(item.content.arr)
         ) {
           newChats = item.content.arr;
+          console.log("[COLLAB-DEBUG] 📋 Extracted from content.arr:", newChats);
         } else if (Array.isArray(item.content)) {
           newChats = item.content;
+          console.log("[COLLAB-DEBUG] 📋 Extracted from content array:", newChats);
         } else {
           newChats = [item.content];
+          console.log("[COLLAB-DEBUG] 📋 Extracted from single content:", newChats);
         }
 
         newChats.forEach((newChat) => {
+          console.log("[COLLAB-DEBUG] 📋 Processing new chat:", newChat);
+          
           // Get current chats state
           let chats = [];
           try {
             chats = JSON.parse(localStorage.getItem("chats") || "[]");
+            console.log("[COLLAB-DEBUG] 📊 Current chats from localStorage:", chats.length);
           } catch (e) {
             console.warn("[COLLAB] ⚠️ Error parsing chats:", e);
             chats = [];
@@ -1617,13 +1670,16 @@ const collaboration = {
 
           // Check for duplicates using chat id
           const exists = chats.some((c) => c.id === newChat.id);
+          console.log("[COLLAB-DEBUG] 🔍 Chat already exists:", exists);
 
           if (!exists) {
             // Add chat to the array
             chats.push(newChat);
+            console.log("[COLLAB-DEBUG] 📝 Added chat to array, new count:", chats.length);
 
             // Save to localStorage
             localStorage.setItem("chats", JSON.stringify(chats));
+            console.log("[COLLAB-DEBUG] 💾 Saved to localStorage");
 
             console.log(
               `[COLLAB] 📨 ${this.isLeader ? "Leader" : "Collab"} ← Chat "${
@@ -1636,24 +1692,32 @@ const collaboration = {
               type: "chat",
               data: newChat,
             });
+            console.log("[COLLAB-DEBUG] 📋 Queued for database sync");
 
             // Update UI/state with proper timing
             setTimeout(() => {
+              console.log("[COLLAB-DEBUG] 🔄 Updating UI after chat received...");
               if (window.memory && window.memory.loadAll) {
                 window.memory.loadAll();
+                console.log("[COLLAB-DEBUG] ✅ Memory loaded");
               }
               if (window.views && window.views.renderCurrentView) {
                 window.views.renderCurrentView(false);
+                console.log("[COLLAB-DEBUG] ✅ View rendered");
               }
               if (window.memoryView && window.memoryView.refreshView) {
                 window.memoryView.refreshView();
+                console.log("[COLLAB-DEBUG] ✅ Memory view refreshed");
               }
               document.dispatchEvent(
                 new CustomEvent("collaborationDataUpdate", {
                   detail: { type: "chatReceived", chatId: newChat.id },
                 })
               );
+              console.log("[COLLAB-DEBUG] ✅ Collaboration data update event dispatched");
             }, 100);
+          } else {
+            console.log("[COLLAB-DEBUG] ⚠️ Skipping duplicate chat:", newChat.id);
           }
         });
       });
@@ -2973,11 +3037,12 @@ const collaboration = {
 
     try {
       // Create a mock session for the collaborator
-      // For collaborators, we want userId to be null so messages are saved as collaboration messages
+      // Use leader's userId for collaboration data so leader can fetch it later
+      const leaderId = this.leaderId || window.userId;
       const mockSession = {
         access_token: `collab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
         user: {
-          id: null // Set to null for collaborators so sync manager treats messages as collaboration messages
+          id: leaderId // Use leader's userId for collaboration data
         }
       };
 
@@ -3234,6 +3299,7 @@ const collaboration = {
     
     this.databaseCollaborationId = localStorage.getItem("databaseCollaborationId");
     this.participantId = localStorage.getItem("collaborationParticipantId");
+    this.leaderId = localStorage.getItem("collaborationLeaderId");
     
     if (this.databaseCollaborationId) {
       console.log("[COLLAB-DATA] ✅ Loaded database collaboration ID:", this.databaseCollaborationId);
@@ -3241,6 +3307,10 @@ const collaboration = {
     
     if (this.participantId) {
       console.log("[COLLAB-DATA] ✅ Loaded participant ID:", this.participantId);
+    }
+    
+    if (this.leaderId) {
+      console.log("[COLLAB-DATA] ✅ Loaded leaderId:", this.leaderId);
     }
 
     // If we have collaboration data, initialize the sync manager
@@ -3775,5 +3845,182 @@ window.testMessageStructure = function() {
     console.log(JSON.stringify(expectedMessageData, null, 2));
   } else {
     console.log("[COLLAB-DEBUG] ⚠️ Not in collaboration mode or missing collaboration ID");
+  }
+};
+
+// Global helper function to test chat creation
+window.testChatCreation = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING CHAT CREATION ===");
+  
+  if (!window.actions || !window.actions.executeAction) {
+    console.error("[COLLAB-DEBUG] ❌ Actions module not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 📋 Creating test chat...");
+  window.actions.executeAction('messages.create', {
+    title: 'Test Collaboration Chat',
+    description: 'This is a test chat created by collaborator'
+  }).then((result) => {
+    console.log("[COLLAB-DEBUG] ✅ Chat creation result:", result);
+  }).catch((error) => {
+    console.error("[COLLAB-DEBUG] ❌ Chat creation error:", error);
+  });
+};
+
+// Global helper function to test chat sync
+window.testChatSync = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING CHAT SYNC ===");
+  
+  if (!window.collaboration) {
+    console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 🔍 Collaboration status:", {
+    isCollaborating: window.collaboration.isCollaborating,
+    isLeader: window.collaboration.isLeader,
+    peers: window.collaboration.peers.size,
+    providerConnected: window.collaboration.provider?.connected || false,
+    isReconnecting: window.collaboration.isReconnecting
+  });
+  
+  console.log("[COLLAB-DEBUG] 🔍 Shared chats array:", {
+    hasSharedChats: !!window.collaboration.sharedChats,
+    sharedChatsLength: window.collaboration.sharedChats?.length || 0
+  });
+  
+  if (window.collaboration.sharedChats) {
+    const chats = window.collaboration.sharedChats.toArray();
+    console.log("[COLLAB-DEBUG] 📋 Current shared chats:", chats);
+  }
+  
+  // Check queue status
+  console.log("[COLLAB-DEBUG] 📋 Queue status:", {
+    messageQueueLength: window.collaboration.messageQueue?.length || 0,
+    chatQueueLength: window.collaboration.chatQueue?.length || 0,
+    artifactQueueLength: window.collaboration.artifactQueue?.length || 0
+  });
+  
+  // Also check localStorage chats
+  try {
+    const localStorageChats = JSON.parse(localStorage.getItem("chats") || "[]");
+    console.log("[COLLAB-DEBUG] 📋 localStorage chats:", localStorageChats);
+    console.log("[COLLAB-DEBUG] 📊 localStorage chats count:", localStorageChats.length);
+  } catch (e) {
+    console.error("[COLLAB-DEBUG] ❌ Error reading localStorage chats:", e);
+  }
+  
+  // Check context chats
+  if (window.context) {
+    const contextChats = window.context.getChats() || [];
+    console.log("[COLLAB-DEBUG] 📋 Context chats:", contextChats);
+    console.log("[COLLAB-DEBUG] 📊 Context chats count:", contextChats.length);
+  }
+};
+
+// Global helper function to manually process chat queue
+window.processChatQueue = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === MANUALLY PROCESSING CHAT QUEUE ===");
+  
+  if (!window.collaboration) {
+    console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 📋 Current queue status:", {
+    chatQueueLength: window.collaboration.chatQueue?.length || 0,
+    isReconnecting: window.collaboration.isReconnecting,
+    providerConnected: window.collaboration.provider?.connected || false
+  });
+  
+  if (window.collaboration.chatQueue && window.collaboration.chatQueue.length > 0) {
+    console.log("[COLLAB-DEBUG] 📋 Queued chats:", window.collaboration.chatQueue);
+    
+    // Temporarily clear reconnection flag to force processing
+    const wasReconnecting = window.collaboration.isReconnecting;
+    window.collaboration.isReconnecting = false;
+    
+    try {
+      window.collaboration.processMessageQueue();
+      console.log("[COLLAB-DEBUG] ✅ Chat queue processed successfully");
+    } catch (error) {
+      console.error("[COLLAB-DEBUG] ❌ Error processing chat queue:", error);
+    } finally {
+      // Restore reconnection flag
+      window.collaboration.isReconnecting = wasReconnecting;
+    }
+  } else {
+    console.log("[COLLAB-DEBUG] ⚠️ No chats in queue to process");
+  }
+};
+
+// Global helper function to force reconnection and clear reconnection state
+window.forceReconnection = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === FORCING RECONNECTION ===");
+  
+  if (!window.collaboration) {
+    console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 📋 Current state:", {
+    isReconnecting: window.collaboration.isReconnecting,
+    providerConnected: window.collaboration.provider?.connected || false,
+    peers: window.collaboration.peers.size
+  });
+  
+  // Clear reconnection flag
+  window.collaboration.isReconnecting = false;
+  console.log("[COLLAB-DEBUG] ✅ Reconnection flag cleared");
+  
+  // Try to refresh connection
+  if (window.collaboration.refreshConnection) {
+    window.collaboration.refreshConnection();
+    console.log("[COLLAB-DEBUG] ✅ Connection refresh triggered");
+  }
+  
+  // Process any queued items
+  setTimeout(() => {
+    if (window.collaboration.processMessageQueue) {
+      window.collaboration.processMessageQueue();
+      console.log("[COLLAB-DEBUG] ✅ Queue processing triggered");
+    }
+  }, 500);
+};
+
+// Global helper function to check leaderId status
+window.checkLeaderId = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === CHECKING LEADER ID STATUS ===");
+  
+  if (!window.collaboration) {
+    console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 📋 Collaboration state:", {
+    isCollaborating: window.collaboration.isCollaborating,
+    isLeader: window.collaboration.isLeader,
+    leaderId: window.collaboration.leaderId,
+    databaseCollaborationId: window.collaboration.databaseCollaborationId,
+    participantId: window.collaboration.participantId
+  });
+  
+  // Check localStorage
+  const localStorageLeaderId = localStorage.getItem("collaborationLeaderId");
+  console.log("[COLLAB-DEBUG] 📋 localStorage leaderId:", localStorageLeaderId);
+  
+  // Check shared sync map
+  if (window.collaboration.getSharedSyncMap) {
+    const sharedSyncMap = window.collaboration.getSharedSyncMap();
+    if (sharedSyncMap) {
+      const sharedLeaderId = sharedSyncMap.get('leaderId');
+      console.log("[COLLAB-DEBUG] 📋 Shared sync map leaderId:", sharedLeaderId);
+    }
+  }
+  
+  // Check sync manager
+  if (window.syncManager) {
+    console.log("[COLLAB-DEBUG] 📋 Sync manager userId:", window.syncManager.userId);
   }
 };
