@@ -392,23 +392,19 @@ class SupabaseSync {
       role: serverMessage.role,
       content: serverMessage.content,
       metadata: serverMessage.metadata || {},
+      message_id: serverMessage.message_id, // Preserve the message_id from database
+      isSaved: true, // Messages from database are already saved
     };
 
     const chatId = serverMessage.chat_id;
 
     // Use memory module to save the message
     if (window.memory?.saveMessage) {
-      // Check if message already exists to prevent duplicates
+      // Check if message already exists to prevent duplicates using message_id
       const existingMessages =
         window.context?.getMessagesByChat()[chatId] || [];
       const exists = existingMessages.some(
-        (m) =>
-          m.role === message.role &&
-          m.content === message.content &&
-          Math.abs(
-            new Date(m.metadata.timestamp || 0) -
-              new Date(serverMessage.created_at)
-          ) < 1000
+        (m) => m.message_id === message.message_id
       );
 
       if (!exists) {
@@ -683,6 +679,8 @@ class SupabaseSync {
         role: msg.role,
         content: msg.content,
         metadata: msg.metadata || {},
+        message_id: msg.message_id, // Preserve message_id from database
+        isSaved: true, // Messages from database are already saved
       });
     });
 
@@ -708,9 +706,7 @@ class SupabaseSync {
       // Add server messages that don't exist locally
       serverMessages.forEach((serverMsg) => {
         const exists = localMessages.some(
-          (localMsg) =>
-            localMsg.role === serverMsg.role &&
-            localMsg.content === serverMsg.content
+          (localMsg) => localMsg.message_id === serverMsg.message_id
         );
         if (!exists) {
           mergedMessagesByChat[chatId].push(serverMsg);
@@ -725,10 +721,9 @@ class SupabaseSync {
       const serverMessages = serverMessagesByChat[chatId] || [];
       const localOnlyMessages = messages.filter(
         (localMsg) =>
+          localMsg.isSaved === false && // Only upload messages that haven't been saved
           !serverMessages.some(
-            (serverMsg) =>
-              serverMsg.role === localMsg.role &&
-              serverMsg.content === localMsg.content
+            (serverMsg) => serverMsg.message_id === localMsg.message_id
           )
       );
 
@@ -851,15 +846,12 @@ class SupabaseSync {
         // Collaboration chat
         console.log("[COLLAB-DEBUG] 📝 Saving as collaboration chat");
         
-        // Get leader's userId for collaboration data
-        const leaderId = window.collaboration?.leaderId || this.userId;
-        
         chatData = {
           ...chatData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_chat: true,
-          user_id: leaderId, // Use leader's userId for all collaboration data
+          user_id: isLeader ? this.userId : (localStorage.getItem("collaborationLeaderId") || this.userId), // Use leader's userId for collaborators
         };
       } else {
         // Regular user chat
@@ -909,6 +901,10 @@ class SupabaseSync {
     console.log("[COLLAB-DEBUG] 📤 === SYNC UPLOAD MESSAGE START ===");
     console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
     console.log("[COLLAB-DEBUG] 📋 Message:", message);
+    console.log("[COLLAB-DEBUG] 📋 Message isSaved status:", message.isSaved);
+    
+    // Don't check isSaved here - let the caller handle it
+    // We'll always attempt the upload and return the result
 
     // Check if we have Supabase client
     console.log("[COLLAB-DEBUG] 🔍 Checking Supabase client...");
@@ -917,7 +913,7 @@ class SupabaseSync {
     if (!this.supabase) {
       console.warn("[COLLAB-DEBUG] ⚠️ No Supabase client - queuing message");
       this.queueOperation("uploadMessage", { chatId, message });
-      return;
+      return { success: false, error: "No Supabase client available" };
     }
 
     // Get collaboration context
@@ -948,7 +944,7 @@ class SupabaseSync {
     if (isCollabProtected && !isCollaborating) {
       console.log("[COLLAB-DEBUG] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
       this.queueOperation("uploadMessage", { chatId, message });
-      return;
+      return { success: false, error: "Collaboration protection active" };
     }
 
     try {
@@ -966,15 +962,12 @@ class SupabaseSync {
         // Collaboration message
         console.log("[COLLAB-DEBUG] 📝 Saving as collaboration message");
         
-        // Get leader's userId for collaboration data
-        const leaderId = window.collaboration?.leaderId || this.userId;
-        
         messageData = {
           ...messageData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_message: true,
-          user_id: leaderId, // Use leader's userId for all collaboration data
+          user_id: isLeader ? this.userId : (localStorage.getItem("collaborationLeaderId") || this.userId), // Use leader's userId for collaborators
           metadata: {
             ...messageData.metadata,
             collaboration_room: window.collaboration?.collaborationId,
@@ -991,7 +984,7 @@ class SupabaseSync {
         if (!this.userId) {
           console.warn("[COLLAB-DEBUG] ⚠️ No user ID for regular message - queuing");
           this.queueOperation("uploadMessage", { chatId, message });
-          return;
+          return { success: false, error: "No user ID available" };
         }
         
         messageData = {
@@ -1009,23 +1002,27 @@ class SupabaseSync {
       console.log("[COLLAB-DEBUG] 🗄️ === DATABASE INSERT ATTEMPT ===");
       console.log("[COLLAB-DEBUG] 📋 Inserting into 'messages' table with data:", messageData);
       
-      const { data, error } = await this.supabase.from("messages").insert([messageData]);
+      const { data, error, status } = await this.supabase.from("messages").insert([messageData]);
 
-      console.log("[COLLAB-DEBUG] 📊 Database response:", { data, error });
+      console.log("[COLLAB-DEBUG] 📊 Database response:", { data, error, status });
 
       if (error) {
         console.error("[COLLAB-DEBUG] ❌ Message upload failed:", error);
-        throw error;
+        console.log("[COLLAB-DEBUG] 📊 Returning failure result");
+        return { success: false, error: error.message, status };
       }
 
       console.log("[COLLAB-DEBUG] ✅ Message uploaded successfully");
       console.log("[COLLAB-DEBUG] 📋 Database response data:", data);
+      console.log("[COLLAB-DEBUG] 📊 Returning success result");
+      return { success: true, data, status };
       
     } catch (error) {
       console.error("[COLLAB-DEBUG] ❌ === SYNC UPLOAD ERROR ===");
       console.error("[COLLAB-DEBUG] Exception during message upload:", error);
       console.error("[COLLAB-DEBUG] Error stack:", error.stack);
       this.queueOperation("uploadMessage", { chatId, message });
+      return { success: false, error: error.message };
     }
   }
 
@@ -1080,15 +1077,12 @@ class SupabaseSync {
         // Collaboration artifact
         console.log("[COLLAB-DATA] 📝 Saving as collaboration artifact");
         
-        // Get leader's userId for collaboration data
-        const leaderId = window.collaboration?.leaderId || this.userId;
-        
         artifactData = {
           ...artifactData,
           collaboration_id: collaborationId,
           participant_id: participantId,
           is_collaboration_artifact: true,
-          user_id: leaderId, // Use leader's userId for all collaboration data
+          user_id: isLeader ? this.userId : (localStorage.getItem("collaborationLeaderId") || this.userId), // Use leader's userId for collaborators
         };
       } else {
         // Regular user artifact

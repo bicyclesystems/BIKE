@@ -956,7 +956,7 @@ async function addMessage(role, content, options = {}) {
   const timePart = Date.now().toString(36);
   const randPart = Math.random().toString(36).slice(2, 8);
   const message_id = `${userId.slice(-4)}_${timePart}_${randPart}`;
-  const message = { role, content, timestamp, message_id };
+  const message = { role, content, timestamp, message_id, isSaved: false, userId };
 
   console.log("[COLLAB-DEBUG] 🆔 Generated message ID:", message_id);
   console.log("[COLLAB-DEBUG] 👤 User ID:", userId);
