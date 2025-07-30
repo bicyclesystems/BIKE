@@ -177,6 +177,8 @@ function validateViewParams(viewId, params = {}) {
 let isTransitioning = false;
 
 function renderCurrentView(withTransition = true) {
+  console.log("[VIEWS] renderCurrentView called with transition:", withTransition);
+  
   const viewElement = window.context?.getViewElement();
   if (!viewElement)
     window.context?.setViewElement(document.getElementById("view"));
@@ -191,18 +193,24 @@ function renderCurrentView(withTransition = true) {
   const activeView = window.context?.getActiveView();
   let newHtml = "";
 
+  console.log("[VIEWS] Active view:", activeView);
+
   if (!activeView) {
     // Always show memory view when activeView is null
+    console.log("[VIEWS] No active view, showing memory view");
     newHtml = window.memoryView.renderMemoryView();
   } else {
     const { type, data } = activeView;
+    console.log("[VIEWS] Rendering view type:", type, "with data:", data);
 
     // Find the view in our registry that matches this type
     const view = Object.values(VIEWS_REGISTRY).find((v) => v.type === type);
 
     if (view && view.render) {
+      console.log("[VIEWS] Found view renderer:", view.type);
       newHtml = view.render(data);
     } else {
+      console.warn("[VIEWS] No view renderer found for type:", type);
       newHtml = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
     }
   }
@@ -268,6 +276,29 @@ function simpleBlurTransition(container, newHtml) {
     }, 400);
   }, 400);
 }
+
+// =================== Debug Functions ===================
+
+function debugViewState() {
+  console.log("[VIEWS-DEBUG] Current view state:");
+  console.log("  - Active view:", window.context?.getActiveView());
+  console.log("  - Collaboration active:", localStorage.getItem("collaborationActive"));
+  console.log("  - Is collaborating:", window.collaboration?.isCollaborating);
+  console.log("  - Is leader:", window.collaboration?.isLeader);
+  console.log("  - Current hash:", location.hash);
+  console.log("  - View element exists:", !!document.getElementById("view"));
+}
+
+function forceClearCollaborationState() {
+  console.log("[VIEWS-DEBUG] Force clearing collaboration state");
+  localStorage.removeItem("collaborationActive");
+  localStorage.removeItem("collaborationPermissions");
+  console.log("[VIEWS-DEBUG] Collaboration state cleared");
+}
+
+// Make debug functions globally available
+window.debugViewState = debugViewState;
+window.forceClearCollaborationState = forceClearCollaborationState;
 
 // =================== View UI Management ===================
 

@@ -47,7 +47,8 @@ function renderArtifactView(data) {
     return '<div class="column align-center justify-center padding-xl foreground-tertiary">Artifact not found</div>';
   }
 
-  const currentVersionIdx = window.context?.getActiveVersionIndex(artifactId) ?? artifact.versions.length - 1;
+  // Get current version index - default to 0 (latest version) since we now store latest first
+  const currentVersionIdx = window.context?.getActiveVersionIndex(artifactId) ?? 0;
   const currentVersion = artifact.versions[currentVersionIdx];
   
   if (!currentVersion) {
@@ -55,7 +56,7 @@ function renderArtifactView(data) {
   }
 
   const content = currentVersion.content;
-  
+
   // Check if user can edit this artifact
   const canEdit = window.collaboration?.canPerformAction('editArtifact') || false;
   const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
@@ -95,7 +96,7 @@ function renderArtifactView(data) {
           <div class="text-m foreground-primary" style="font-weight: 600;">${window.utils.escapeHtml(artifact.title)}</div>
           <div class="row gap-s text-xs foreground-tertiary">
             <span class="background-tertiary padding-xs radius-xs">${artifact.type}</span>
-            <span class="background-tertiary padding-xs radius-xs">Version ${currentVersionIdx + 1} of ${artifact.versions.length}</span>
+            <span class="background-tertiary padding-xs radius-xs">Version ${artifact.versions.length - currentVersionIdx} of ${artifact.versions.length}</span>
             <span class="background-tertiary padding-xs radius-xs">${new Date(currentVersion.timestamp).toLocaleString()}</span>
             ${currentVersion.editedBy ? `<span class="background-tertiary padding-xs radius-xs">Edited by ${currentVersion.editedBy}</span>` : ''}
           </div>
@@ -179,7 +180,7 @@ function renderArtifactView(data) {
       `;
     } else {
       // View mode for HTML artifacts
-      const escapedContent = content.replace(/"/g, '&quot;');
+    const escapedContent = content.replace(/"/g, '&quot;');
       return `${headerHtml}
         <div class="column gap-m">
           ${canEdit ? `
@@ -295,7 +296,7 @@ function renderArtifactView(data) {
       `;
     } else {
       // View mode for link artifacts
-      contentHtml = `
+    contentHtml = `
         <div class="column gap-m">
           ${canEdit ? `
             <div class="row align-center justify-between">
@@ -303,16 +304,16 @@ function renderArtifactView(data) {
               <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit Link</button>
             </div>
           ` : ''}
-          <div class="row align-center gap-m padding-l radius-s background-secondary" style="border: calc(var(--base-size) * 0.25) solid var(--color-secondary-background); margin: calc(var(--base-size) * 3) 0;">
-            <div class="text-xl">${linkIcon}</div>
-            <div class="column gap-xs">
-              <div class="text-s foreground-tertiary" style="font-weight: 500;">${linkTypeText}</div>
-              <div class="text-xs foreground-tertiary">${domain}</div>
-              <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs foreground-primary transition" style="text-decoration: none;">${url}</a>
+      <div class="row align-center gap-m padding-l radius-s background-secondary" style="border: calc(var(--base-size) * 0.25) solid var(--color-secondary-background); margin: calc(var(--base-size) * 3) 0;">
+        <div class="text-xl">${linkIcon}</div>
+        <div class="column gap-xs">
+          <div class="text-s foreground-tertiary" style="font-weight: 500;">${linkTypeText}</div>
+          <div class="text-xs foreground-tertiary">${domain}</div>
+          <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs foreground-primary transition" style="text-decoration: none;">${url}</a>
             </div>
-          </div>
         </div>
-      `;
+      </div>
+    `;
     }
   } else if (artifact.type === 'markdown' && content.startsWith('```')) {
     // Extract code from markdown code blocks
@@ -343,7 +344,7 @@ function renderArtifactView(data) {
       `;
     } else {
       // View mode
-      contentHtml = `<div class="padding-m" style="margin: calc(var(--base-size) * 3) 0; line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
+    contentHtml = `<div class="padding-m" style="margin: calc(var(--base-size) * 3) 0; line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
       
       // Add edit button if user can edit
       if (canEdit) {

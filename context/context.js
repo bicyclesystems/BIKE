@@ -99,7 +99,7 @@ function loadChat() {
 // =================== View Management ===================
 
 function setActiveView(viewType, data = {}, options = {}) {
-  console.log("[CONTEXT] setActiveView called:", viewType, data);
+  console.log("[CONTEXT] setActiveView called:", viewType, data, "options:", options);
   
   const { withTransition = true } = options;
 
@@ -127,6 +127,8 @@ function setActiveView(viewType, data = {}, options = {}) {
 
   setState({ activeView: newView });
   window.memory?.saveActiveView(newView);
+  
+  console.log("[CONTEXT] ✅ Active view updated to:", newView);
 
   // Handle version tracking for artifact views
   if (viewType === "artifact" && data.artifactId) {

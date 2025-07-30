@@ -281,12 +281,15 @@ function loadAll() {
 }
 
 async function saveArtifacts() {
+  console.log('[MEMORY] 💾 saveArtifacts called with', AppState.artifacts.length, 'artifacts');
+  
   // Use debounced save for better performance
   debouncedSaveArtifacts();
 
   // Also save to IndexedDB asynchronously
   try {
     await saveArtifactsToIndexedDB();
+    console.log('[MEMORY] ✅ Artifacts saved to IndexedDB');
   } catch (error) {
     console.warn(
       "[MEMORY] IndexedDB artifact save failed, localStorage backup available:",
@@ -295,7 +298,9 @@ async function saveArtifacts() {
   }
 
   // Notify sync system that artifacts have changed
+  console.log('[MEMORY] 🔄 Dispatching data change event for artifacts...');
   dispatchDataChange("artifacts", AppState.artifacts);
+  console.log('[MEMORY] ✅ Data change event dispatched');
 }
 
 async function loadArtifacts() {

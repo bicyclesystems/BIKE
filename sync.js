@@ -54,7 +54,22 @@ class SupabaseSync {
   handleDataChange(event) {
     const { type, data } = event.detail;
 
-    if (!this.isOnline || !this.isInitialized) return;
+    // Check if sync is enabled (collaboration protection cleared)
+    const isCollabProtected = window.isCollaborationProtected
+      ? window.isCollaborationProtected()
+      : false;
+
+    if (!this.isOnline || !this.isInitialized) {
+      console.log("[SYNC] ⚠️ Sync skipped - offline or not initialized");
+      return;
+    }
+
+    if (isCollabProtected) {
+      console.log("[SYNC] ⚠️ Sync skipped - collaboration protection active");
+      return;
+    }
+
+    console.log("[SYNC] 🔄 Processing data change:", type);
 
     switch (type) {
       case "chat":
@@ -963,6 +978,10 @@ if (document.readyState === "loading") {
   syncManager.init();
 }
 
+
+// Export for global access
+window.syncManager = syncManager;
+
 document.addEventListener("DOMContentLoaded", async () => {
   // Wait until window.SUPABASE_CONFIG is available
   while (!window.SUPABASE_CONFIG?.url || !window.SUPABASE_CONFIG?.key) {
@@ -981,6 +1000,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.log("[SYNC] Preserving synchronized collaboration data");
     return; // Exit early to preserve collaboration data
   }
+
+  // Enable sync process by clearing collaboration protection
+  console.log("[SYNC] 🔄 Enabling database sync process");
+  localStorage.removeItem("collaborationActive");
+  localStorage.removeItem("COLLABORATION_ACTIVE");
+  localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
+  console.log("[SYNC] ✅ Collaboration protection cleared - sync enabled");
 
   //fetching all the data of the user from database
   try {
@@ -1018,5 +1044,72 @@ document.addEventListener("DOMContentLoaded", async () => {
   }
 });
 
-// Export for global access
-window.syncManager = syncManager;
+// Manual sync trigger function
+window.enableDatabaseSync = async function() {
+  console.log("[SYNC] 🚀 Manually enabling database sync");
+  
+  // Clear collaboration protection
+  localStorage.removeItem("collaborationActive");
+  localStorage.removeItem("COLLABORATION_ACTIVE");
+  localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
+  
+  // Initialize sync if not already done
+  if (window.syncManager && !window.syncManager.isInitialized) {
+    await window.syncManager.init();
+  }
+  
+  // Process any queued operations
+  if (window.syncManager && window.syncManager.syncQueue.length > 0) {
+    console.log("[SYNC] 📋 Processing queued operations:", window.syncManager.syncQueue.length);
+    await window.syncManager.processQueue();
+  }
+  
+  // Perform initial sync
+  if (window.syncManager && window.syncManager.isOnline) {
+    console.log("[SYNC] 🔄 Performing initial sync");
+    await window.syncManager.performInitialSync();
+  }
+  
+  console.log("[SYNC] ✅ Database sync enabled and processing");
+  return { success: true, message: "Database sync enabled" };
+};
+
+// Test function to check artifact sync
+window.testArtifactSync = async function() {
+  console.log("[SYNC] 🧪 Testing artifact sync...");
+  
+  // Check sync status
+  const status = window.syncManager?.getStatus();
+  console.log("[SYNC] 📊 Sync status:", status);
+  
+  // Check if collaboration protection is active
+  const isCollabProtected = window.isCollaborationProtected
+    ? window.isCollaborationProtected()
+    : false;
+  console.log("[SYNC] 🛡️ Collaboration protection:", isCollabProtected);
+  
+  // Check current artifacts
+  const artifacts = window.context?.getArtifacts() || [];
+  console.log("[SYNC] 📋 Current artifacts:", artifacts.length);
+  
+  // Try to create a test artifact
+  if (window.artifactsModule?.createArtifact) {
+    console.log("[SYNC] 🆕 Creating test artifact...");
+    const testArtifact = window.artifactsModule.createArtifact(
+      "Test artifact content for sync testing",
+      "test-message-id",
+      "text"
+    );
+    console.log("[SYNC] ✅ Test artifact created:", testArtifact?.id);
+    
+    // Wait a bit for sync to process
+    setTimeout(() => {
+      console.log("[SYNC] 📋 Artifacts after creation:", window.context?.getArtifacts()?.length || 0);
+      console.log("[SYNC] 📋 Sync queue length:", window.syncManager?.syncQueue?.length || 0);
+    }, 2000);
+  } else {
+    console.error("[SYNC] ❌ Artifacts module not available");
+  }
+  
+  return { success: true, message: "Artifact sync test completed" };
+};

@@ -318,44 +318,8 @@ function removeIntroScreen() {
 function initializeMainApp() {
   console.log('[AUTH] Initializing app');
 
-  const chats = window.context.getChats() || [];
-  const activeChatId = window.context.getActiveChatId();
-
-  // Check for existing chats in localStorage before creating new ones
-  const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
-  const hasStoredChats = storedChats.length > 0;
-
-  // Check collaboration protection status
-  const isCollabProtected = window.isCollaborationProtected
-    ? window.isCollaborationProtected()
-    : false;
-
-  console.log(
-    `[AUTH] Found ${chats.length} chats in context, ${
-      storedChats.length
-    } in localStorage, active: ${
-      activeChatId || "none"
-    }, collabProtected: ${isCollabProtected}`
-  );
-
-  // Only create new chat if no chats exist in BOTH context AND localStorage
-  if (chats.length === 0 && !hasStoredChats) {
-    console.log("[AUTH] No chats found anywhere - creating new chat");
-    window.actions.executeAction("chat.create", {});
-  } else if (!activeChatId) {
-    if (chats.length > 0) {
-      console.log("[AUTH] Setting first chat as active");
-      window.context.setActiveChat(chats[0].id);
-    } else if (hasStoredChats) {
-      console.log("[AUTH] Using first stored chat as active");
-      // Load stored data first, then set active chat
-      window.memory?.loadAll();
-      const reloadedChats = window.context.getChats() || [];
-      if (reloadedChats.length > 0) {
-        window.context.setActiveChat(reloadedChats[0].id);
-      }
-    }
-  }
+  // Ensure there's always an active chat
+  ensureActiveChatExists();
 
   if (window.context.getActiveChatId()) {
     window.context.loadChat();
@@ -364,10 +328,116 @@ function initializeMainApp() {
   window.views.renderCurrentView(false); // No transition during initialization
 }
 
+/**
+ * Ensure there's always an active chat available
+ * Creates a default chat if none exists
+ */
+function ensureActiveChatExists() {
+  console.log('[AUTH] 🔍 Checking for active chat...');
+  
+  const chats = window.context.getChats() || [];
+  const activeChatId = window.context.getActiveChatId();
+  
+  // Check for existing chats in localStorage
+  const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
+  const hasStoredChats = storedChats.length > 0;
+  
+  // Check collaboration protection status
+  const isCollabProtected = window.isCollaborationProtected
+    ? window.isCollaborationProtected()
+    : false;
+
+  console.log(
+    `[AUTH] 📊 Chat status: ${chats.length} context, ${storedChats.length} localStorage, active: ${activeChatId || "none"}, collabProtected: ${isCollabProtected}`
+  );
+
+  // If no active chat exists, try to set one
+  if (!activeChatId) {
+    console.log('[AUTH] 🔄 No active chat found, attempting to set one...');
+    
+    // First try to use existing chats from context
+    if (chats.length > 0) {
+      console.log("[AUTH] ✅ Setting first context chat as active:", chats[0].id);
+      window.context.setActiveChat(chats[0].id);
+      return;
+    }
+    
+    // Then try to load from localStorage
+    if (hasStoredChats) {
+      console.log("[AUTH] 🔄 Loading chats from localStorage...");
+      window.memory?.loadAll();
+      const reloadedChats = window.context.getChats() || [];
+      if (reloadedChats.length > 0) {
+        console.log("[AUTH] ✅ Setting first stored chat as active:", reloadedChats[0].id);
+        window.context.setActiveChat(reloadedChats[0].id);
+        return;
+      }
+    }
+    
+    // If still no chat exists, create a new one
+    console.log("[AUTH] 🆕 No chats found anywhere - creating new default chat");
+    createDefaultChat();
+  } else {
+    console.log('[AUTH] ✅ Active chat already exists:', activeChatId);
+  }
+}
+
+/**
+ * Create a default chat with a random ID
+ */
+function createDefaultChat() {
+  try {
+    const chatId = Date.now().toString();
+    const defaultChat = {
+      id: chatId,
+      title: "New Chat",
+      description: "Start a new conversation",
+      timestamp: new Date().toISOString(),
+      endTime: null
+    };
+    
+    console.log('[AUTH] 🆕 Creating default chat:', chatId);
+    
+    // Add chat to context
+    const currentChats = window.context.getChats() || [];
+    const updatedChats = [defaultChat, ...currentChats];
+    window.context.setState({ chats: updatedChats });
+    
+    // Set as active chat
+    window.context.setActiveChat(chatId);
+    
+    // Save to localStorage
+    localStorage.setItem("chats", JSON.stringify(updatedChats));
+    localStorage.setItem("activeChatId", chatId);
+    
+    // Initialize empty messages array for this chat
+    const currentMessagesByChat = window.context.getMessagesByChat() || {};
+    currentMessagesByChat[chatId] = [];
+    window.context.setState({ messagesByChat: currentMessagesByChat });
+    localStorage.setItem("messagesByChat", JSON.stringify(currentMessagesByChat));
+    
+    console.log('[AUTH] ✅ Default chat created and set as active:', chatId);
+    
+    // Save to memory module if available
+    if (window.memory?.saveChat) {
+      window.memory.saveChat(defaultChat);
+    }
+    
+    return chatId;
+  } catch (error) {
+    console.error('[AUTH] ❌ Failed to create default chat:', error);
+    return null;
+  }
+}
+
 // =================== Authenticated State Handler ===================
 async function handleAuthenticatedState() {
   removeIntroScreen();
   toggleUI(true);
+  
+  // Fetch and merge user data from database with smart deduplication
+  await fetchAndMergeUserData();
+
   await initializeSync();
 
   // Start smart session monitoring for authenticated users
@@ -460,6 +530,9 @@ function handleUnauthenticatedState() {
   // Keep intro screen visible for unauthenticated users
   toggleUI(true); // Enable UI so users can interact
 
+  // Ensure there's a default chat for unauthenticated users
+  ensureActiveChatExists();
+
   // Check for existing chats in localStorage before creating new ones
   const storedChats = JSON.parse(localStorage.getItem("chats") || "[]");
   const hasStoredChats = storedChats.length > 0;
@@ -509,6 +582,252 @@ async function updateAuthState(session, forceNewLogin = false) {
   lastAuthState = isLoggedIn;
 }
 
+// =================== Smart Data Fetching and Merging ===================
+
+/**
+ * Fetch and merge user data from database with smart deduplication
+ * This function handles both fresh login and page refresh scenarios
+ */
+async function fetchAndMergeUserData() {
+  console.log('[AUTH] 🔄 Fetching and merging user data from database...');
+  
+  try {
+    // Get current local data
+    const localChats = JSON.parse(localStorage.getItem("chats") || "[]");
+    const localMessagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const localArtifacts = JSON.parse(localStorage.getItem("artifacts") || "[]");
+    const localUser = JSON.parse(localStorage.getItem("bike_user_data") || "{}").user;
+    
+    console.log('[AUTH] 📊 Current local data:', {
+      chats: localChats.length,
+      artifacts: localArtifacts.length,
+      messages: Object.values(localMessagesByChat).flat().length,
+      user: !!localUser
+    });
+
+    // First ensure user exists in database
+    const session = await getCurrentSession();
+    if (session?.user?.id) {
+      await ensureUserInDatabase(session);
+    }
+    
+    // Fetch fresh data from database
+    const [dbUser, dbArtifacts, dbChats, dbMessages] = await Promise.all([
+      getUserData(),
+      getUserArtifacts(),
+      getUserChats(),
+      getUserMessages(),
+    ]);
+
+    console.log('[AUTH] 📊 Fetched database data:', {
+      user: !!dbUser,
+      artifacts: dbArtifacts?.length || 0,
+      chats: dbChats?.length || 0,
+      messages: dbMessages?.length || 0
+    });
+
+    // Smart merge with deduplication
+    const mergedData = mergeDataWithDeduplication({
+      local: { chats: localChats, messagesByChat: localMessagesByChat, artifacts: localArtifacts, user: localUser },
+      database: { chats: dbChats, messages: dbMessages, artifacts: dbArtifacts, user: dbUser }
+    });
+
+    // Store merged data in localStorage
+    const messagesByChat = mergedData.messagesByChat;
+    localStorage.setItem("bike_user_data", JSON.stringify({ user: mergedData.user }));
+    localStorage.setItem("userPreferences", JSON.stringify(mergedData.user?.preferences || {}));
+    localStorage.setItem("userId", mergedData.user?.id || "");
+    localStorage.setItem("artifacts", JSON.stringify(mergedData.artifacts));
+    localStorage.setItem("chats", JSON.stringify(mergedData.chats));
+    localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
+
+    // Set the last chat as active if no active chat exists
+    const currentActiveChatId = window.context?.getActiveChatId();
+    if (!currentActiveChatId && mergedData.chats.length > 0) {
+      const lastChat = mergedData.chats[mergedData.chats.length - 1];
+      localStorage.setItem("activeChatId", lastChat.id.toString());
+    }
+
+    console.log('[AUTH] ✅ Merged data stored in localStorage');
+
+    // Update context state with merged data
+    if (window.context?.setState) {
+      window.context.setState({
+        chats: mergedData.chats,
+        messagesByChat: messagesByChat,
+        artifacts: mergedData.artifacts,
+        activeChatId: currentActiveChatId || (mergedData.chats.length > 0 ? mergedData.chats[mergedData.chats.length - 1].id : null),
+        userPreferences: mergedData.user?.preferences || {}
+      });
+          console.log('[AUTH] ✅ Context state updated with merged data');
+  }
+
+  // Ensure there's an active chat after data merging
+  ensureActiveChatExists();
+
+  console.log('[AUTH] 📊 Final merged data summary:', {
+    chats: mergedData.chats.length,
+    artifacts: mergedData.artifacts.length,
+    messages: Object.values(messagesByChat).flat().length,
+    user: !!mergedData.user
+  });
+
+} catch (error) {
+  console.error('[AUTH] ❌ Failed to fetch and merge user data:', error);
+}
+}
+
+/**
+ * Smart data merging with deduplication
+ */
+function mergeDataWithDeduplication({ local, database }) {
+  console.log('[AUTH] 🔄 Merging data with deduplication...');
+
+  // Merge chats with deduplication by chat_id
+  const mergedChats = mergeChatsWithDeduplication(local.chats, database.chats);
+  
+  // Merge messages with deduplication by message_id
+  const mergedMessagesByChat = mergeMessagesWithDeduplication(local.messagesByChat, database.messages);
+  
+  // Merge artifacts with deduplication by artifact_id
+  const mergedArtifacts = mergeArtifactsWithDeduplication(local.artifacts, database.artifacts);
+  
+  // Use database user data (always fresh)
+  const mergedUser = database.user || local.user;
+
+  return {
+    chats: mergedChats,
+    messagesByChat: mergedMessagesByChat,
+    artifacts: mergedArtifacts,
+    user: mergedUser
+  };
+}
+
+/**
+ * Merge chats with deduplication by chat_id
+ */
+function mergeChatsWithDeduplication(localChats, dbChats) {
+  const chatMap = new Map();
+  
+  // Add local chats first
+  localChats.forEach(chat => {
+    chatMap.set(chat.id, chat);
+  });
+  
+  // Add/update with database chats (database takes precedence for conflicts)
+  dbChats.forEach(dbChat => {
+    const existingChat = chatMap.get(dbChat.id);
+    if (!existingChat || new Date(dbChat.updated_at || dbChat.timestamp) > new Date(existingChat.updatedAt || existingChat.timestamp)) {
+      chatMap.set(dbChat.id, {
+        id: dbChat.id,
+        title: dbChat.title,
+        description: dbChat.description || "",
+        timestamp: dbChat.timestamp,
+        endTime: dbChat.endTime,
+        updatedAt: dbChat.updated_at || dbChat.timestamp
+      });
+    }
+  });
+  
+  const mergedChats = Array.from(chatMap.values()).sort((a, b) => 
+    new Date(b.timestamp) - new Date(a.timestamp)
+  );
+  
+  console.log(`[AUTH] 📋 Chats merged: ${localChats.length} local + ${dbChats.length} db = ${mergedChats.length} total`);
+  return mergedChats;
+}
+
+/**
+ * Merge messages with deduplication by message_id
+ */
+function mergeMessagesWithDeduplication(localMessagesByChat, dbMessages) {
+  const mergedMessagesByChat = { ...localMessagesByChat };
+  
+  // Group database messages by chat_id
+  const dbMessagesByChat = {};
+  dbMessages.forEach(dbMessage => {
+    const chatId = dbMessage.chat_id;
+    if (!dbMessagesByChat[chatId]) {
+      dbMessagesByChat[chatId] = [];
+    }
+    dbMessagesByChat[chatId].push({
+      role: dbMessage.role,
+      content: dbMessage.content,
+      metadata: dbMessage.metadata || {},
+      message_id: dbMessage.message_id,
+      created_at: dbMessage.created_at
+    });
+  });
+  
+  // Merge messages for each chat
+  Object.keys(dbMessagesByChat).forEach(chatId => {
+    const localMessages = mergedMessagesByChat[chatId] || [];
+    const dbMessages = dbMessagesByChat[chatId];
+    
+    // Create a map of existing messages by content and role to avoid duplicates
+    const messageMap = new Map();
+    
+    // Add local messages first
+    localMessages.forEach(msg => {
+      const key = `${msg.role}:${msg.content}`;
+      messageMap.set(key, msg);
+    });
+    
+    // Add database messages (database takes precedence for conflicts)
+    dbMessages.forEach(dbMsg => {
+      const key = `${dbMsg.role}:${dbMsg.content}`;
+      const existingMsg = messageMap.get(key);
+      if (!existingMsg || new Date(dbMsg.created_at) > new Date(existingMsg.metadata?.timestamp || 0)) {
+        messageMap.set(key, dbMsg);
+      }
+    });
+    
+    mergedMessagesByChat[chatId] = Array.from(messageMap.values()).sort((a, b) => 
+      new Date(a.metadata?.timestamp || a.created_at || 0) - new Date(b.metadata?.timestamp || b.created_at || 0)
+    );
+  });
+  
+  const totalMessages = Object.values(mergedMessagesByChat).flat().length;
+  console.log(`[AUTH] 💬 Messages merged: ${Object.values(localMessagesByChat).flat().length} local + ${dbMessages.length} db = ${totalMessages} total`);
+  return mergedMessagesByChat;
+}
+
+/**
+ * Merge artifacts with deduplication by artifact_id
+ */
+function mergeArtifactsWithDeduplication(localArtifacts, dbArtifacts) {
+  const artifactMap = new Map();
+  
+  // Add local artifacts first
+  localArtifacts.forEach(artifact => {
+    artifactMap.set(artifact.id, artifact);
+  });
+  
+  // Add/update with database artifacts (database takes precedence for conflicts)
+  dbArtifacts.forEach(dbArtifact => {
+    const existingArtifact = artifactMap.get(dbArtifact.id);
+    if (!existingArtifact || new Date(dbArtifact.updated_at) > new Date(existingArtifact.updatedAt || 0)) {
+      artifactMap.set(dbArtifact.id, {
+        id: dbArtifact.id,
+        chatId: dbArtifact.chat_id,
+        title: dbArtifact.title,
+        type: dbArtifact.type,
+        versions: dbArtifact.versions || [],
+        updatedAt: dbArtifact.updated_at,
+        slug: dbArtifact.slug,
+        liveUrl: dbArtifact.live_url
+      });
+    }
+  });
+  
+  const mergedArtifacts = Array.from(artifactMap.values()).sort((a, b) => 
+    new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0)
+  );
+  
+  console.log(`[AUTH] 🎨 Artifacts merged: ${localArtifacts.length} local + ${dbArtifacts.length} db = ${mergedArtifacts.length} total`);
+  return mergedArtifacts;
+}
+
 // =================== User Data Getters ===================
 
 /**
@@ -518,6 +837,10 @@ async function updateAuthState(session, forceNewLogin = false) {
 async function getUserData() {
   const session = await getCurrentSession();
   if (!session?.user?.id) return null;
+  
+  // First, ensure user exists in database (create if not exists)
+  await ensureUserInDatabase(session);
+  
   const { data, error } = await supabase
     .from("users")
     .select("*")
@@ -530,6 +853,73 @@ async function getUserData() {
   }
 
   return data;
+}
+
+/**
+ * Ensure user exists in database, create if not exists
+ */
+async function ensureUserInDatabase(session) {
+  if (!session?.user?.id) return;
+  
+  try {
+    // Get user preferences from localStorage
+    const userPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+    
+    console.log('[USER] 🔄 Ensuring user exists in database:', session.user.id);
+    
+    // Try to upsert user record
+    const { data, error } = await supabase
+      .from("users")
+      .upsert({
+        id: session.user.id,
+        session_id: session.access_token,
+        preferences: userPreferences,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'id',
+        ignoreDuplicates: false
+      });
+
+    if (error) {
+      console.error("[USER] Failed to upsert user:", error);
+      return;
+    }
+
+    console.log('[USER] ✅ User record ensured in database:', session.user.id);
+    return data;
+  } catch (error) {
+    console.error("[USER] Error ensuring user in database:", error);
+  }
+}
+
+/**
+ * Update user preferences in database
+ */
+async function updateUserPreferences(preferences) {
+  const session = await getCurrentSession();
+  if (!session?.user?.id) return;
+  
+  try {
+    console.log('[USER] 🔄 Updating user preferences in database:', session.user.id);
+    
+    const { data, error } = await supabase
+      .from("users")
+      .update({
+        preferences: preferences,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", session.user.id);
+
+    if (error) {
+      console.error("[USER] Failed to update user preferences:", error);
+      return;
+    }
+
+    console.log('[USER] ✅ User preferences updated in database');
+    return data;
+  } catch (error) {
+    console.error("[USER] Error updating user preferences:", error);
+  }
 }
 
 /**
@@ -610,4 +1000,15 @@ window.user = {
   getUserArtifacts,
   getUserChats,
   getUserMessages,
+  
+  // smart data fetching and merging
+  fetchAndMergeUserData,
+  
+  // user database management
+  ensureUserInDatabase,
+  updateUserPreferences,
+  
+  // chat management
+  ensureActiveChatExists,
+  createDefaultChat,
 };

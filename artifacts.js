@@ -1,6 +1,27 @@
 // =================== Artifact Creation & Management ===================
 // Core CRUD and initialization only. Upload, parser, and matching logic moved to separate files.
 
+// Global Supabase client for artifacts
+let supabaseClient = null;
+
+// Initialize Supabase client
+function initSupabaseClient() {
+  if (window.supabase && window.SUPABASE_CONFIG) {
+    try {
+      supabaseClient = window.supabase.createClient(
+        window.SUPABASE_CONFIG.url,
+        window.SUPABASE_CONFIG.key
+      );
+      console.log("[ARTIFACTS] 🔗 Supabase client initialized");
+      return true;
+    } catch (error) {
+      console.error("[ARTIFACTS] ❌ Failed to initialize Supabase client:", error);
+      return false;
+    }
+  }
+  return false;
+}
+
 // URL detection utility function
 function isValidUrl(string) {
   try {
@@ -85,10 +106,25 @@ function createArtifactBase(
 
   const currentArtifacts = window.context?.getArtifacts() || [];
   window.context?.setState({ artifacts: [...currentArtifacts, artifact] });
-  window.memory?.saveArtifacts();
+  
+  console.log('[ARTIFACTS] 🆕 Artifact created:', {
+    id: artifact.id,
+    title: artifact.title,
+    type: artifact.type,
+    chatId: artifact.chatId
+  });
+  
+  // Save to memory (this triggers sync)
+  if (window.memory?.saveArtifacts) {
+    console.log('[ARTIFACTS] 💾 Saving artifact to memory...');
+    window.memory.saveArtifacts();
+  } else {
+    console.warn('[ARTIFACTS] ⚠️ Memory module not available for saving');
+  }
 
   // --- COLLABORATION SYNC ---
   if (window.collaboration && window.collaboration.pushArtifactToCollab) {
+    console.log('[ARTIFACTS] 🤝 Pushing artifact to collaboration...');
     window.collaboration.pushArtifactToCollab(artifact);
   }
   // --- END COLLABORATION SYNC ---
@@ -170,13 +206,14 @@ async function updateArtifact(id, content) {
   console.log("[ARTIFACTS] 📝 Creating new version:", newVersion);
   console.log("[ARTIFACTS] 📚 Current versions count:", artifact.versions.length);
   
-  artifact.versions.push(newVersion);
+  // Add new version to the beginning of the versions array (most recent first)
+  artifact.versions.unshift(newVersion);
   artifact.updatedAt = new Date().toISOString();
   
-  console.log("[ARTIFACTS] ✅ New version added, total versions:", artifact.versions.length);
+  console.log("[ARTIFACTS] ✅ New version added to beginning, total versions:", artifact.versions.length);
   
-  // Update state and set active version to the new version
-  const newActiveVersionIdx = artifact.versions.length - 1;
+  // Update state and set active version to the new version (index 0)
+  const newActiveVersionIdx = 0;
   
   console.log("[ARTIFACTS] 🔄 Updating context state with new artifacts array");
   console.log("[ARTIFACTS] 📊 Setting active version index to:", newActiveVersionIdx);
@@ -186,82 +223,201 @@ async function updateArtifact(id, content) {
     artifacts: artifacts,
   });
   
-  // Set the active version index to the new version
+  // Set the active version index to the new version (index 0)
   window.context?.setActiveVersionIndex(id, newActiveVersionIdx);
   
   // Save artifacts to local storage
   console.log("[ARTIFACTS] 💾 Saving artifacts to memory");
   window.memory?.saveArtifacts();
   
-  // Immediately upsert to database - Direct Supabase call
-  console.log("[ARTIFACTS] 🗄️ Upserting artifact to database");
+  // Update Supabase with robust error handling and retry logic
+  const updateResult = await updateArtifactInSupabase(artifact);
   
-  // Create Supabase client directly
-  let supabaseClient = null;
-  
-  if (window.supabase && window.SUPABASE_CONFIG) {
-    try {
-      supabaseClient = window.supabase.createClient(
-        window.SUPABASE_CONFIG.url,
-        window.SUPABASE_CONFIG.key
-      );
-      console.log("[ARTIFACTS] 🔗 Created Supabase client for database update");
-    } catch (error) {
-      console.error("[ARTIFACTS] ❌ Failed to create Supabase client:", error);
-    }
-  }
-  
-  if (supabaseClient && window.SUPABASE_CONFIG) {
-    try {
-      console.log("[ARTIFACTS] 🔗 Making direct Supabase call to update versions");
-      console.log("[ARTIFACTS] 📋 Artifact ID:", artifact.id);
-      console.log("[ARTIFACTS] 📚 Versions to update:", artifact.versions.length);
-      
-      // Verify client has the required methods
-      if (typeof supabaseClient.from !== 'function') {
-        console.error("[ARTIFACTS] ❌ Supabase client missing 'from' method");
-        console.log("[ARTIFACTS] 🔍 Available methods:", Object.keys(supabaseClient));
-        return;
-      }
-      
-      const { data, error } = await supabaseClient
-        .from("artifacts")
-        .update({ 
-          versions: artifact.versions 
-        })
-        .eq("id", artifact.id);
-      
-      if (error) {
-        console.error("[ARTIFACTS] ❌ Database upsert failed:", error);
-      } else {
-        console.log("[ARTIFACTS] ✅ Database versions updated successfully");
-        console.log("[ARTIFACTS] 📊 Updated artifact ID:", artifact.id);
-        console.log("[ARTIFACTS] 📚 Total versions in DB:", artifact.versions.length);
-        console.log("[ARTIFACTS] 📤 Supabase response:", data);
-      }
-    } catch (error) {
-      console.error("[ARTIFACTS] ❌ Database upsert failed:", error);
-    }
+  if (updateResult.success) {
+    console.log(`[ARTIFACTS] ✅ Updated artifact "${artifact.title}" (${artifact.type}) - now has ${artifact.versions.length} versions`);
   } else {
-    console.warn("[ARTIFACTS] ⚠️ Supabase not available for database upsert");
-    console.log("[ARTIFACTS] 🔍 Available Supabase objects:");
-    console.log("  - window.supabase:", !!window.supabase);
-    console.log("  - window.user.supabase:", !!window.user?.supabase);
-    console.log("  - window.SUPABASE_CONFIG:", !!window.SUPABASE_CONFIG);
-    console.log("  - supabaseClient:", !!supabaseClient);
-    
-    if (window.supabase) {
-      console.log("  - window.supabase methods:", Object.keys(window.supabase));
-    }
-    if (window.user?.supabase) {
-      console.log("  - window.user.supabase methods:", Object.keys(window.user.supabase));
-    }
+    console.error(`[ARTIFACTS] ❌ Failed to update artifact "${artifact.title}" in database:`, updateResult.error);
   }
-  
-  // Log the update
-  console.log(`[ARTIFACTS] ✅ Updated artifact "${artifact.title}" (${artifact.type}) - now has ${artifact.versions.length} versions`);
   
   return artifact;
+}
+
+/**
+ * Robust Supabase upsert function for artifacts using POST to replace entire artifact
+ * @param {Object} artifact - The artifact object to save
+ * @param {number} maxRetries - Maximum number of retry attempts (default: 3)
+ * @returns {Promise<{success: boolean, error?: string, data?: any, status?: number}>}
+ */
+async function updateArtifactInSupabase(artifact, maxRetries = 3) {
+  console.log("[SAVE] 🔄 Starting artifact save to Supabase:", artifact.id);
+  
+  // Step 1: Initialize Supabase client
+  console.log("[SAVE] Step 1: Checking Supabase client...");
+  if (!supabaseClient) {
+    console.log("[SAVE] Step 1a: Initializing Supabase client...");
+    if (!initSupabaseClient()) {
+      console.error("[SAVE] ❌ Step 1 failed: Could not initialize Supabase client");
+      return { success: false, error: "Failed to initialize Supabase client" };
+    }
+  }
+  
+  console.log("[SAVE] ✅ Step 1 complete: Supabase client ready");
+  
+  // Step 2: Prepare artifact data for database
+  console.log("[SAVE] Step 2: Preparing artifact data...");
+  const dbArtifact = {
+    id: artifact.id,
+    title: artifact.title,
+    type: artifact.type,
+    versions: artifact.versions,
+    chat_id: artifact.chatId,
+    created_at: artifact.createdAt || new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+  
+  console.log("[SAVE] ✅ Step 2 complete: Artifact data prepared");
+  console.log("[SAVE] 📋 Database payload:", {
+    id: dbArtifact.id,
+    title: dbArtifact.title,
+    type: dbArtifact.type,
+    versionsCount: dbArtifact.versions.length,
+    chat_id: dbArtifact.chat_id
+  });
+  
+  // Step 3: Retry logic with exponential backoff
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`[SAVE] Step 3 (Attempt ${attempt}/${maxRetries}): Upserting artifact to database...`);
+      
+      // Step 3a: Use upsert to insert or update the entire artifact
+      console.log(`[SAVE] Step 3a: Executing upsert operation...`);
+      const { data, error, status, statusText } = await supabaseClient
+        .from("artifacts")
+        .upsert(dbArtifact, { 
+          onConflict: 'id',
+          ignoreDuplicates: false 
+        })
+        .select()
+        .single();
+      
+      console.log(`[SAVE] Step 3b: Database response received`);
+      console.log(`[SAVE] 📤 Response - Status: ${status}, StatusText: ${statusText}`);
+      console.log(`[SAVE] 📤 Response data:`, data);
+      console.log(`[SAVE] 📤 Response error:`, error);
+      
+      // Step 3c: Handle response
+      if (error) {
+        console.error(`[SAVE] ❌ Step 3c failed: Database error:`, error);
+        if (attempt === maxRetries) {
+          return { 
+            success: false, 
+            error: error.message || "Database upsert failed", 
+            status: status,
+            attempt: attempt 
+          };
+        }
+        console.log(`[SAVE] ⏳ Retrying in ${Math.pow(2, attempt) * 1000}ms...`);
+        continue;
+      }
+      
+      // Step 3d: Handle successful response
+      if (status >= 200 && status < 300) {
+        console.log(`[SAVE] ✅ Step 3 complete: Artifact saved successfully - Status: ${status}`);
+        return { 
+          success: true, 
+          data: data, 
+          status: status,
+          attempt: attempt 
+        };
+      }
+      
+      // Step 3e: Handle unexpected status codes
+      console.warn(`[SAVE] ⚠️ Step 3e: Unexpected status code: ${status}`);
+      if (attempt === maxRetries) {
+        return { 
+          success: false, 
+          error: `Unexpected status code: ${status}`, 
+          status: status,
+          attempt: attempt 
+        };
+      }
+      
+    } catch (error) {
+      console.error(`[SAVE] ❌ Step 3 threw exception:`, error);
+      if (attempt === maxRetries) {
+        return { 
+          success: false, 
+          error: "Exception during upsert: " + error.message, 
+          attempt: attempt 
+        };
+      }
+      
+      // Wait before retry with exponential backoff
+      const waitTime = Math.pow(2, attempt) * 1000;
+      console.log(`[SAVE] ⏳ Waiting ${waitTime}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
+    }
+  }
+  
+  console.error(`[SAVE] ❌ All ${maxRetries} attempts failed`);
+  return { 
+    success: false, 
+    error: "All retry attempts failed", 
+    attempt: maxRetries 
+  };
+}
+
+/**
+ * Verify that an artifact exists in the database
+ * @param {Object} supabaseClient - Supabase client instance
+ * @param {string} artifactId - Artifact ID to verify
+ * @returns {Promise<{exists: boolean, data?: any}>}
+ */
+async function verifyArtifactExists(artifactId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from("artifacts")
+      .eq("id", artifactId)
+      .select("id")
+      .single();
+    
+    if (error) {
+      console.log(`[ARTIFACTS-SUPABASE] 🔍 Artifact ${artifactId} verification failed:`, error);
+      return { exists: false };
+    }
+    
+    console.log(`[ARTIFACTS-SUPABASE] 🔍 Artifact ${artifactId} exists in database`);
+    return { exists: true, data };
+  } catch (error) {
+    console.error(`[ARTIFACTS-SUPABASE] ❌ Error verifying artifact ${artifactId}:`, error);
+    return { exists: false };
+  }
+}
+
+/**
+ * Get current artifact state from database
+ * @param {Object} supabaseClient - Supabase client instance
+ * @param {string} artifactId - Artifact ID to fetch
+ * @returns {Promise<Object|null>}
+ */
+async function getCurrentArtifactState(artifactId) {
+  try {
+    const { data, error } = await supabaseClient
+      .from("artifacts")
+      .eq("id", artifactId)
+      .select("*")
+      .single();
+    
+    if (error) {
+      console.error(`[ARTIFACTS-SUPABASE] ❌ Error fetching artifact ${artifactId}:`, error);
+      return null;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error(`[ARTIFACTS-SUPABASE] ❌ Exception fetching artifact ${artifactId}:`, error);
+    return null;
+  }
 }
 
 function getArtifact(id) {
@@ -513,6 +669,9 @@ function setupArtifactClickHandlers() {
 // =================== Artifacts Initialization ===================
 
 function init() {
+  // Initialize Supabase client
+  initSupabaseClient();
+  
   // Setup artifact-specific click handlers
   setupArtifactClickHandlers();
 
