@@ -157,7 +157,8 @@ class SupabaseSync {
   // =================== Authentication Integration ===================
   async initializeWithAuth(supabaseClient, session) {
     try {
-  
+      console.log("[SYNC] 🔄 Initializing sync manager with auth...");
+      console.log("[SYNC] 📋 Session user ID:", session.user?.id);
 
       this.supabase = supabaseClient;
       this.sessionId = session.access_token;
@@ -165,13 +166,21 @@ class SupabaseSync {
       // Get user ID from session
       if (session.user) {
         this.userId = session.user.id;
-        localStorage.setItem("userId", this.userId);
-        window.userId = this.userId;
-    
+        // Only store userId in localStorage if it's not null (for collaborators)
+        if (this.userId) {
+          localStorage.setItem("userId", this.userId);
+          window.userId = this.userId;
+        } else {
+          console.log("[SYNC] 📋 Collaborator mode - userId is null");
+        }
       }
 
-      // Initialize user in database
-      await this.initializeUser();
+      // Initialize user in database (skip for collaborators with null userId)
+      if (this.userId) {
+        await this.initializeUser();
+      } else {
+        console.log("[SYNC] 📋 Skipping user initialization for collaborator");
+      }
 
       // Perform initial sync
       if (this.isOnline) {
@@ -181,7 +190,7 @@ class SupabaseSync {
       // Set up real-time subscriptions
       await this.setupRealtime();
 
-  
+      console.log("[SYNC] ✅ Sync manager initialized successfully");
       return true;
     } catch (error) {
       console.error("[SYNC] Auth initialization failed:", error);
@@ -207,7 +216,7 @@ class SupabaseSync {
     try {
       // Use the user ID from authentication (already set in initializeWithAuth)
       if (!this.userId) {
-        console.error("[SYNC] No user ID available");
+        console.log("[SYNC] No user ID available - this is normal for collaborators");
         return;
       }
 
@@ -783,80 +792,312 @@ class SupabaseSync {
 
   // =================== Upload Functions ===================
   async uploadChat(chat) {
-    if (!this.supabase || !this.userId) {
+    console.log("[COLLAB-DATA] 📤 Uploading chat to database...");
+    console.log("[COLLAB-DATA] 📋 Chat:", chat);
+
+    // Check if we have Supabase client
+    if (!this.supabase) {
+      console.warn("[COLLAB-DATA] ⚠️ No Supabase client - queuing chat");
+      this.queueOperation("uploadChat", chat);
+      return;
+    }
+
+    // Get collaboration context
+    const isCollaborating = window.collaboration?.isCollaborating || false;
+    const collaborationId = window.collaboration?.databaseCollaborationId || null;
+    const participantId = window.collaboration?.participantId || null;
+    const isLeader = window.collaboration?.isLeader || false;
+
+    console.log("[COLLAB-DATA] 📋 Collaboration Context for Chat:");
+    console.log("  - Is Collaborating:", isCollaborating);
+    console.log("  - Collaboration ID:", collaborationId);
+    console.log("  - Participant ID:", participantId);
+    console.log("  - Is Leader:", isLeader);
+    console.log("  - User ID:", this.userId);
+
+    // Bypass collaboration protection for collaboration data
+    const isCollabProtected = window.isCollaborationProtected
+      ? window.isCollaborationProtected()
+      : false;
+    
+    if (isCollabProtected && !isCollaborating) {
+      console.log("[COLLAB-DATA] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
       this.queueOperation("uploadChat", chat);
       return;
     }
 
     try {
-      const { error } = await this.supabase.from("chats").insert([
-        {
-          id: chat.id,
-          user_id: this.userId,
-          title: chat.title,
-          description: chat.description || "",
-          timestamp: chat.timestamp,
-          endTime: chat.endTime,
-        },
-      ]);
+      // Prepare chat data based on collaboration context
+      let chatData = {
+        id: chat.id,
+        title: chat.title,
+        description: chat.description || "",
+        timestamp: chat.timestamp,
+        endTime: chat.endTime,
+      };
 
-      if (error) throw error;
-  
+      if (isCollaborating && collaborationId) {
+        // Collaboration chat
+        console.log("[COLLAB-DATA] 📝 Saving as collaboration chat");
+        
+        chatData = {
+          ...chatData,
+          collaboration_id: collaborationId,
+          participant_id: participantId,
+          is_collaboration_chat: true,
+          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+        };
+      } else {
+        // Regular user chat
+        console.log("[COLLAB-DATA] 📝 Saving as regular user chat");
+        
+        if (!this.userId) {
+          console.warn("[COLLAB-DATA] ⚠️ No user ID for regular chat - queuing");
+          this.queueOperation("uploadChat", chat);
+          return;
+        }
+        
+        chatData = {
+          ...chatData,
+          user_id: this.userId,
+          collaboration_id: null,
+          participant_id: null,
+          is_collaboration_chat: false
+        };
+      }
+
+      console.log("[COLLAB-DATA] 📋 Final chat data:", chatData);
+
+      // Insert chat into database
+      const { data, error } = await this.supabase.from("chats").insert([chatData]);
+
+      if (error) {
+        console.error("[COLLAB-DATA] ❌ Chat upload failed:", error);
+        throw error;
+      }
+
+      console.log("[COLLAB-DATA] ✅ Chat uploaded successfully");
+      console.log("[COLLAB-DATA] 📋 Database response:", data);
+      
     } catch (error) {
-      console.error("[SYNC] Chat upload failed:", error);
+      console.error("[COLLAB-DATA] ❌ Exception during chat upload:", error);
       this.queueOperation("uploadChat", chat);
     }
   }
 
   async uploadMessage(chatId, message) {
-    if (!this.supabase || !this.userId) {
+    console.log("[COLLAB-DEBUG] 📤 === SYNC UPLOAD MESSAGE START ===");
+    console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
+    console.log("[COLLAB-DEBUG] 📋 Message:", message);
+
+    // Check if we have Supabase client
+    console.log("[COLLAB-DEBUG] 🔍 Checking Supabase client...");
+    console.log("[COLLAB-DEBUG] 📊 Supabase client available:", !!this.supabase);
+    
+    if (!this.supabase) {
+      console.warn("[COLLAB-DEBUG] ⚠️ No Supabase client - queuing message");
       this.queueOperation("uploadMessage", { chatId, message });
       return;
     }
-    try {
-      const { error } = await this.supabase.from("messages").insert([
-        {
-          chat_id: chatId,
-          user_id: this.userId,
-          role: message.role,
-          content: message.content,
-          metadata: message.metadata || {},
-          message_id: message.message_id,
-        },
-      ]);
 
-      if (error) throw error;
+    // Get collaboration context
+    const isCollaborating = window.collaboration?.isCollaborating || false;
+    const collaborationId = window.collaboration?.databaseCollaborationId || null;
+    const participantId = window.collaboration?.participantId || null;
+    const isLeader = window.collaboration?.isLeader || false;
+
+    console.log("[COLLAB-DEBUG] 📋 Collaboration Context:");
+    console.log("  - Is Collaborating:", isCollaborating);
+    console.log("  - Collaboration ID:", collaborationId);
+    console.log("  - Participant ID:", participantId);
+    console.log("  - Is Leader:", isLeader);
+    console.log("  - User ID:", this.userId);
+    console.log("  - Will save as collaboration message:", isCollaborating && collaborationId);
+
+    // Bypass collaboration protection for collaboration data
+    const isCollabProtected = window.isCollaborationProtected
+      ? window.isCollaborationProtected()
+      : false;
+    
+    console.log("[COLLAB-DEBUG] 🛡️ Collaboration protection check:", {
+      isCollabProtected,
+      isCollaborating,
+      shouldSkip: isCollabProtected && !isCollaborating
+    });
+    
+    if (isCollabProtected && !isCollaborating) {
+      console.log("[COLLAB-DEBUG] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
+      this.queueOperation("uploadMessage", { chatId, message });
+      return;
+    }
+
+    try {
+      // Prepare message data based on collaboration context
+      console.log("[COLLAB-DEBUG] 📝 === PREPARING MESSAGE DATA ===");
+      let messageData = {
+        chat_id: chatId,
+        role: message.role,
+        content: message.content,
+        metadata: message.metadata || {},
+        message_id: message.message_id,
+      };
+
+      if (isCollaborating && collaborationId) {
+        // Collaboration message
+        console.log("[COLLAB-DEBUG] 📝 Saving as collaboration message");
+        
+        messageData = {
+          ...messageData,
+          collaboration_id: collaborationId,
+          participant_id: participantId,
+          is_collaboration_message: true,
+          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+          metadata: {
+            ...messageData.metadata,
+            collaboration_room: window.collaboration?.collaborationId,
+            peer_id: window.collaboration?.provider?.room?.peerId,
+            display_name: isLeader ? 'Leader' : 'Anonymous Collaborator',
+            is_leader: isLeader,
+            timestamp: new Date().toISOString()
+          }
+        };
+      } else {
+        // Regular user message
+        console.log("[COLLAB-DEBUG] 📝 Saving as regular user message");
+        
+        if (!this.userId) {
+          console.warn("[COLLAB-DEBUG] ⚠️ No user ID for regular message - queuing");
+          this.queueOperation("uploadMessage", { chatId, message });
+          return;
+        }
+        
+        messageData = {
+          ...messageData,
+          user_id: this.userId,
+          collaboration_id: null,
+          participant_id: null,
+          is_collaboration_message: false
+        };
+      }
+
+      console.log("[COLLAB-DEBUG] 📋 Final message data:", messageData);
+
+      // Insert message into database
+      console.log("[COLLAB-DEBUG] 🗄️ === DATABASE INSERT ATTEMPT ===");
+      console.log("[COLLAB-DEBUG] 📋 Inserting into 'messages' table with data:", messageData);
+      
+      const { data, error } = await this.supabase.from("messages").insert([messageData]);
+
+      console.log("[COLLAB-DEBUG] 📊 Database response:", { data, error });
+
+      if (error) {
+        console.error("[COLLAB-DEBUG] ❌ Message upload failed:", error);
+        throw error;
+      }
+
+      console.log("[COLLAB-DEBUG] ✅ Message uploaded successfully");
+      console.log("[COLLAB-DEBUG] 📋 Database response data:", data);
       
     } catch (error) {
-      console.error("[SYNC] Message upload failed:", error);
+      console.error("[COLLAB-DEBUG] ❌ === SYNC UPLOAD ERROR ===");
+      console.error("[COLLAB-DEBUG] Exception during message upload:", error);
+      console.error("[COLLAB-DEBUG] Error stack:", error.stack);
       this.queueOperation("uploadMessage", { chatId, message });
     }
   }
 
   async uploadArtifact(artifact) {
-    if (!this.supabase || !this.userId) {
+    console.log("[COLLAB-DATA] 📤 Uploading artifact to database...");
+    console.log("[COLLAB-DATA] 📋 Artifact:", artifact);
+
+    // Check if we have Supabase client
+    if (!this.supabase) {
+      console.warn("[COLLAB-DATA] ⚠️ No Supabase client - queuing artifact");
+      this.queueOperation("uploadArtifact", artifact);
+      return;
+    }
+
+    // Get collaboration context
+    const isCollaborating = window.collaboration?.isCollaborating || false;
+    const collaborationId = window.collaboration?.databaseCollaborationId || null;
+    const participantId = window.collaboration?.participantId || null;
+    const isLeader = window.collaboration?.isLeader || false;
+
+    console.log("[COLLAB-DATA] 📋 Collaboration Context for Artifact:");
+    console.log("  - Is Collaborating:", isCollaborating);
+    console.log("  - Collaboration ID:", collaborationId);
+    console.log("  - Participant ID:", participantId);
+    console.log("  - Is Leader:", isLeader);
+    console.log("  - User ID:", this.userId);
+
+    // Bypass collaboration protection for collaboration data
+    const isCollabProtected = window.isCollaborationProtected
+      ? window.isCollaborationProtected()
+      : false;
+    
+    if (isCollabProtected && !isCollaborating) {
+      console.log("[COLLAB-DATA] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
       this.queueOperation("uploadArtifact", artifact);
       return;
     }
 
     try {
-      const { error } = await this.supabase.from("artifacts").upsert([
-        {
-          id: artifact.id,
-          user_id: this.userId,
-          chat_id: artifact.chatId,
-          title: artifact.title,
-          type: artifact.type,
-          versions: artifact.versions || [],
-          slug: artifact.slug, // ✅ Include slug
-          live_url: artifact.liveUrl,
-        },
-      ]);
+      // Prepare artifact data based on collaboration context
+      let artifactData = {
+        id: artifact.id,
+        chat_id: artifact.chatId,
+        title: artifact.title,
+        type: artifact.type,
+        versions: artifact.versions || [],
+        slug: artifact.slug,
+        live_url: artifact.liveUrl,
+      };
 
-      if (error) throw error;
+      if (isCollaborating && collaborationId) {
+        // Collaboration artifact
+        console.log("[COLLAB-DATA] 📝 Saving as collaboration artifact");
+        
+        artifactData = {
+          ...artifactData,
+          collaboration_id: collaborationId,
+          participant_id: participantId,
+          is_collaboration_artifact: true,
+          user_id: isLeader ? this.userId : null, // Only set user_id for leader
+        };
+      } else {
+        // Regular user artifact
+        console.log("[COLLAB-DATA] 📝 Saving as regular user artifact");
+        
+        if (!this.userId) {
+          console.warn("[COLLAB-DATA] ⚠️ No user ID for regular artifact - queuing");
+          this.queueOperation("uploadArtifact", artifact);
+          return;
+        }
+        
+        artifactData = {
+          ...artifactData,
+          user_id: this.userId,
+          collaboration_id: null,
+          participant_id: null,
+          is_collaboration_artifact: false
+        };
+      }
+
+      console.log("[COLLAB-DATA] 📋 Final artifact data:", artifactData);
+
+      // Insert/update artifact in database
+      const { data, error } = await this.supabase.from("artifacts").upsert([artifactData]);
+
+      if (error) {
+        console.error("[COLLAB-DATA] ❌ Artifact upload failed:", error);
+        throw error;
+      }
+
+      console.log("[COLLAB-DATA] ✅ Artifact uploaded successfully");
+      console.log("[COLLAB-DATA] 📋 Database response:", data);
       
     } catch (error) {
-      console.error("[SYNC] Artifact upload failed:", error);
+      console.error("[COLLAB-DATA] ❌ Exception during artifact upload:", error);
       this.queueOperation("uploadArtifact", artifact);
     }
   }

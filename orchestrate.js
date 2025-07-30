@@ -198,7 +198,7 @@ async function orchestrateAIResponse(response, utilities) {
     
     // Use incremental message adding for smooth animation
     if (window.messages && window.messages.addMessage) {
-      window.messages.addMessage('assistant', response.message, { 
+      await window.messages.addMessage('assistant', response.message, { 
         artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null,
         structuredData,
         isIncremental: true 

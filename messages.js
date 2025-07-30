@@ -932,7 +932,12 @@ function removeMessagesUI() {
 
 // =================== MESSAGE MANAGEMENT ===================
 
-function addMessage(role, content, options = {}) {
+async function addMessage(role, content, options = {}) {
+  console.log("[COLLAB-DEBUG] 🚀 === MESSAGE FLOW START ===");
+  console.log("[COLLAB-DEBUG] 📋 Role:", role);
+  console.log("[COLLAB-DEBUG] 📋 Content:", content);
+  console.log("[COLLAB-DEBUG] 📋 Options:", options);
+
   const {
     artifactIds = null,
     structuredData = null,
@@ -953,9 +958,19 @@ function addMessage(role, content, options = {}) {
   const message_id = `${userId.slice(-4)}_${timePart}_${randPart}`;
   const message = { role, content, timestamp, message_id };
 
+  console.log("[COLLAB-DEBUG] 🆔 Generated message ID:", message_id);
+  console.log("[COLLAB-DEBUG] 👤 User ID:", userId);
+
   // Only add extra fields if NOT in collaboration mode
   const isCollaborating =
     window.collaboration && window.collaboration.isCollaborating;
+  
+  console.log("[COLLAB-DEBUG] 🤝 Collaboration status:", {
+    isCollaborating,
+    collaborationModule: !!window.collaboration,
+    collaborationActive: window.collaboration?.isCollaborating
+  });
+
   if (!isCollaborating) {
     if (artifactIds !== null) {
       message.artifactIds = artifactIds;
@@ -963,37 +978,86 @@ function addMessage(role, content, options = {}) {
     if (structuredData) {
       message.structuredData = structuredData;
     }
+    console.log("[COLLAB-DEBUG] 📝 Regular mode - added extra fields");
   } else {
+    console.log("[COLLAB-DEBUG] 📝 Collaboration mode - skipping extra fields");
   }
 
-  messages.push(message);
-  window.context.setActiveMessages(messages);
-  window.context.setActiveMessageIndex(messages.length - 1);
-
-  // --- COLLABORATION SYNC ---
-  if (window.collaboration && window.collaboration.pushMessageToCollab) {
+  try {
+    // Step 1: Save to database first
     const chatId = window.context.getActiveChatId();
-    if (chatId && !message.chatId) message.chatId = chatId;
-    window.collaboration.pushMessageToCollab(message);
-  }
-  // --- END COLLABORATION SYNC ---
-
-  window.inputModule.hide();
-
-  // Handle incremental display for assistant messages
-  if (isIncremental && role === "assistant") {
-    const mainContent = structuredData ? structuredData.main : content;
-    let fileAnalysisInfo = "";
-
-    if (structuredData?.fileAnalysisContext) {
-      fileAnalysisInfo = generateFileAnalysisDisplay(
-        structuredData.fileAnalysisContext
-      );
+    console.log("[COLLAB-DEBUG] 💬 Chat ID for database save:", chatId);
+    console.log("[COLLAB-DEBUG] 🧠 Memory module available:", !!window.memory);
+    console.log("[COLLAB-DEBUG] 💾 Save message function available:", !!window.memory?.saveMessage);
+    
+    if (chatId && window.memory?.saveMessage) {
+      console.log("[COLLAB-DEBUG] 📤 === DATABASE SAVE ATTEMPT ===");
+      console.log("[COLLAB-DEBUG] 📋 Message to save:", message);
+      const saveResult = await window.memory.saveMessage(chatId, message);
+      
+      console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
+      
+      if (saveResult.success) {
+        console.log("[COLLAB-DEBUG] ✅ Message saved to database successfully");
+      } else {
+        console.warn("[COLLAB-DEBUG] ⚠️ Database save failed, but continuing:", saveResult.error);
+      }
+    } else {
+      console.warn("[COLLAB-DEBUG] ⚠️ No chat ID or memory module - skipping database save");
+      console.log("[COLLAB-DEBUG] 🔍 Debug info:", {
+        chatId,
+        hasMemory: !!window.memory,
+        hasSaveMessage: !!window.memory?.saveMessage
+      });
     }
 
-    fillIncrementalMessage(mainContent, fileAnalysisInfo);
-  } else {
-    updateMessagesDisplay();
+    // Step 2: Add to local state
+    console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE UPDATE ===");
+    console.log("[COLLAB-DEBUG] 📋 Current messages count:", messages.length);
+    messages.push(message);
+    window.context.setActiveMessages(messages);
+    window.context.setActiveMessageIndex(messages.length - 1);
+    console.log("[COLLAB-DEBUG] ✅ Message added to local state");
+
+    // --- COLLABORATION SYNC ---
+    console.log("[COLLAB-DEBUG] 🤝 === COLLABORATION SYNC ===");
+    if (window.collaboration && window.collaboration.pushMessageToCollab) {
+      console.log("[COLLAB-DEBUG] 📤 Pushing message to collaboration...");
+      if (chatId && !message.chatId) message.chatId = chatId;
+      window.collaboration.pushMessageToCollab(message);
+      console.log("[COLLAB-DEBUG] ✅ Message pushed to collaboration");
+    } else {
+      console.log("[COLLAB-DEBUG] ⚠️ Collaboration sync not available");
+    }
+
+    // Step 3: Update UI
+    console.log("[COLLAB-DEBUG] 🎨 === UI UPDATE ===");
+    if (window.messages && window.messages.updateMessagesDisplay) {
+      window.messages.updateMessagesDisplay();
+      console.log("[COLLAB-DEBUG] ✅ Messages display updated");
+    } else {
+      console.log("[COLLAB-DEBUG] ⚠️ Messages display update not available");
+    }
+
+    console.log("[COLLAB-DEBUG] 🎉 === MESSAGE FLOW COMPLETE ===");
+    return message;
+
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ === MESSAGE FLOW ERROR ===");
+    console.error("[COLLAB-DEBUG] Error details:", error);
+    console.error("[COLLAB-DEBUG] Stack trace:", error.stack);
+    
+    // Fallback: still add to local state even if database save failed
+    console.log("[COLLAB-DEBUG] 🔄 Fallback: Adding to local state only...");
+    messages.push(message);
+    window.context.setActiveMessages(messages);
+    window.context.setActiveMessageIndex(messages.length - 1);
+    
+    if (window.messages && window.messages.updateMessagesDisplay) {
+      window.messages.updateMessagesDisplay();
+    }
+    
+    return message;
   }
 }
 

@@ -19,16 +19,28 @@ const collaboration = {
   isReconnecting: false,
   databaseSyncQueue: [], // Queue for ordered database sync
 
+  // Database integration properties
+  databaseCollaborationId: null, // UUID from database
+  participantId: null, // Anonymous participant ID
+  supabaseClient: null,
+
   // Initialize collaboration
   async init() {
+    console.log("[COLLAB-DATA] 🚀 Initializing collaboration system...");
+    
     // Wait for Yjs to be loaded
     await this.waitForYjs();
+
+    // Load collaboration data from localStorage
+    this.loadCollaborationData();
 
     // Set up cleanup on page unload (but preserve for refresh)
     this.setupPageUnloadCleanup();
 
     // Check for existing collaboration session or auto-join
     await this.checkForExistingSession();
+    
+    console.log("[COLLAB-DATA] ✅ Collaboration system initialized");
   },
 
   // Wait for Yjs libraries to load
@@ -196,10 +208,15 @@ const collaboration = {
   // Create a collaboration session
   async createSession(roomName = null, permissions = 'view') {
     try {
+      console.log("[COLLAB-DATA] 🚀 Creating collaboration session...");
+      
       // Generate room name if not provided
       if (!roomName) {
         roomName = "room-" + Math.random().toString(36).substr(2, 9);
       }
+
+      console.log("[COLLAB-DATA] 📋 Room Name:", roomName);
+      console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
 
       // Check if room already exists globally
       if (window.globalRoomRegistry.has(roomName)) {
@@ -241,16 +258,38 @@ const collaboration = {
       // Set up event listeners
       this.setupEventListeners();
 
+      // Create collaboration session in database
+      console.log("[COLLAB-DATA] 📝 Creating database record...");
+      const dbResult = await this.createCollaborationInDatabase(roomName, permissions);
+      
+      if (!dbResult.success) {
+        console.error("[COLLAB-DATA] ❌ Failed to create database record:", dbResult.error);
+        // Continue with local session even if database fails
+      } else {
+        console.log("[COLLAB-DATA] ✅ Database record created successfully");
+      }
+
       // Update state and persist
       this.isCollaborating = true;
+      this.isLeader = true;
       this.collaborationId = roomName;
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
       localStorage.setItem("collaborationPermissions", permissions);
+      localStorage.setItem("collaborationLeader", "true");
 
-      return { success: true, roomName };
+      console.log("[COLLAB-DATA] ✅ Collaboration session created successfully");
+      console.log("[COLLAB-DATA] 📋 Database Collaboration ID:", this.databaseCollaborationId);
+      console.log("[COLLAB-DATA] 📋 Participant ID:", this.participantId);
+
+      return { 
+        success: true, 
+        roomName,
+        databaseCollaborationId: this.databaseCollaborationId,
+        participantId: this.participantId
+      };
     } catch (error) {
-      console.error("[COLLAB] Error creating session:", error);
+      console.error("[COLLAB-DATA] ❌ Error creating session:", error);
       return { success: false, error: error.message };
     }
   },
@@ -258,22 +297,18 @@ const collaboration = {
   // Join an existing collaboration session
   async joinSession(roomName, permissions = null) {
     try {
-      console.log("[COLLAB] Joining session:", roomName, "with permissions:", permissions);
+      console.log("[COLLAB-DATA] 🔗 Joining collaboration session...");
+      console.log("[COLLAB-DATA] 📋 Room Name:", roomName);
+      console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
 
       // Create Yjs document
       this.ydoc = new window.Y.Doc();
-      console.log("[COLLAB] Yjs document created");
+      console.log("[COLLAB-DATA] ✅ Yjs document created");
 
       // Create WebRTC provider with signaling servers
-      console.log("[COLLAB] Creating WebRTC provider with room:", roomName);
+      console.log("[COLLAB-DATA] 🔗 Creating WebRTC provider...");
 
       const signalingServers = ["ws://localhost:4444"];
-
-      console.log("[COLLAB] WebRTC provider options:", {
-        signaling: signalingServers,
-        maxConns: 20,
-        filterBcConns: false,
-      });
 
       this.provider = new window.WebrtcProvider(roomName, this.ydoc, {
         signaling: signalingServers, // Local signaling server
@@ -290,28 +325,48 @@ const collaboration = {
         },
       });
 
-      console.log("[COLLAB] WebRTC provider created successfully");
-      console.log("[COLLAB] Provider object:", this.provider);
+      console.log("[COLLAB-DATA] ✅ WebRTC provider created successfully");
 
       // Set up event listeners
       this.setupEventListeners();
 
+      // Join collaboration session in database
+      console.log("[COLLAB-DATA] 📝 Joining database record...");
+      const dbResult = await this.joinCollaborationInDatabase(roomName, permissions);
+      
+      if (!dbResult.success) {
+        console.error("[COLLAB-DATA] ❌ Failed to join database record:", dbResult.error);
+        // Continue with local session even if database fails
+      } else {
+        console.log("[COLLAB-DATA] ✅ Database record joined successfully");
+      }
+
       // Update state and persist
       this.isCollaborating = true;
+      this.isLeader = false; // Joining means not the leader
       this.collaborationId = roomName;
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
+      localStorage.setItem("collaborationLeader", "false");
       
       // Store permissions if provided
       if (permissions) {
         localStorage.setItem("collaborationPermissions", permissions);
-        console.log("[COLLAB] Stored permissions:", permissions);
+        console.log("[COLLAB-DATA] 📋 Stored permissions:", permissions);
       }
 
-      console.log("[COLLAB] Joined session:", roomName);
-      return { success: true, roomName };
+      console.log("[COLLAB-DATA] ✅ Joined session successfully");
+      console.log("[COLLAB-DATA] 📋 Database Collaboration ID:", this.databaseCollaborationId);
+      console.log("[COLLAB-DATA] 📋 Participant ID:", this.participantId);
+
+      return { 
+        success: true, 
+        roomName,
+        databaseCollaborationId: this.databaseCollaborationId,
+        participantId: this.participantId
+      };
     } catch (error) {
-      console.error("[COLLAB] Error joining session:", error);
+      console.error("[COLLAB-DATA] ❌ Error joining session:", error);
       return { success: false, error: error.message };
     }
   },
@@ -2873,10 +2928,597 @@ const collaboration = {
     console.log("isCollaborating:", this.isCollaborating);
     console.log("collaborationId:", this.collaborationId);
   },
+
+  // =================== Database Integration Functions ===================
+
+  // Initialize Supabase client for collaboration
+  initSupabaseClient() {
+    console.log("[COLLAB-DATA] 🔗 Initializing Supabase client for collaboration...");
+    
+    if (window.supabase && window.SUPABASE_CONFIG) {
+      try {
+        this.supabaseClient = window.supabase.createClient(
+          window.SUPABASE_CONFIG.url,
+          window.SUPABASE_CONFIG.key
+        );
+        console.log("[COLLAB-DATA] ✅ Supabase client initialized successfully");
+        
+        // Initialize sync manager with the Supabase client for collaborators
+        this.initializeSyncManagerForCollaborator();
+        
+        return true;
+      } catch (error) {
+        console.error("[COLLAB-DATA] ❌ Failed to initialize Supabase client:", error);
+        return false;
+      }
+    } else {
+      console.warn("[COLLAB-DATA] ⚠️ Supabase config not available");
+      return false;
+    }
+  },
+
+  // Initialize sync manager for collaborators
+  initializeSyncManagerForCollaborator() {
+    console.log("[COLLAB-DATA] 🔄 Initializing sync manager for collaborator...");
+    
+    if (!window.syncManager) {
+      console.warn("[COLLAB-DATA] ⚠️ Sync manager not available");
+      return;
+    }
+
+    if (!this.supabaseClient) {
+      console.warn("[COLLAB-DATA] ⚠️ Supabase client not available");
+      return;
+    }
+
+    try {
+      // Create a mock session for the collaborator
+      // For collaborators, we want userId to be null so messages are saved as collaboration messages
+      const mockSession = {
+        access_token: `collab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        user: {
+          id: null // Set to null for collaborators so sync manager treats messages as collaboration messages
+        }
+      };
+
+      console.log("[COLLAB-DATA] 📋 Mock session created for collaborator:", {
+        participantId: this.participantId,
+        accessToken: mockSession.access_token,
+        userId: mockSession.user.id
+      });
+
+      console.log("[COLLAB-DATA] 🔍 Sync manager state before initialization:", {
+        hasSupabase: !!window.syncManager.supabase,
+        isInitialized: window.syncManager.isInitialized,
+        userId: window.syncManager.userId
+      });
+
+      // Initialize sync manager with the Supabase client and mock session
+      window.syncManager.initializeWithAuth(this.supabaseClient, mockSession)
+        .then((result) => {
+          if (result) {
+            console.log("[COLLAB-DATA] ✅ Sync manager initialized successfully for collaborator");
+            console.log("[COLLAB-DATA] 🔍 Sync manager state after initialization:", {
+              hasSupabase: !!window.syncManager.supabase,
+              isInitialized: window.syncManager.isInitialized,
+              userId: window.syncManager.userId
+            });
+          } else {
+            console.error("[COLLAB-DATA] ❌ Failed to initialize sync manager for collaborator");
+          }
+        })
+        .catch((error) => {
+          console.error("[COLLAB-DATA] ❌ Error initializing sync manager for collaborator:", error);
+        });
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Error creating mock session for collaborator:", error);
+    }
+  },
+
+  // Create collaboration session in database
+  async createCollaborationInDatabase(roomName, permissions = 'view') {
+    console.log("[COLLAB-DATA] 📝 Creating collaboration session in database...");
+    console.log("[COLLAB-DATA] 📋 Room ID:", roomName);
+    console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
+
+    if (!this.supabaseClient) {
+      if (!this.initSupabaseClient()) {
+        console.error("[COLLAB-DATA] ❌ Cannot create collaboration - no Supabase client");
+        return { success: false, error: "No Supabase client available" };
+      }
+    }
+
+    try {
+      // Generate a unique doc ID for this collaboration
+      const docId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      console.log("[COLLAB-DATA] 📋 Generated Doc ID:", docId);
+
+      // Create collaboration record
+      const { data: collaborationData, error: collaborationError } = await this.supabaseClient
+        .from('collaborations')
+        .insert([{
+          room_id: roomName,
+          doc_id: docId,
+          leader_user_id: window.userId || null, // Can be null for anonymous leaders
+          title: `Collaboration Session - ${roomName}`,
+          description: `Real-time collaboration session`,
+          permissions: permissions,
+          status: 'active',
+          max_participants: 10
+        }])
+        .select()
+        .single();
+
+      if (collaborationError) {
+        console.error("[COLLAB-DATA] ❌ Failed to create collaboration record:", collaborationError);
+        return { success: false, error: collaborationError.message };
+      }
+
+      console.log("[COLLAB-DATA] ✅ Collaboration record created:", collaborationData);
+      this.databaseCollaborationId = collaborationData.id;
+
+      // Create leader participant record
+      const leaderParticipantId = window.userId || `leader_${Date.now()}`;
+      const { error: participantError } = await this.supabaseClient
+        .from('collaboration_participants')
+        .insert([{
+          collaboration_id: this.databaseCollaborationId,
+          participant_id: leaderParticipantId,
+          peer_id: roomName, // Use room_id as peer_id for leader
+          display_name: 'Leader',
+          permissions: 'full',
+          metadata: {
+            is_leader: true,
+            user_id: window.userId || null
+          }
+        }]);
+
+      if (participantError) {
+        console.error("[COLLAB-DATA] ❌ Failed to create leader participant record:", participantError);
+        // Don't fail the whole operation, just log the error
+      } else {
+        console.log("[COLLAB-DATA] ✅ Leader participant record created");
+      }
+
+      // Store collaboration data locally
+      localStorage.setItem("databaseCollaborationId", this.databaseCollaborationId);
+      localStorage.setItem("collaborationDocId", docId);
+      localStorage.setItem("collaborationParticipantId", leaderParticipantId);
+
+      return { 
+        success: true, 
+        collaborationId: this.databaseCollaborationId,
+        docId: docId,
+        participantId: leaderParticipantId
+      };
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Exception creating collaboration:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Join collaboration session in database
+  async joinCollaborationInDatabase(roomName, permissions = 'view') {
+    console.log("[COLLAB-DATA] 🔗 Joining collaboration session in database...");
+    console.log("[COLLAB-DATA] 📋 Room ID:", roomName);
+    console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
+
+    if (!this.supabaseClient) {
+      if (!this.initSupabaseClient()) {
+        console.error("[COLLAB-DATA] ❌ Cannot join collaboration - no Supabase client");
+        return { success: false, error: "No Supabase client available" };
+      }
+    }
+
+    try {
+      // First, find the collaboration by room_id
+      const { data: collaborationData, error: findError } = await this.supabaseClient
+        .from('collaborations')
+        .select('*')
+        .eq('room_id', roomName)
+        .eq('status', 'active')
+        .single();
+
+      if (findError) {
+        console.error("[COLLAB-DATA] ❌ Collaboration session not found:", findError);
+        return { success: false, error: "Collaboration session not found or inactive" };
+      }
+
+      console.log("[COLLAB-DATA] ✅ Found collaboration session:", collaborationData);
+      this.databaseCollaborationId = collaborationData.id;
+
+      // Generate participant ID for this collaborator
+      const peerId = this.provider?.room?.peerId || `peer_${Date.now()}`;
+      const participantId = `collab_${peerId}_${Date.now()}`;
+      
+      console.log("[COLLAB-DATA] 📋 Generated Participant ID:", participantId);
+      console.log("[COLLAB-DATA] 📋 Peer ID:", peerId);
+
+      // Create or update participant record
+      const { error: participantError } = await this.supabaseClient
+        .from('collaboration_participants')
+        .upsert([{
+          collaboration_id: this.databaseCollaborationId,
+          participant_id: participantId,
+          peer_id: peerId,
+          display_name: 'Anonymous Collaborator',
+          permissions: permissions,
+          is_active: true,
+          last_seen: new Date().toISOString(),
+          metadata: {
+            is_leader: false,
+            user_id: window.userId || null
+          }
+        }], {
+          onConflict: 'collaboration_id,participant_id'
+        });
+
+      if (participantError) {
+        console.error("[COLLAB-DATA] ❌ Failed to create participant record:", participantError);
+        return { success: false, error: participantError.message };
+      }
+
+      console.log("[COLLAB-DATA] ✅ Participant record created/updated");
+      this.participantId = participantId;
+
+      // Initialize sync manager for this collaborator
+      this.initializeSyncManagerForCollaborator();
+
+      // Store collaboration data locally
+      localStorage.setItem("databaseCollaborationId", this.databaseCollaborationId);
+      localStorage.setItem("collaborationDocId", collaborationData.doc_id);
+      localStorage.setItem("collaborationParticipantId", participantId);
+
+      return { 
+        success: true, 
+        collaborationId: this.databaseCollaborationId,
+        docId: collaborationData.doc_id,
+        participantId: participantId
+      };
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Exception joining collaboration:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Leave collaboration session in database
+  async leaveCollaborationInDatabase() {
+    console.log("[COLLAB-DATA] 👋 Leaving collaboration session in database...");
+
+    if (!this.supabaseClient || !this.databaseCollaborationId || !this.participantId) {
+      console.warn("[COLLAB-DATA] ⚠️ No database session to leave");
+      return { success: true };
+    }
+
+    try {
+      // Mark participant as inactive
+      const { error } = await this.supabaseClient
+        .from('collaboration_participants')
+        .update({
+          is_active: false,
+          last_seen: new Date().toISOString()
+        })
+        .eq('collaboration_id', this.databaseCollaborationId)
+        .eq('participant_id', this.participantId);
+
+      if (error) {
+        console.error("[COLLAB-DATA] ❌ Failed to mark participant as inactive:", error);
+      } else {
+        console.log("[COLLAB-DATA] ✅ Participant marked as inactive");
+      }
+
+      // Clear local storage
+      localStorage.removeItem("databaseCollaborationId");
+      localStorage.removeItem("collaborationDocId");
+      localStorage.removeItem("collaborationParticipantId");
+
+      // Clear instance variables
+      this.databaseCollaborationId = null;
+      this.participantId = null;
+
+      return { success: true };
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Exception leaving collaboration:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Load collaboration data from localStorage
+  loadCollaborationData() {
+    console.log("[COLLAB-DATA] 📂 Loading collaboration data from localStorage...");
+    
+    this.databaseCollaborationId = localStorage.getItem("databaseCollaborationId");
+    this.participantId = localStorage.getItem("collaborationParticipantId");
+    
+    if (this.databaseCollaborationId) {
+      console.log("[COLLAB-DATA] ✅ Loaded database collaboration ID:", this.databaseCollaborationId);
+    }
+    
+    if (this.participantId) {
+      console.log("[COLLAB-DATA] ✅ Loaded participant ID:", this.participantId);
+    }
+
+    // If we have collaboration data, initialize the sync manager
+    if (this.databaseCollaborationId && this.participantId) {
+      console.log("[COLLAB-DATA] 🔄 Initializing sync manager for existing collaboration...");
+      // Initialize Supabase client first, then sync manager
+      if (this.initSupabaseClient()) {
+        this.initializeSyncManagerForCollaborator();
+      }
+    }
+  },
+
+  // =================== Debug and Test Functions ===================
+
+  // Test database integration
+  async testDatabaseIntegration() {
+    console.log("[COLLAB-DATA] 🧪 Testing database integration...");
+    
+    // Test 1: Initialize Supabase client
+    console.log("[COLLAB-DATA] 🧪 Test 1: Initializing Supabase client...");
+    const clientResult = this.initSupabaseClient();
+    console.log("[COLLAB-DATA] 🧪 Test 1 Result:", clientResult ? "PASS" : "FAIL");
+    
+    if (!clientResult) {
+      console.error("[COLLAB-DATA] ❌ Cannot proceed with tests - no Supabase client");
+      return { success: false, error: "No Supabase client available" };
+    }
+    
+    // Test 2: Check if collaborations table exists
+    console.log("[COLLAB-DATA] 🧪 Test 2: Checking collaborations table...");
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('collaborations')
+        .select('count')
+        .limit(1);
+      
+      if (error) {
+        console.error("[COLLAB-DATA] ❌ Test 2 FAILED - Table access error:", error);
+        return { success: false, error: "Cannot access collaborations table" };
+      }
+      
+      console.log("[COLLAB-DATA] 🧪 Test 2 Result: PASS - Table accessible");
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Test 2 FAILED - Exception:", error);
+      return { success: false, error: "Exception accessing collaborations table" };
+    }
+    
+    // Test 3: Check if collaboration_participants table exists
+    console.log("[COLLAB-DATA] 🧪 Test 3: Checking collaboration_participants table...");
+    try {
+      const { data, error } = await this.supabaseClient
+        .from('collaboration_participants')
+        .select('count')
+        .limit(1);
+      
+      if (error) {
+        console.error("[COLLAB-DATA] ❌ Test 3 FAILED - Table access error:", error);
+        return { success: false, error: "Cannot access collaboration_participants table" };
+      }
+      
+      console.log("[COLLAB-DATA] 🧪 Test 3 Result: PASS - Table accessible");
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Test 3 FAILED - Exception:", error);
+      return { success: false, error: "Exception accessing collaboration_participants table" };
+    }
+    
+    console.log("[COLLAB-DATA] ✅ All database integration tests PASSED");
+    return { success: true };
+  },
+
+  // Get current collaboration status
+  getCollaborationStatus() {
+    return {
+      isCollaborating: this.isCollaborating,
+      isLeader: this.isLeader,
+      collaborationId: this.collaborationId,
+      databaseCollaborationId: this.databaseCollaborationId,
+      participantId: this.participantId,
+      peers: Array.from(this.peers),
+      permissions: localStorage.getItem("collaborationPermissions"),
+      hasSupabaseClient: !!this.supabaseClient
+    };
+  },
+
+  // Debug function to show all collaboration data
+  debugCollaborationData() {
+    console.log("[COLLAB-DATA] 🔍 === COLLABORATION DATA DEBUG ===");
+    console.log("[COLLAB-DATA] 📋 Status:", this.getCollaborationStatus());
+    console.log("[COLLAB-DATA] 📋 LocalStorage Keys:");
+    console.log("  - collaborationActive:", localStorage.getItem("collaborationActive"));
+    console.log("  - collaborationId:", localStorage.getItem("collaborationId"));
+    console.log("  - collaborationLeader:", localStorage.getItem("collaborationLeader"));
+    console.log("  - collaborationPermissions:", localStorage.getItem("collaborationPermissions"));
+    console.log("  - databaseCollaborationId:", localStorage.getItem("databaseCollaborationId"));
+    console.log("  - collaborationParticipantId:", localStorage.getItem("collaborationParticipantId"));
+    console.log("  - collaborationDocId:", localStorage.getItem("collaborationDocId"));
+    console.log("[COLLAB-DATA] 🔍 === END DEBUG ===");
+  },
+
+  // Test message saving with collaboration context
+  async testMessageSaving() {
+    console.log("[COLLAB-DATA] 🧪 Testing message saving with collaboration...");
+    
+    if (!this.isCollaborating) {
+      console.error("[COLLAB-DATA] ❌ Not in collaboration mode - cannot test message saving");
+      return { success: false, error: "Not in collaboration mode" };
+    }
+
+    if (!window.syncManager) {
+      console.error("[COLLAB-DATA] ❌ No sync manager available");
+      return { success: false, error: "No sync manager available" };
+    }
+
+    // Create a test message
+    const testMessage = {
+      role: "user",
+      content: `Test collaboration message from ${this.isLeader ? 'leader' : 'collaborator'} at ${new Date().toISOString()}`,
+      metadata: {
+        test: true,
+        collaboration_test: true,
+        timestamp: Date.now()
+      },
+      message_id: `test_msg_${Date.now()}`
+    };
+
+    // Get active chat ID
+    const activeChatId = window.context?.activeChatId || localStorage.getItem("activeChatId");
+    
+    if (!activeChatId) {
+      console.error("[COLLAB-DATA] ❌ No active chat ID available");
+      return { success: false, error: "No active chat ID available" };
+    }
+
+    console.log("[COLLAB-DATA] 📋 Test Message:", testMessage);
+    console.log("[COLLAB-DATA] 📋 Active Chat ID:", activeChatId);
+
+    try {
+      // Save message locally first
+      if (window.memory?.saveMessage) {
+        window.memory.saveMessage(activeChatId, testMessage);
+        console.log("[COLLAB-DATA] ✅ Message saved locally");
+      }
+
+      // Trigger sync to save to database
+      if (window.syncManager?.uploadMessage) {
+        await window.syncManager.uploadMessage(activeChatId, testMessage);
+        console.log("[COLLAB-DATA] ✅ Message sync triggered");
+      }
+
+      return { 
+        success: true, 
+        message: testMessage,
+        chatId: activeChatId,
+        collaborationContext: {
+          isCollaborating: this.isCollaborating,
+          isLeader: this.isLeader,
+          collaborationId: this.databaseCollaborationId,
+          participantId: this.participantId
+        }
+      };
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Error testing message saving:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Test database-first message creation
+  async testDatabaseFirstMessage() {
+    console.log("[COLLAB-DATA] 🧪 Testing database-first message creation...");
+    
+    if (!this.isCollaborating) {
+      console.error("[COLLAB-DATA] ❌ Not in collaboration mode - cannot test database-first message");
+      return { success: false, error: "Not in collaboration mode" };
+    }
+
+    if (!window.messages?.addMessage) {
+      console.error("[COLLAB-DATA] ❌ No messages module available");
+      return { success: false, error: "No messages module available" };
+    }
+
+    const testContent = `Database-first test message from ${this.isLeader ? 'leader' : 'collaborator'} at ${new Date().toISOString()}`;
+    
+    console.log("[COLLAB-DATA] 📋 Test Content:", testContent);
+
+    try {
+      // Use the new database-first addMessage function
+      const result = await window.messages.addMessage('user', testContent, {
+        test: true,
+        database_first: true,
+        collaboration_test: true
+      });
+
+      console.log("[COLLAB-DATA] ✅ Database-first message creation completed");
+      return { 
+        success: true, 
+        content: testContent,
+        result: result,
+        collaborationContext: {
+          isCollaborating: this.isCollaborating,
+          isLeader: this.isLeader,
+          collaborationId: this.databaseCollaborationId,
+          participantId: this.participantId
+        }
+      };
+
+    } catch (error) {
+      console.error("[COLLAB-DATA] ❌ Error testing database-first message:", error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Debug function to check collaboration and sync status
+  debugCollaborationAndSync() {
+    console.log("[COLLAB-DEBUG] 🔍 === COLLABORATION & SYNC STATUS ===");
+    
+    // Collaboration status
+    console.log("[COLLAB-DEBUG] 🤝 Collaboration Status:", {
+      isCollaborating: this.isCollaborating,
+      collaborationId: this.collaborationId,
+      isLeader: this.isLeader,
+      databaseCollaborationId: this.databaseCollaborationId,
+      participantId: this.participantId,
+      peers: this.peers.size,
+      provider: !!this.provider,
+      providerConnected: this.provider?.connected || false
+    });
+    
+    // Sync manager status
+    console.log("[COLLAB-DEBUG] 🔄 Sync Manager Status:", {
+      hasSyncManager: !!window.syncManager,
+      syncManagerKeys: window.syncManager ? Object.keys(window.syncManager) : 'N/A',
+      hasUploadMessage: !!window.syncManager?.uploadMessage,
+      hasUploadChat: !!window.syncManager?.uploadChat,
+      hasUploadArtifact: !!window.syncManager?.uploadArtifact,
+      hasSupabase: !!window.syncManager?.supabase,
+      userId: window.syncManager?.userId || 'N/A'
+    });
+    
+    // Memory module status
+    console.log("[COLLAB-DEBUG] 🧠 Memory Module Status:", {
+      hasMemory: !!window.memory,
+      memoryKeys: window.memory ? Object.keys(window.memory) : 'N/A',
+      hasSaveMessage: !!window.memory?.saveMessage,
+      hasSaveChat: !!window.memory?.saveChat,
+      hasSaveArtifact: !!window.memory?.saveArtifact
+    });
+    
+    // Context status
+    console.log("[COLLAB-DEBUG] 📋 Context Status:", {
+      hasContext: !!window.context,
+      activeChatId: window.context?.getActiveChatId(),
+      activeView: window.context?.getActiveView(),
+      messagesByChat: window.context?.getMessagesByChat ? Object.keys(window.context.getMessagesByChat()) : 'N/A'
+    });
+    
+    // Collaboration protection status
+    console.log("[COLLAB-DEBUG] 🛡️ Protection Status:", {
+      isCollabProtected: this.isCollaborationProtected(),
+      collaborationActive: localStorage.getItem("collaborationActive"),
+      collaborationDataTimestamp: localStorage.getItem("COLLABORATION_DATA_TIMESTAMP")
+    });
+    
+    console.log("[COLLAB-DEBUG] ✅ === STATUS CHECK COMPLETE ===");
+  }
 };
 
 // Make collaboration available globally
 window.collaboration = collaboration;
+
+// Global debug function
+window.debugCollaborationAndSync = function() {
+  if (window.collaboration) {
+    window.collaboration.debugCollaborationAndSync();
+  } else {
+    console.log("[COLLAB-DEBUG] ❌ Collaboration module not available");
+  }
+};
 
 // Add global functions for easy console access
 window.sendDatabaseData = function () {
@@ -2975,3 +3617,163 @@ window.isCollaborationProtected = function () {
 
 // Auto-initialize when script loads
 collaboration.init();
+
+// =================== Global Debug Functions ===================
+
+// Make collaboration functions globally accessible for testing
+window.collaboration = collaboration;
+
+// Global debug functions
+window.testCollaborationDatabase = async function() {
+  console.log("[COLLAB-DATA] 🧪 Running collaboration database tests...");
+  return await collaboration.testDatabaseIntegration();
+};
+
+window.debugCollaboration = function() {
+  console.log("[COLLAB-DATA] 🔍 Debugging collaboration system...");
+  collaboration.debugCollaborationData();
+};
+
+window.getCollaborationStatus = function() {
+  console.log("[COLLAB-DATA] 📊 Getting collaboration status...");
+  const status = collaboration.getCollaborationStatus();
+  console.log("[COLLAB-DATA] 📊 Status:", status);
+  return status;
+};
+
+window.createTestCollaboration = async function(permissions = 'view') {
+  console.log("[COLLAB-DATA] 🧪 Creating test collaboration...");
+  const result = await collaboration.createSession(null, permissions);
+  console.log("[COLLAB-DATA] 🧪 Test collaboration result:", result);
+  return result;
+};
+
+window.joinTestCollaboration = async function(roomName, permissions = 'view') {
+  console.log("[COLLAB-DATA] 🧪 Joining test collaboration...");
+  const result = await collaboration.joinSession(roomName, permissions);
+  console.log("[COLLAB-DATA] 🧪 Test join result:", result);
+  return result;
+};
+
+window.testCollaborationMessageSaving = async function() {
+  console.log("[COLLAB-DATA] 🧪 Testing collaboration message saving...");
+  const result = await collaboration.testMessageSaving();
+  console.log("[COLLAB-DATA] 🧪 Message saving test result:", result);
+  return result;
+};
+
+window.testDatabaseFirstMessage = async function() {
+  console.log("[COLLAB-DATA] 🧪 Testing database-first message creation...");
+  const result = await collaboration.testDatabaseFirstMessage();
+  console.log("[COLLAB-DATA] 🧪 Database-first message test result:", result);
+  return result;
+};
+
+console.log("[COLLAB-DATA] 🚀 Collaboration system loaded with database integration");
+console.log("[COLLAB-DATA] 📋 Available debug functions:");
+console.log("  - testCollaborationDatabase() - Test database connectivity");
+console.log("  - debugCollaboration() - Show all collaboration data");
+console.log("  - getCollaborationStatus() - Get current status");
+console.log("  - createTestCollaboration(permissions) - Create test session");
+console.log("  - joinTestCollaboration(roomName, permissions) - Join test session");
+console.log("  - testCollaborationMessageSaving() - Test message saving with collaboration");
+console.log("  - testDatabaseFirstMessage() - Test database-first message creation");
+
+// Global debug function
+window.debugCollaborationAndSync = function() {
+  if (window.collaboration) {
+    window.collaboration.debugCollaborationAndSync();
+  } else {
+    console.log("[COLLAB-DEBUG] ❌ Collaboration module not available");
+  }
+};
+
+// Test function to simulate collaboration message
+window.testCollaborationMessage = function(messageText = "Test collaboration message") {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING COLLABORATION MESSAGE ===");
+  console.log("[COLLAB-DEBUG] 📋 Test message:", messageText);
+  
+  if (!window.messages || !window.messages.addMessage) {
+    console.error("[COLLAB-DEBUG] ❌ Messages module not available");
+    return;
+  }
+  
+  // Call addMessage directly to test the flow
+  window.messages.addMessage('user', messageText).then((result) => {
+    console.log("[COLLAB-DEBUG] ✅ Test message result:", result);
+  }).catch((error) => {
+    console.error("[COLLAB-DEBUG] ❌ Test message error:", error);
+  });
+};
+
+// Global helper function for testing sync manager initialization
+window.testSyncManagerInit = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING SYNC MANAGER INITIALIZATION ===");
+  if (!window.collaboration) {
+    console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
+    return;
+  }
+  if (!window.syncManager) {
+    console.error("[COLLAB-DEBUG] ❌ Sync manager not available");
+    return;
+  }
+  
+  console.log("[COLLAB-DEBUG] 🔍 Current sync manager state:", {
+    hasSupabase: !!window.syncManager.supabase,
+    isInitialized: window.syncManager.isInitialized,
+    userId: window.syncManager.userId
+  });
+  
+  console.log("[COLLAB-DEBUG] 🔍 Collaboration state:", {
+    hasSupabaseClient: !!window.collaboration.supabaseClient,
+    participantId: window.collaboration.participantId,
+    databaseCollaborationId: window.collaboration.databaseCollaborationId
+  });
+  
+  // Try to initialize sync manager
+  window.collaboration.initializeSyncManagerForCollaborator();
+};
+
+// Global helper function to test message structure
+window.testMessageStructure = function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING MESSAGE STRUCTURE ===");
+  
+  // Simulate what the message data should look like for collaborators
+  const isCollaborating = window.collaboration?.isCollaborating || false;
+  const collaborationId = window.collaboration?.databaseCollaborationId || null;
+  const participantId = window.collaboration?.participantId || null;
+  const isLeader = window.collaboration?.isLeader || false;
+  const syncManagerUserId = window.syncManager?.userId || null;
+  
+  console.log("[COLLAB-DEBUG] 📋 Current context:");
+  console.log("  - Is Collaborating:", isCollaborating);
+  console.log("  - Collaboration ID:", collaborationId);
+  console.log("  - Participant ID:", participantId);
+  console.log("  - Is Leader:", isLeader);
+  console.log("  - Sync Manager User ID:", syncManagerUserId);
+  
+  if (isCollaborating && collaborationId) {
+    const expectedMessageData = {
+      chat_id: "test_chat_id",
+      role: "user",
+      content: "test message",
+      metadata: {
+        collaboration_room: window.collaboration?.collaborationId,
+        peer_id: window.collaboration?.provider?.room?.peerId,
+        display_name: isLeader ? 'Leader' : 'Anonymous Collaborator',
+        is_leader: isLeader,
+        timestamp: new Date().toISOString()
+      },
+      message_id: "test_message_id",
+      collaboration_id: collaborationId,
+      participant_id: participantId,
+      is_collaboration_message: true,
+      user_id: isLeader ? syncManagerUserId : null
+    };
+    
+    console.log("[COLLAB-DEBUG] ✅ Expected message structure for collaborator:");
+    console.log(JSON.stringify(expectedMessageData, null, 2));
+  } else {
+    console.log("[COLLAB-DEBUG] ⚠️ Not in collaboration mode or missing collaboration ID");
+  }
+};
