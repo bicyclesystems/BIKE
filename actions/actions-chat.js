@@ -1,13 +1,13 @@
-// =================== Messages Actions ===================
+// =================== Chat Actions ===================
 // Actions related to chat/conversation management
 // These actions correspond to operations handled by messages.js
 
-const MESSAGES_ACTIONS = {
-  'messages.create': {
-    id: 'messages.create',
+const CHAT_ACTIONS = {
+  'chat.create': {
+    id: 'chat.create',
     name: 'Create New Chat',
     description: 'Create a new chat conversation with optional custom title, description, and duration',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: [],
     optionalParams: ['timestamp', 'title', 'description', 'endTime'],
     availableData: () => ({
@@ -46,10 +46,10 @@ const MESSAGES_ACTIONS = {
       window.memory?.saveAll();
       
       // Switch to the new chat
-      await window.actions.executeAction('messages.switch', { chatId: id });
+      await window.actions.executeAction('chat.switch', { chatId: id });
       
       return window.actions.createStandardizedResult(
-        'messages.create',
+        'chat.create',
         'Create New Chat',
         true,
         { 
@@ -65,11 +65,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.switch': {
-    id: 'messages.switch',
+  'chat.switch': {
+    id: 'chat.switch',
     name: 'Switch Chat',
     description: 'Switch to a different chat conversation',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['chatId'],
     optionalParams: [],
     availableData: () => ({
@@ -81,7 +81,7 @@ const MESSAGES_ACTIONS = {
       const chat = (window.context?.getChats() || []).find(c => c.id === chatId);
       if (!chat) {
         return window.actions.createStandardizedResult(
-          'messages.switch',
+          'chat.switch',
           'Switch Chat',
           false,
           {},
@@ -144,7 +144,7 @@ const MESSAGES_ACTIONS = {
       }
       
       return window.actions.createStandardizedResult(
-        'messages.switch',
+        'chat.switch',
         'Switch Chat',
         true,
         { 
@@ -159,11 +159,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.add': {
-    id: 'messages.add',
+  'chat.addMessage': {
+    id: 'chat.addMessage',
     name: 'Add Message',
     description: 'Add a message to the current chat',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['role', 'content'],
     optionalParams: ['artifactIds'],
     availableData: () => ({
@@ -177,7 +177,7 @@ const MESSAGES_ACTIONS = {
           artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null 
         });
         return window.actions.createStandardizedResult(
-          'messages.add',
+          'chat.addMessage',
           'Add Message',
           true,
           { 
@@ -191,7 +191,7 @@ const MESSAGES_ACTIONS = {
         );
       }
       return window.actions.createStandardizedResult(
-        'messages.add',
+        'chat.addMessage',
         'Add Message',
         false,
         {},
@@ -201,11 +201,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.rename': {
-    id: 'messages.rename',
+  'chat.rename': {
+    id: 'chat.rename',
     name: 'Rename Chat',
     description: 'Rename a chat conversation with a new title',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['title'],
     optionalParams: ['chatId'],
     availableData: () => {
@@ -226,7 +226,7 @@ const MESSAGES_ACTIONS = {
       // Validate title
       if (!title || typeof title !== 'string') {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -238,7 +238,7 @@ const MESSAGES_ACTIONS = {
       const trimmedTitle = title.trim();
       if (trimmedTitle.length === 0) {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -251,7 +251,7 @@ const MESSAGES_ACTIONS = {
       const targetChatId = chatId || window.context?.getActiveChatId();
       if (!targetChatId) {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -265,7 +265,7 @@ const MESSAGES_ACTIONS = {
       const chat = chats.find(c => c.id === targetChatId);
       if (!chat) {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -279,7 +279,7 @@ const MESSAGES_ACTIONS = {
       // Check if the title is actually different
       if (oldTitle === trimmedTitle) {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -311,7 +311,7 @@ const MESSAGES_ACTIONS = {
         }
         
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           true,
           { 
@@ -326,7 +326,7 @@ const MESSAGES_ACTIONS = {
         );
       } catch (error) {
         return window.actions.createStandardizedResult(
-          'messages.rename',
+          'chat.rename',
           'Rename Chat',
           false,
           {},
@@ -337,11 +337,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.setDescription': {
-    id: 'messages.setDescription',
+  'chat.setDescription': {
+    id: 'chat.setDescription',
     name: 'Set Chat Description',
     description: 'Set or update a chat conversation description',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['description'],
     optionalParams: ['chatId'],
     availableData: () => {
@@ -363,7 +363,7 @@ const MESSAGES_ACTIONS = {
       // Validate description (allow empty string to clear description)
       if (description !== null && typeof description !== 'string') {
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           false,
           {},
@@ -378,7 +378,7 @@ const MESSAGES_ACTIONS = {
       const targetChatId = chatId || window.context?.getActiveChatId();
       if (!targetChatId) {
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           false,
           {},
@@ -392,7 +392,7 @@ const MESSAGES_ACTIONS = {
       const chat = chats.find(c => c.id === targetChatId);
       if (!chat) {
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           false,
           {},
@@ -406,7 +406,7 @@ const MESSAGES_ACTIONS = {
       // Check if the description is actually different
       if (oldDescription === trimmedDescription) {
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           false,
           {},
@@ -438,7 +438,7 @@ const MESSAGES_ACTIONS = {
         }
         
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           true,
           { 
@@ -456,7 +456,7 @@ const MESSAGES_ACTIONS = {
         );
       } catch (error) {
         return window.actions.createStandardizedResult(
-          'messages.setDescription',
+          'chat.setDescription',
           'Set Chat Description',
           false,
           {},
@@ -467,11 +467,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.schedule': {
-    id: 'messages.schedule',
+  'chat.schedule': {
+    id: 'chat.schedule',
     name: 'Schedule Chat',
     description: 'Schedule a new chat conversation with specific start and end times',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['startTime', 'endTime'],
     optionalParams: ['title', 'description'],
     availableData: () => ({
@@ -485,7 +485,7 @@ const MESSAGES_ACTIONS = {
       // Validate required parameters
       if (!startTime || !endTime) {
         return window.actions.createStandardizedResult(
-          'messages.schedule',
+          'chat.schedule',
           'Schedule Chat',
           false,
           {},
@@ -500,7 +500,7 @@ const MESSAGES_ACTIONS = {
       
       if (isNaN(start) || isNaN(end)) {
         return window.actions.createStandardizedResult(
-          'messages.schedule',
+          'chat.schedule',
           'Schedule Chat',
           false,
           {},
@@ -511,7 +511,7 @@ const MESSAGES_ACTIONS = {
       
       if (end <= start) {
         return window.actions.createStandardizedResult(
-          'messages.schedule',
+          'chat.schedule',
           'Schedule Chat',
           false,
           {},
@@ -530,7 +530,7 @@ const MESSAGES_ACTIONS = {
         })();
       
       // Create the scheduled chat
-      const result = await window.actions.executeAction('messages.create', {
+      const result = await window.actions.executeAction('chat.create', {
         timestamp: start.toISOString(),
         endTime: end.toISOString(),
         title: title || 'Scheduled Chat',
@@ -539,7 +539,7 @@ const MESSAGES_ACTIONS = {
       
       if (result.success) {
         return window.actions.createStandardizedResult(
-          'messages.schedule',
+          'chat.schedule',
           'Schedule Chat',
           true,
           { 
@@ -556,7 +556,7 @@ const MESSAGES_ACTIONS = {
         );
       } else {
         return window.actions.createStandardizedResult(
-          'messages.schedule',
+          'chat.schedule',
           'Schedule Chat',
           false,
           {},
@@ -567,11 +567,11 @@ const MESSAGES_ACTIONS = {
     }
   },
 
-  'messages.delete': {
-    id: 'messages.delete',
+  'chat.delete': {
+    id: 'chat.delete',
     name: 'Delete Chat',
     description: 'Permanently delete a chat conversation and all its messages and artifacts',
-    category: window.actions?.ACTION_CATEGORIES?.MESSAGES || 'messages',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
     requiredParams: ['chatId'],
     optionalParams: ['confirmDelete'],
     availableData: () => ({
@@ -592,7 +592,7 @@ const MESSAGES_ACTIONS = {
       
       if (!chat) {
         return window.actions.createStandardizedResult(
-          'messages.delete',
+          'chat.delete',
           'Delete Chat',
           false,
           {},
@@ -608,7 +608,7 @@ const MESSAGES_ACTIONS = {
       
       if ((messages.length > 0 || artifacts.length > 0) && !confirmDelete) {
         return window.actions.createStandardizedResult(
-          'messages.delete',
+          'chat.delete',
           'Delete Chat',
           false,
           { 
@@ -625,7 +625,7 @@ const MESSAGES_ACTIONS = {
       // Prevent deleting the last chat
       if (chats.length <= 1) {
         return window.actions.createStandardizedResult(
-          'messages.delete',
+          'chat.delete',
           'Delete Chat',
           false,
           {},
@@ -673,9 +673,9 @@ const MESSAGES_ACTIONS = {
           } else {
             // This shouldn't happen due to our check above, but handle gracefully
     
-            await window.actions.executeAction('messages.create', {});
+            await window.actions.executeAction('chat.create', {});
             return window.actions.createStandardizedResult(
-              'messages.delete',
+              'chat.delete',
               'Delete Chat',
               true,
               { 
@@ -697,7 +697,7 @@ const MESSAGES_ACTIONS = {
         
         // 8. Switch to new active chat if needed
         if (newActiveChatId) {
-          await window.actions.executeAction('messages.switch', { chatId: newActiveChatId });
+          await window.actions.executeAction('chat.switch', { chatId: newActiveChatId });
         } else {
           // If no chat to switch to, make sure view is updated
           window.context?.setState({ activeView: null });
@@ -709,7 +709,7 @@ const MESSAGES_ACTIONS = {
 
         
         return window.actions.createStandardizedResult(
-          'messages.delete',
+          'chat.delete',
           'Delete Chat',
           true,
           { 
@@ -724,9 +724,9 @@ const MESSAGES_ACTIONS = {
           `Deleted chat "${chat.title}" with ${messages.length} messages and ${deletedArtifactCount} artifacts`
         );
       } catch (error) {
-        console.error(`[MESSAGES-ACTIONS] Error deleting chat:`, error);
+        console.error(`[CHAT-ACTIONS] Error deleting chat:`, error);
         return window.actions.createStandardizedResult(
-          'messages.delete',
+          'chat.delete',
           'Delete Chat',
           false,
           {},
@@ -740,10 +740,10 @@ const MESSAGES_ACTIONS = {
 
 // Register these actions with the core system
 if (window.actions && window.actions.registerActions) {
-  window.actions.registerActions(MESSAGES_ACTIONS);
+  window.actions.registerActions(CHAT_ACTIONS);
 }
 
 // Also export for direct access
-window.messagesActions = MESSAGES_ACTIONS;
+window.chatActions = CHAT_ACTIONS;
 
  

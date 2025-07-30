@@ -6,7 +6,7 @@
 // =================== Action Categories ===================
 
 const ACTION_CATEGORIES = {
-  MESSAGES: 'messages',    // Renamed from CHAT to match messages.js
+  CHAT: 'chat',           // Changed from MESSAGES to CHAT for better user-facing terminology  
   ARTIFACTS: 'artifacts', 
   VIEWS: 'views',
   USER: 'user',           // Renamed from AUTH to match user.js 

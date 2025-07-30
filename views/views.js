@@ -71,12 +71,7 @@ const VIEWS_REGISTRY = {
       storageStatus: window.memory?.getStorageStatus() || {}
     }),
     render: (data) => {
-      const html = window.memoryView.renderMemoryView();
-      // Apply context highlighting specifically for memory view
-      if (window.memoryView.applyContextHighlighting) {
-        window.memoryView.applyContextHighlighting();
-      }
-      return html;
+      return window.memoryView.renderMemoryView();
     }
   },
   
@@ -102,12 +97,7 @@ const VIEWS_REGISTRY = {
       actions: window.actions?.ACTIONS_REGISTRY ? Object.values(window.actions.ACTIONS_REGISTRY) : []
     }),
     render: (data) => {
-      const html = window.actionsView.renderActionsView();
-      // Apply context highlighting specifically for actions view
-      if (window.actionsView.applyContextHighlighting) {
-        window.actionsView.applyContextHighlighting();
-      }
-      return html;
+      return window.actionsView.renderActionsView();
     }
   },
   
@@ -163,7 +153,13 @@ let isTransitioning = false;
 
 function renderCurrentView(withTransition = true) {
   const viewElement = window.context?.getViewElement();
-  if (!viewElement) window.context?.setViewElement(document.getElementById('view'));
+  if (!viewElement) {
+    // Ensure view element exists before setting it
+    if (!document.getElementById('view')) {
+      renderViewUI(); // Create the view element if it doesn't exist
+    }
+    window.context?.setViewElement(document.getElementById('view'));
+  }
   
   const currentViewElement = window.context?.getViewElement();
   if (!currentViewElement) return;
@@ -194,6 +190,14 @@ function renderCurrentView(withTransition = true) {
   // If no transition requested or view is empty, render immediately
   if (!withTransition || !currentViewElement.innerHTML.trim()) {
     currentViewElement.innerHTML = newHtml;
+    
+    // Apply highlighting to new content
+    setTimeout(() => {
+      if (window.contextHighlight && window.contextHighlight.highlightViewContent) {
+        window.contextHighlight.highlightViewContent();
+      }
+    }, 50);
+    
     return;
   }
   
@@ -218,6 +222,13 @@ function simpleBlurTransition(container, newHtml) {
     // Blur in new content
     container.style.filter = 'blur(0px)';
     container.style.opacity = '1';
+    
+    // Apply highlighting to new content after transition
+    setTimeout(() => {
+      if (window.contextHighlight && window.contextHighlight.highlightViewContent) {
+        window.contextHighlight.highlightViewContent();
+      }
+    }, 50);
     
     // Clean up after transition
     setTimeout(() => {

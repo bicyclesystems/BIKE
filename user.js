@@ -310,7 +310,7 @@ function initializeMainApp() {
 
   if (chats.length === 0) {
     console.log('[AUTH] Creating new chat');
-    window.actions.executeAction("messages.create", {});
+    window.actions.executeAction("chat.create", {});
   } else if (!activeChatId) {
     console.log('[AUTH] Setting first chat as active');
     window.context.setActiveChat(chats[0].id);
@@ -327,7 +327,7 @@ function initializeMainApp() {
 async function handleAuthenticatedState() {
   removeIntroScreen();
   toggleUI(true);
-  await initializeSync();
+  // Sync initialization moved to background in index.html - don't block UI
 
   // Start smart session monitoring for authenticated users
   startSessionMonitoring();
@@ -382,8 +382,6 @@ function handleUnauthenticatedState() {
       activeChatId: null,
       messages: [],
       activeMessageIndex: -1,
-      messagesContainer: null,
-      viewElement: null,
       activeView: null,
       activeVersionIdxByArtifact: {},
       showAllMessages: false,
@@ -393,11 +391,12 @@ function handleUnauthenticatedState() {
 
   // Keep intro screen visible for unauthenticated users
   toggleUI(true); // Enable UI so users can interact
-
-  // Create chat BEFORE setting memory view to ensure active chat exists
-  window.actions.executeAction("messages.create", {});
-  window.context.setActiveView("memory", {}, { withTransition: false });
-  window.views.renderCurrentView(false); // No transition during initialization
+  
+  // Show memory view if no active view is set (mirror authenticated behavior)
+  const currentView = window.context.getActiveView();
+  if (window.context?.setActiveView && !currentView) {
+    window.context.setActiveView("memory", {}, { withTransition: false });
+  }
 }
 
 // Track auth state to detect fresh logins

@@ -97,7 +97,7 @@ const MEMORY_ACTIONS = {
           }
         }
 
-        // Clear local data
+        // Clear local data - account deletion should clear everything
         window.memory.purgeAllData();
         
         // Clear sync queue
@@ -106,14 +106,14 @@ const MEMORY_ACTIONS = {
           window.memory.clearSyncQueue();
         }
         
-        // Reset app state
+        // Reset app state - for account deletion, this should clear everything
         if (window.context?.setState) {
           window.context.setState({
             chats: [],
             messagesByChat: {},
             artifacts: [],
-            userPreferences: {},
-            activeView: null
+            activeView: null,
+            userPreferences: {} // Only clear preferences for explicit account deletion
           });
         }
 

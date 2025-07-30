@@ -185,7 +185,7 @@ function renderCalendarView() {
 // Chat switching
 const switchToChat = (chatId) => {
         if (window.actions && window.actions.executeAction) {
-        window.actions.executeAction('messages.switch', { chatId });
+        window.actions.executeAction('chat.switch', { chatId });
   }
 };
 
@@ -195,7 +195,7 @@ const createChatAt = (date, hour) => {
   const chatDate = new Date(date);
   chatDate.setHours(hour, 0, 0, 0);
         if (window.actions.executeAction) {
-        window.actions.executeAction('messages.create', { timestamp: chatDate.toISOString() });
+        window.actions.executeAction('chat.create', { timestamp: chatDate.toISOString() });
   }
   if (window.views?.renderCurrentView) {
     window.views.renderCurrentView();

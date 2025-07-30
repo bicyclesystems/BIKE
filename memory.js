@@ -497,7 +497,7 @@ function purgeAllData() {
       const transaction = indexedDB_instance.transaction([STORE_NAMES.artifacts], 'readwrite');
       const store = transaction.objectStore(STORE_NAMES.artifacts);
       store.clear();
-  
+
     } catch (error) {
       console.error('[MEMORY] Failed to clear IndexedDB:', error);
     }

@@ -204,12 +204,12 @@ class SupabaseSync {
         .single();
 
       if (existingUser) {
-        // Sync user preferences from database using memory module
-        if (existingUser.preferences && window.memory?.saveUserPreferences) {
-          window.memory.saveUserPreferences(existingUser.preferences);
+        // Local preferences are ALWAYS authoritative - push them to database
+        const currentLocalPrefs = window.memory?.getUserPreferences() || {};
+        if (Object.keys(currentLocalPrefs).length > 0) {
+          // Update database with current local preferences
+          await this.syncUserPreferences(currentLocalPrefs);
         }
-
-  
       } else {
         // Create new user with the authenticated user ID
         const currentPrefs = window.memory?.getUserPreferences() || {};

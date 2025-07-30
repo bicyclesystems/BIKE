@@ -225,6 +225,8 @@ async function init(session = null) {
     await window.memory.initMemory();
   }
   
+
+  
   const isAuthenticated = !!session;
   
     if (isAuthenticated) {
@@ -238,7 +240,7 @@ async function init(session = null) {
     
     // Create new chat if none exist
     if (!AppState.activeChatId && AppState.chats.length === 0) {
-      window.actions?.executeAction('messages.create', {});
+      window.actions?.executeAction('chat.create', {});
     } else if (!AppState.activeChatId) {
       setState({ activeChatId: AppState.chats[0].id });
     }
@@ -286,7 +288,7 @@ async function init(session = null) {
     });
     
     // Create a new chat for the fresh guest session
-    window.actions?.executeAction('messages.create', {});
+    window.actions?.executeAction('chat.create', {});
   }
 }
 

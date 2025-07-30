@@ -46,50 +46,7 @@ function setupMemoryViewEventListeners() {
 }
 
 // =================== Context Highlighting ===================
-
-function applyContextHighlighting() {
-  if (!window.contextHighlight) return;
-
-  setTimeout(() => {
-    const viewElement = window.context?.getViewElement();
-    if (viewElement) {
-      // Find all text elements that could benefit from context highlighting
-      const textElements = viewElement.querySelectorAll(
-        "h1, h2, h3, h4, h5, h6, .text-xs, .text-s, .text-m, .text-l, .text-xl"
-      );
-      textElements.forEach((element) => {
-        if (element.innerText && element.innerText.trim()) {
-          // If element contains trait tags, preserve them by applying highlighting carefully
-          const traitTags = element.querySelectorAll(
-            '[data-no-highlight="true"]'
-          );
-          if (traitTags.length > 0) {
-            // Save trait tag content and temporarily replace with placeholders
-            const traitData = [];
-            traitTags.forEach((tag, index) => {
-              const placeholder = `__TRAIT_PLACEHOLDER_${index}__`;
-              traitData.push({ placeholder, originalHTML: tag.outerHTML });
-              tag.outerHTML = placeholder;
-            });
-
-            // Apply highlighting to the modified content
-            window.contextHighlight.highlightContextWords(element);
-
-            // Restore trait tags
-            let html = element.innerHTML;
-            traitData.forEach(({ placeholder, originalHTML }) => {
-              html = html.replace(placeholder, originalHTML);
-            });
-            element.innerHTML = html;
-          } else {
-            // No trait tags, apply highlighting normally
-            window.contextHighlight.highlightContextWords(element);
-          }
-        }
-      });
-    }
-  }, 50);
-}
+// Note: Context highlighting is now handled automatically by the global auto-highlighting system
 
 // =================== Memory View Rendering ===================
 
@@ -233,7 +190,6 @@ function renderMemoryView() {
 function refreshMemoryView() {
   if (window.context?.getActiveView()?.type === "memory") {
     window.views?.renderCurrentView();
-    applyContextHighlighting();
   }
 }
 
@@ -319,6 +275,5 @@ document.addEventListener("DOMContentLoaded", async () => {
 window.memoryView = {
   renderMemoryView,
   refreshMemoryView,
-  applyContextHighlighting,
   setupMemoryViewEventListeners,
 };

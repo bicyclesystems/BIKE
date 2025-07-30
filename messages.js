@@ -1,5 +1,5 @@
-// =================== MESSAGES MODULE ===================
-// Handles all message display, user input, and conversation UI functionality
+// =================== CHAT & MESSAGES MODULE ===================
+// Handles all chat and message display, user input, and conversation UI functionality
 // Main sections: Configuration → State Management → Typewriter System → Message Display → Event Handling → Public API
 
 // =================== CONFIGURATION ===================
@@ -172,7 +172,7 @@ function showLoadingIndicator() {
 
   messagesContainer.innerHTML = `
     <div class="column align-center justify-center padding-xl">
-      <div class="background-secondary padding-l radius-m typewriter-container column align-center justify-center transition blur-s">
+      <div class="background-secondary padding-l radius-l typewriter-container column align-center justify-center transition blur-s" style="width: 72px; height: 72px;">
         <h4 class="typewriter-content opacity-xl"></h4>
         <h4 class="typewriter-extras opacity-xl gap-s"></h4>
       </div>
@@ -221,28 +221,11 @@ function fillIncrementalMessage(content, fileAnalysisInfo = "") {
   dom.addMessageIndex(container.parentElement);
   dom.addMessageIndex(container);
 
-  if (bubbles.length > 1) {
-    fillMultipleBubbles(bubbles, fileAnalysisInfo);
-  } else {
-    const contentElement = container.querySelector(".typewriter-content");
-    const extrasElement = container.querySelector(".typewriter-extras");
-
-    if (contentElement) {
-      contentElement.classList.remove("opacity-xl");
-
-      smartTypewriter(contentElement, content, {
-        onComplete: () => {
-          if (extrasElement && fileAnalysisInfo) {
-            animateExtrasSequentially(extrasElement, fileAnalysisInfo);
-          }
-          setupMessageEventHandlers(false);
-        },
-      });
-    }
-  }
+  // All bubbles (whether 1 or many) use the same consistent approach
+  fillBubbles(bubbles, fileAnalysisInfo);
 }
 
-function fillMultipleBubbles(bubbles, fileAnalysisInfo) {
+function fillBubbles(bubbles, fileAnalysisInfo) {
   const messagesContainer = dom.getContainer();
   if (!messagesContainer) return;
 
@@ -474,24 +457,10 @@ function addMessageAttributes(html, messageIndex, isShowAllMode) {
 function renderMessage(message, processedContent, isUser, returnHtml) {
   let mainContent;
 
-  if (!isUser && message.artifactIds) {
-    // Convert [bracketed] references to clickable links
-    mainContent = processedContent.replace(/\[([^\]]+)\]/g, (match, title) => {
-      const artifactId = message.artifactIds[title];
-      if (artifactId) {
-        const artifact = window.context?.getArtifact(artifactId);
-        if (artifact) {
-          const favicon = getFaviconHtml(artifact);
-          return `${favicon}<a href="#" data-artifact-id="${artifactId}" class="color-primary transition">${window.utils.escapeHtml(
-            title
-          )}</a>`;
-        }
-      }
-      return match;
-    });
-  } else {
-    mainContent = processedContent;
-  }
+  // Simply remove brackets from AI responses, no link conversion
+  mainContent = !isUser 
+    ? processedContent.replace(/\[([^\]]+)\]/g, '$1')
+    : processedContent;
 
   const fileAnalysisInfo = generateFileAnalysisDisplay(
     message?.fileAnalysisContext || {}
@@ -858,7 +827,7 @@ function renderMessagesUI() {
       window.processModule.process();
     } else {
       console.error(
-        "[MESSAGES] processModule not available. Available modules:",
+        "[CHAT] processModule not available. Available modules:",
         Object.keys(window).filter((k) => k.includes("Module"))
       );
       window.utils?.showError?.(

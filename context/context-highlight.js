@@ -13,6 +13,9 @@ function highlightContextWords(element = null) {
   
   if (!element || !window.context) return;
   
+  // Skip if this element is already being processed or contains only highlighted content
+  if (element.dataset.highlighting === 'true') return;
+  
   const elementText = element.innerText;
   if (!elementText.trim()) {
     return;
@@ -203,7 +206,10 @@ function highlightContextWords(element = null) {
   });
   
   if (highlightedHtml !== element.innerHTML) {
+    // Mark element as being processed to prevent infinite loops
+    element.dataset.highlighting = 'true';
     element.innerHTML = highlightedHtml;
+    delete element.dataset.highlighting;
     
     setTimeout(() => {
       const newlyAnimatedSpans = element.querySelectorAll('span[data-animated="false"]');
@@ -323,9 +329,44 @@ function extractContextReferences(element = null) {
   return { cleanText, references };
 }
 
+// =================== Simple View Highlighting ===================
+
+function highlightViewContent() {
+  const viewElement = document.getElementById('view');
+  if (!viewElement) return;
+  
+  // Find text elements and apply highlighting with proper trait preservation
+  const textElements = viewElement.querySelectorAll('h1, h2, h3, h4, h5, h6, .text-xs, .text-s, .text-m, .text-l, .text-xl');
+  textElements.forEach(element => {
+    if (!element.innerText?.trim() || element.dataset.highlighting === 'true') return;
+    
+    // Preserve trait tags 
+    const traitTags = element.querySelectorAll('[data-no-highlight="true"]');
+    if (traitTags.length > 0) {
+      const traitData = [];
+      traitTags.forEach((tag, index) => {
+        const placeholder = `__TRAIT_PLACEHOLDER_${index}__`;
+        traitData.push({ placeholder, originalHTML: tag.outerHTML });
+        tag.outerHTML = placeholder;
+      });
+      
+      highlightContextWords(element);
+      
+      let html = element.innerHTML;
+      traitData.forEach(({ placeholder, originalHTML }) => {
+        html = html.replace(placeholder, originalHTML);
+      });
+      element.innerHTML = html;
+    } else {
+      highlightContextWords(element);
+    }
+  });
+}
+
 // =================== Public API ===================
 
 window.contextHighlight = {
   highlightContextWords,
-  extractContextReferences
+  extractContextReferences,
+  highlightViewContent
 }; 
