@@ -205,6 +205,7 @@ function renderMemoryView() {
   const collaborationId = collabStatus.collaborationId;
   const peerCount = collabStatus.peerCount || 0;
   const isLeader = collabStatus.isLeader || false;
+  const permissions = collabStatus.permissions || 'view';
 
   // Create collaboration UI
   const collaborationUI = isCollaborating
@@ -219,6 +220,11 @@ function renderMemoryView() {
       } connected</div>
             <div class="text-s opacity-s">Role: ${
               isLeader ? "Leader" : "Collaborator"
+            }</div>
+            <div class="text-s opacity-s">Permissions: ${
+              permissions === 'view' ? 'View Only' :
+              permissions === 'edit' ? 'View & Edit' :
+              permissions === 'full' ? 'Full Access' : 'View Only'
             }</div>
             ${
               isLeader
@@ -240,14 +246,33 @@ function renderMemoryView() {
     `
     : `
       <div class="background-secondary padding-m radius-m">
-        <div class="row align-center justify-between">
-          <div class="column gap-xs">
-            <div class="text-m">🤝 Start Live Collaboration</div>
-            <div class="text-s opacity-s">Share your session with others in real-time</div>
+        <div class="column gap-m">
+          <div class="row align-center justify-between">
+            <div class="column gap-xs">
+              <div class="text-m">🤝 Start Live Collaboration</div>
+              <div class="text-s opacity-s">Share your session with others in real-time</div>
+            </div>
           </div>
-          <button class="button-primary" onclick="handleCreateCollaboration()">
-            Create Link
-          </button>
+          <div class="row gap-s justify-center">
+            <button class="button-secondary" onclick="handleCreateCollaboration('view')" title="Collaborators can only view artifacts">
+              <div class="column align-center gap-xs">
+                <div class="text-s">👁️</div>
+                <div class="text-xs">View Only</div>
+              </div>
+            </button>
+            <button class="button-secondary" onclick="handleCreateCollaboration('edit')" title="Collaborators can view and edit artifacts">
+              <div class="column align-center gap-xs">
+                <div class="text-s">✏️</div>
+                <div class="text-xs">View & Edit</div>
+              </div>
+            </button>
+            <button class="button-primary" onclick="handleCreateCollaboration('full')" title="Collaborators have full access to create, edit, and delete">
+              <div class="column align-center gap-xs">
+                <div class="text-s">🔓</div>
+                <div class="text-xs">Full Access</div>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
     `;
@@ -311,8 +336,8 @@ function getAvailableActionsCount() {
 
 // =================== Collaboration Functions ===================
 
-async function handleCreateCollaboration() {
-  console.log("[COLLAB] handleCreateCollaboration called");
+async function handleCreateCollaboration(permissions = 'view') {
+  console.log("[COLLAB] handleCreateCollaboration called with permissions:", permissions);
 
   if (!window.collaboration) {
     console.error("[COLLAB] Collaboration module not available");
@@ -323,16 +348,32 @@ async function handleCreateCollaboration() {
   }
 
   try {
-    console.log("[COLLAB] Creating collaboration link...");
-    const result = await window.collaboration.createCollaborationLink();
+    console.log("[COLLAB] Creating collaboration link with permissions:", permissions);
+    const result = await window.collaboration.createCollaborationLink(permissions);
 
     console.log("[COLLAB] createCollaborationLink result:", result);
 
     if (result.success) {
       console.log("[COLLAB] Collaboration link created:", result.shareableLink);
 
-      // Show success message
-      alert(result.message);
+      // Create permission description
+      let permissionDesc = "";
+      switch(permissions) {
+        case 'view':
+          permissionDesc = "View Only - Collaborators can only view artifacts";
+          break;
+        case 'edit':
+          permissionDesc = "View & Edit - Collaborators can view and edit artifacts";
+          break;
+        case 'full':
+          permissionDesc = "Full Access - Collaborators can create, edit, and delete artifacts";
+          break;
+        default:
+          permissionDesc = "View Only - Collaborators can only view artifacts";
+      }
+      
+      // Show success message with permission info
+      alert(`${result.message}\n\nPermission Level: ${permissionDesc}`);
 
       // Refresh the view to show collaboration status
       refreshMemoryView();

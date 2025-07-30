@@ -35,10 +35,15 @@ function detectLinkContentType(url) {
 
 // Render artifact view for different content types
 function renderArtifactView(data) {
+  console.log("[ARTIFACT] renderArtifactView called with data:", data);
+  
   const { artifactId } = data;
   const artifact = getArtifact(artifactId);
   
+  console.log("[ARTIFACT] Found artifact:", artifact);
+  
   if (!artifact) {
+    console.error("[ARTIFACT] Artifact not found for ID:", artifactId);
     return '<div class="column align-center justify-center padding-xl foreground-tertiary">Artifact not found</div>';
   }
 
@@ -50,32 +55,185 @@ function renderArtifactView(data) {
   }
 
   const content = currentVersion.content;
+  
+  // Check if user can edit this artifact
+  const canEdit = window.collaboration?.canPerformAction('editArtifact') || false;
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
+  
+  // Permission check for collaborative editing
+  if (isCollaborator && !canEdit) {
+    console.log("[ARTIFACT] 🔒 Permission denied: Collaborator cannot edit artifacts");
+    return `
+      <div class="column align-center justify-center padding-xl">
+        <div class="background-secondary padding-l radius-m">
+          <div class="text-l margin-bottom-m">🔒</div>
+          <div class="text-m foreground-primary margin-bottom-s">View Only Mode</div>
+          <div class="text-s foreground-tertiary">You don't have permission to edit this artifact.</div>
+          <div class="text-s foreground-tertiary margin-top-s">Ask the session leader for edit permissions.</div>
+        </div>
+      </div>
+    `;
+  }
+  
+  // Auto-enable edit mode for collaborators with edit permissions on ALL artifacts
+  if (canEdit && !window.artifactEditMode?.[artifactId]) {
+    window.artifactEditMode = window.artifactEditMode || {};
+    window.artifactEditMode[artifactId] = true;
+    console.log("[ARTIFACT] ✏️ Auto-enabled edit mode for artifact:", artifactId, "type:", artifact.type);
+  }
+  
+  const isInEditMode = window.artifactEditMode?.[artifactId] || false;
+  
+  // Debug logging
+  console.log("[ARTIFACT] Debug - Artifact:", artifactId, "Type:", artifact.type, "CanEdit:", canEdit, "IsInEditMode:", isInEditMode);
+  
+  // Create header with artifact info
+  const headerHtml = `
+    <div class="background-secondary padding-m radius-m margin-bottom-m">
+      <div class="row align-center justify-between">
+        <div class="column gap-xs">
+          <div class="text-m foreground-primary" style="font-weight: 600;">${window.utils.escapeHtml(artifact.title)}</div>
+          <div class="row gap-s text-xs foreground-tertiary">
+            <span class="background-tertiary padding-xs radius-xs">${artifact.type}</span>
+            <span class="background-tertiary padding-xs radius-xs">Version ${currentVersionIdx + 1} of ${artifact.versions.length}</span>
+            <span class="background-tertiary padding-xs radius-xs">${new Date(currentVersion.timestamp).toLocaleString()}</span>
+            ${currentVersion.editedBy ? `<span class="background-tertiary padding-xs radius-xs">Edited by ${currentVersion.editedBy}</span>` : ''}
+          </div>
+        </div>
+        ${canEdit ? `
+          <div class="row gap-s">
+            ${isInEditMode ? 
+              '<span class="background-primary padding-xs radius-xs text-xs">✏️ Edit Mode' + (isCollaborator ? ' (Auto-enabled)' : '') + '</span>' : 
+              '<span class="background-secondary padding-xs radius-xs text-xs">📄 View Mode</span>'
+            }
+          </div>
+        ` : ''}
+      </div>
+    </div>
+  `;
 
-  // For image artifacts, just return the img element directly for full screen display
+  // For image artifacts, handle edit mode or show image
   if (artifact.type === 'image' && content.startsWith('[[image:')) {
     const imageMatch = content.match(/\[\[image:(.*?)\]\]/);
     if (imageMatch && imageMatch[1]) {
       const imageUrl = imageMatch[1].trim();
-      return `<img src="${imageUrl}" alt="Generated image" onerror="this.outerHTML='<div class=&quot;column align-center justify-center padding-xl foreground-tertiary&quot;>Failed to load image</div>'" />`;
+      
+      if (canEdit && isInEditMode) {
+        // Edit mode for image artifacts
+        return `${headerHtml}
+          <div class="column gap-m">
+            <div class="row align-center justify-between">
+              <div class="text-s opacity-s">✏️ Edit Mode - Edit image URL below</div>
+              <div class="row gap-s">
+                <button class="button-secondary" onclick="switchToViewMode('${artifactId}')">📄 View Mode</button>
+                <button class="button-primary" onclick="saveArtifactEdit('${artifactId}')">💾 Save Changes</button>
+              </div>
+            </div>
+            <textarea id="artifact-edit-${artifactId}" class="background-secondary padding-m radius-s" 
+                      style="min-height: 100px; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); resize: vertical;">${window.utils.escapeHtml(content)}</textarea>
+            <div class="background-tertiary padding-m radius-s">
+              <div class="text-s opacity-s margin-bottom-s">Preview:</div>
+              <img src="${imageUrl}" alt="Generated image" style="max-width: 100%; height: auto;" onerror="this.outerHTML='<div class=&quot;column align-center justify-center padding-xl foreground-tertiary&quot;>Failed to load image</div>'" />
+            </div>
+          </div>
+        `;
+      } else {
+        // View mode for image artifacts
+        return `${headerHtml}
+          <div class="column gap-m">
+            ${canEdit ? `
+              <div class="row align-center justify-between">
+                <div class="text-s opacity-s">📄 View Mode</div>
+                <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit Image</button>
+              </div>
+            ` : ''}
+            <img src="${imageUrl}" alt="Generated image" style="max-width: 100%; height: auto;" onerror="this.outerHTML='<div class=&quot;column align-center justify-center padding-xl foreground-tertiary&quot;>Failed to load image</div>'" />
+          </div>
+        `;
+      }
     } else {
-      return '<div class="column align-center justify-center padding-xl foreground-tertiary">Invalid image format</div>';
+      return `${headerHtml}<div class="column align-center justify-center padding-xl foreground-tertiary">Invalid image format</div>`;
     }
   }
 
-  // For HTML artifacts, just return the iframe directly for full screen display  
+  // For HTML artifacts, handle edit mode or show iframe
   if (artifact.type === 'html') {
-    // Properly escape the HTML content for srcdoc
-    const escapedContent = content.replace(/"/g, '&quot;');
-    return `<iframe srcdoc="${escapedContent}" sandbox="allow-scripts allow-same-origin allow-forms"></iframe>`;
+    if (canEdit && isInEditMode) {
+      // Edit mode for HTML artifacts
+      return `${headerHtml}
+        <div class="column gap-m">
+          <div class="row align-center justify-between">
+            <div class="text-s opacity-s">✏️ Edit Mode - Edit HTML content below</div>
+            <div class="row gap-s">
+              <button class="button-secondary" onclick="switchToViewMode('${artifactId}')">📄 View Mode</button>
+              <button class="button-primary" onclick="saveArtifactEdit('${artifactId}')">💾 Save Changes</button>
+            </div>
+          </div>
+          <textarea id="artifact-edit-${artifactId}" class="background-secondary padding-m radius-s" 
+                    style="min-height: 400px; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); resize: vertical;">${window.utils.escapeHtml(content)}</textarea>
+          <div class="background-tertiary padding-m radius-s">
+            <div class="text-s opacity-s margin-bottom-s">Preview:</div>
+            <iframe srcdoc="${content.replace(/"/g, '&quot;')}" sandbox="allow-scripts allow-same-origin allow-forms" style="width: 100%; height: 200px; border: 1px solid var(--color-tertiary-background);"></iframe>
+          </div>
+        </div>
+      `;
+    } else {
+      // View mode for HTML artifacts
+      const escapedContent = content.replace(/"/g, '&quot;');
+      return `${headerHtml}
+        <div class="column gap-m">
+          ${canEdit ? `
+            <div class="row align-center justify-between">
+              <div class="text-s opacity-s">📄 View Mode</div>
+              <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit HTML</button>
+            </div>
+          ` : ''}
+          <iframe srcdoc="${escapedContent}" sandbox="allow-scripts allow-same-origin allow-forms" style="width: 100%; height: 500px; border: 1px solid var(--color-tertiary-background);"></iframe>
+        </div>
+      `;
+    }
   }
 
-  // For file artifacts, render file viewer
+  // For file artifacts, handle edit mode or render file viewer
   if (artifact.type === 'files') {
     try {
       const fileData = JSON.parse(content);
-      return renderFileArtifact(fileData);
+      
+      if (canEdit && isInEditMode) {
+        // Edit mode for file artifacts
+        return `${headerHtml}
+          <div class="column gap-m">
+            <div class="row align-center justify-between">
+              <div class="text-s opacity-s">✏️ Edit Mode - Edit file data below</div>
+              <div class="row gap-s">
+                <button class="button-secondary" onclick="switchToViewMode('${artifactId}')">📄 View Mode</button>
+                <button class="button-primary" onclick="saveArtifactEdit('${artifactId}')">💾 Save Changes</button>
+              </div>
+            </div>
+            <textarea id="artifact-edit-${artifactId}" class="background-secondary padding-m radius-s" 
+                      style="min-height: 300px; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); resize: vertical;">${window.utils.escapeHtml(content)}</textarea>
+            <div class="background-tertiary padding-m radius-s">
+              <div class="text-s opacity-s margin-bottom-s">Preview:</div>
+              ${renderFileArtifact(fileData)}
+            </div>
+          </div>
+        `;
+      } else {
+        // View mode for file artifacts
+        return `${headerHtml}
+          <div class="column gap-m">
+            ${canEdit ? `
+              <div class="row align-center justify-between">
+                <div class="text-s opacity-s">📄 View Mode</div>
+                <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit File Data</button>
+              </div>
+            ` : ''}
+            ${renderFileArtifact(fileData)}
+          </div>
+        `;
+      }
     } catch (e) {
-      return '<div class="column align-center justify-center padding-xl foreground-tertiary">Invalid file data</div>';
+      return `${headerHtml}<div class="column align-center justify-center padding-xl foreground-tertiary">Invalid file data</div>`;
     }
   }
 
@@ -109,16 +267,53 @@ function renderArtifactView(data) {
         break;
     }
     
-    contentHtml = `
-      <div class="row align-center gap-m padding-l radius-s background-secondary" style="border: calc(var(--base-size) * 0.25) solid var(--color-secondary-background); margin: calc(var(--base-size) * 3) 0;">
-        <div class="text-xl">${linkIcon}</div>
-        <div class="column gap-xs">
-          <div class="text-s foreground-tertiary" style="font-weight: 500;">${linkTypeText}</div>
-          <div class="text-xs foreground-tertiary">${domain}</div>
-          <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs foreground-primary transition" style="text-decoration: none;">${url}</a>
+    if (canEdit && isInEditMode) {
+      // Edit mode for link artifacts
+      contentHtml = `
+        <div class="column gap-m">
+          <div class="row align-center justify-between">
+            <div class="text-s opacity-s">✏️ Edit Mode - Edit link URL below</div>
+            <div class="row gap-s">
+              <button class="button-secondary" onclick="switchToViewMode('${artifactId}')">📄 View Mode</button>
+              <button class="button-primary" onclick="saveArtifactEdit('${artifactId}')">💾 Save Changes</button>
+            </div>
+          </div>
+          <textarea id="artifact-edit-${artifactId}" class="background-secondary padding-m radius-s" 
+                    style="min-height: 100px; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); resize: vertical;">${window.utils.escapeHtml(content)}</textarea>
+          <div class="background-tertiary padding-m radius-s">
+            <div class="text-s opacity-s margin-bottom-s">Preview:</div>
+            <div class="row align-center gap-m padding-l radius-s background-secondary" style="border: calc(var(--base-size) * 0.25) solid var(--color-secondary-background);">
+              <div class="text-xl">${linkIcon}</div>
+              <div class="column gap-xs">
+                <div class="text-s foreground-tertiary" style="font-weight: 500;">${linkTypeText}</div>
+                <div class="text-xs foreground-tertiary">${domain}</div>
+                <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs foreground-primary transition" style="text-decoration: none;">${url}</a>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      // View mode for link artifacts
+      contentHtml = `
+        <div class="column gap-m">
+          ${canEdit ? `
+            <div class="row align-center justify-between">
+              <div class="text-s opacity-s">📄 View Mode</div>
+              <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit Link</button>
+            </div>
+          ` : ''}
+          <div class="row align-center gap-m padding-l radius-s background-secondary" style="border: calc(var(--base-size) * 0.25) solid var(--color-secondary-background); margin: calc(var(--base-size) * 3) 0;">
+            <div class="text-xl">${linkIcon}</div>
+            <div class="column gap-xs">
+              <div class="text-s foreground-tertiary" style="font-weight: 500;">${linkTypeText}</div>
+              <div class="text-xs foreground-tertiary">${domain}</div>
+              <a href="${url}" target="_blank" rel="noopener noreferrer" class="text-xs foreground-primary transition" style="text-decoration: none;">${url}</a>
+            </div>
+          </div>
+        </div>
+      `;
+    }
   } else if (artifact.type === 'markdown' && content.startsWith('```')) {
     // Extract code from markdown code blocks
     const codeMatch = content.match(/```(\w+)?\n?([\s\S]*?)\n?```/);
@@ -131,7 +326,38 @@ function renderArtifactView(data) {
     }
   } else {
     // Handle other artifact types (text, etc.)
-    contentHtml = `<div class="padding-m" style="margin: calc(var(--base-size) * 3) 0; line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
+    if (canEdit && isInEditMode) {
+      // Edit mode for ALL artifact types
+      contentHtml = `
+        <div class="column gap-m">
+          <div class="row align-center justify-between">
+            <div class="text-s opacity-s">✏️ Edit Mode - Make your changes below</div>
+            <div class="row gap-s">
+              <button class="button-secondary" onclick="switchToViewMode('${artifactId}')">📄 View Mode</button>
+              <button class="button-primary" onclick="saveArtifactEdit('${artifactId}')">💾 Save Changes</button>
+            </div>
+          </div>
+          <textarea id="artifact-edit-${artifactId}" class="background-secondary padding-m radius-s" 
+                    style="min-height: 300px; font-family: var(--font-mono); font-size: 0.9rem; line-height: 1.5; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); resize: vertical;">${window.utils.escapeHtml(content)}</textarea>
+        </div>
+      `;
+    } else {
+      // View mode
+      contentHtml = `<div class="padding-m" style="margin: calc(var(--base-size) * 3) 0; line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
+      
+      // Add edit button if user can edit
+      if (canEdit) {
+        contentHtml = `
+          <div class="column gap-m">
+            <div class="row align-center justify-between">
+              <div class="text-s opacity-s">📄 View Mode</div>
+              <button class="button-primary" onclick="enableArtifactEdit('${artifactId}')">✏️ Edit Artifact</button>
+            </div>
+            ${contentHtml}
+          </div>
+        `;
+      }
+    }
   }
 
   // For file artifacts, we don't show the standard artifact header since the file viewer has its own header
@@ -141,12 +367,7 @@ function renderArtifactView(data) {
 
   return `
     <div class="column gap-m padding-xl" style="max-width: calc(var(--base-size) * 250); margin: 0 auto;">
-      <div class="column gap-s padding-m" style="border-bottom: 1px solid var(--color-secondary-background);">
-        <h2 class="text-xl foreground-primary" style="font-weight: 500; margin: 0;">${artifact.title}</h2>
-        <div class="text-s foreground-tertiary">
-          Type: ${artifact.type} • Updated: ${new Date(artifact.updatedAt).toLocaleString()}
-        </div>
-      </div>
+      ${headerHtml}
       ${contentHtml}
     </div>
   `;
@@ -244,6 +465,248 @@ function downloadFileArtifact(fileName, dataUrl, mimeType) {
   link.click();
   document.body.removeChild(link);
 }
+
+// =================== Artifact Edit Functions ===================
+
+// Track which artifacts are in edit mode
+window.artifactEditMode = window.artifactEditMode || {};
+
+// Enable edit mode for an artifact
+function enableArtifactEdit(artifactId) {
+  console.log("[ARTIFACT] Enabling edit mode for artifact:", artifactId);
+  
+  // Check permissions
+  if (!window.collaboration?.canPerformAction('editArtifact')) {
+    console.warn("[ARTIFACT] Permission denied: Cannot edit artifacts");
+    alert("You don't have permission to edit artifacts. Please contact the session leader for edit permissions.");
+    return;
+  }
+  
+  // Set edit mode for this artifact
+  window.artifactEditMode[artifactId] = true;
+  
+  // Re-render the artifact view in edit mode
+  if (window.views?.renderCurrentView) {
+    window.views.renderCurrentView(false);
+  }
+}
+
+// Save artifact changes
+async function saveArtifactEdit(artifactId) {
+  console.log("[ARTIFACT] Saving changes for artifact:", artifactId);
+  
+  // Check permissions
+  if (!window.collaboration?.canPerformAction('editArtifact')) {
+    console.warn("[ARTIFACT] Permission denied: Cannot edit artifacts");
+    alert("You don't have permission to edit artifacts. Please contact the session leader for edit permissions.");
+    return;
+  }
+  
+  // Get the edited content
+  const textarea = document.getElementById(`artifact-edit-${artifactId}`);
+  if (!textarea) {
+    console.error("[ARTIFACT] Edit textarea not found");
+    return;
+  }
+  
+  const newContent = textarea.value.trim();
+  if (!newContent) {
+    alert("Cannot save empty content. Please add some content or cancel the edit.");
+    return;
+  }
+  
+    // Update the artifact with versioning
+  if (window.artifactsModule?.updateArtifact) {
+    console.log("[ARTIFACT] 🔄 Calling updateArtifact with ID:", artifactId, "Content length:", newContent.length);
+    
+    try {
+      const result = await window.artifactsModule.updateArtifact(artifactId, newContent);
+      console.log("[ARTIFACT] 📤 updateArtifact result:", result);
+      
+      if (result) {
+        console.log("[ARTIFACT] ✅ Artifact updated successfully:", result.title);
+        console.log("[ARTIFACT] 📚 New version created - Total versions:", result.versions.length);
+        console.log("[ARTIFACT] 📋 Latest version:", result.versions[result.versions.length - 1]);
+        
+        // Clear edit mode
+        window.artifactEditMode[artifactId] = false;
+        
+        // Show success message with version info
+        const versionInfo = result.versions.length > 1 ? ` (Version ${result.versions.length} of ${result.versions.length})` : '';
+        alert(`✅ Artifact "${result.title}" updated successfully!${versionInfo}\n\n📚 A new version has been added to the artifact's version history.`);
+        
+        // Re-render the view to show the new version
+        if (window.views?.renderCurrentView) {
+          window.views.renderCurrentView(false);
+        }
+      } else {
+        console.error("[ARTIFACT] ❌ Failed to update artifact - result is null/undefined");
+        alert("Failed to update artifact. Please try again.");
+      }
+    } catch (error) {
+      console.error("[ARTIFACT] ❌ Error updating artifact:", error);
+      alert("An error occurred while updating the artifact. Please try again.");
+    }
+  } else {
+    console.error("[ARTIFACT] ❌ Artifacts module not available");
+    alert("Artifacts module not available. Please refresh the page and try again.");
+  }
+}
+
+// Switch to view mode
+function switchToViewMode(artifactId) {
+  console.log("[ARTIFACT] Switching to view mode for artifact:", artifactId);
+  
+  // Clear edit mode for this artifact
+  window.artifactEditMode[artifactId] = false;
+  
+  // Re-render the artifact view in view mode
+  if (window.views?.renderCurrentView) {
+    window.views.renderCurrentView(false);
+  }
+}
+
+// Cancel artifact edit (alias for switchToViewMode)
+function cancelArtifactEdit(artifactId) {
+  switchToViewMode(artifactId);
+}
+
+// Make functions globally available
+window.enableArtifactEdit = enableArtifactEdit;
+window.saveArtifactEdit = saveArtifactEdit;
+window.cancelArtifactEdit = cancelArtifactEdit;
+window.switchToViewMode = switchToViewMode;
+
+// Debug function to check artifact edit state
+window.debugArtifactEdit = function(artifactId) {
+  console.log("[ARTIFACT] 🔍 Debug Artifact Edit State:");
+  console.log("Artifact ID:", artifactId);
+  
+  const artifact = window.artifactsModule?.getArtifact(artifactId);
+  if (artifact) {
+    console.log("Artifact:", artifact);
+    console.log("Type:", artifact.type);
+    console.log("Content preview:", artifact.versions[artifact.versions.length - 1]?.content?.substring(0, 100) + "...");
+  } else {
+    console.log("❌ Artifact not found");
+  }
+  
+  const canEdit = window.collaboration?.canPerformAction('editArtifact');
+  console.log("Can edit artifacts:", canEdit);
+  
+  const isInEditMode = window.artifactEditMode?.[artifactId];
+  console.log("Is in edit mode:", isInEditMode);
+  
+  console.log("Edit mode state:", window.artifactEditMode);
+  
+  return { artifact, canEdit, isInEditMode };
+};
+
+// Test function to manually open an artifact
+window.testOpenArtifact = function(artifactId) {
+  console.log("[ARTIFACT] 🧪 Testing artifact open for ID:", artifactId);
+  
+  if (!artifactId) {
+    console.error("[ARTIFACT] ❌ No artifact ID provided");
+    return;
+  }
+  
+  // Try to open the artifact
+  window.context?.setActiveView('artifact', { artifactId: artifactId });
+  
+  // Check if it worked
+  setTimeout(() => {
+    const activeView = window.context?.getActiveView();
+    console.log("[ARTIFACT] Active view after test:", activeView);
+    
+    if (activeView?.type === 'artifact' && activeView?.data?.artifactId === artifactId) {
+      console.log("[ARTIFACT] ✅ Successfully opened artifact");
+    } else {
+      console.log("[ARTIFACT] ❌ Failed to open artifact");
+    }
+  }, 100);
+};
+
+// Comprehensive debug function for collaborative editing
+window.debugCollaborativeEditing = function(artifactId) {
+  console.log("[ARTIFACT] 🔍 Debug Collaborative Editing System:");
+  
+  // Check collaboration status
+  const collabStatus = window.collaboration?.getStatus();
+  console.log("Collaboration Status:", collabStatus);
+  
+  // Check permissions
+  const permissions = window.collaboration?.getCollaborationPermissions();
+  console.log("Collaboration Permissions:", permissions);
+  
+  // Check if user can edit
+  const canEdit = window.collaboration?.canPerformAction('editArtifact');
+  console.log("Can Edit Artifacts:", canEdit);
+  
+  // Check artifact state
+  if (artifactId) {
+    const artifact = window.artifactsModule?.getArtifact(artifactId);
+    if (artifact) {
+      console.log("Artifact:", artifact);
+      console.log("Artifact Type:", artifact.type);
+      console.log("Total Versions:", artifact.versions.length);
+      console.log("Latest Version:", artifact.versions[artifact.versions.length - 1]);
+    } else {
+      console.log("❌ Artifact not found:", artifactId);
+    }
+  }
+  
+  // Check edit mode state
+  console.log("Edit Mode State:", window.artifactEditMode);
+  
+  // Check active view
+  const activeView = window.context?.getActiveView();
+  console.log("Active View:", activeView);
+  
+  return {
+    collabStatus,
+    permissions,
+    canEdit,
+    artifact: artifactId ? window.artifactsModule?.getArtifact(artifactId) : null,
+    editMode: window.artifactEditMode,
+    activeView
+  };
+};
+
+// Test function to simulate saving an artifact
+window.testSaveArtifact = function(artifactId, testContent = "Test content from debug function") {
+  console.log("[ARTIFACT] 🧪 Testing artifact save for ID:", artifactId);
+  
+  if (!artifactId) {
+    console.error("[ARTIFACT] ❌ No artifact ID provided");
+    return;
+  }
+  
+  // Check if artifact exists
+  const artifact = window.artifactsModule?.getArtifact(artifactId);
+  if (!artifact) {
+    console.error("[ARTIFACT] ❌ Artifact not found:", artifactId);
+    return;
+  }
+  
+  console.log("[ARTIFACT] 📋 Original artifact:", artifact);
+  console.log("[ARTIFACT] 📚 Original versions count:", artifact.versions.length);
+  
+  // Try to update the artifact
+  const result = window.artifactsModule?.updateArtifact(artifactId, testContent);
+  
+  console.log("[ARTIFACT] 📤 Update result:", result);
+  
+  if (result) {
+    console.log("[ARTIFACT] ✅ Test save successful!");
+    console.log("[ARTIFACT] 📚 New versions count:", result.versions.length);
+    console.log("[ARTIFACT] 📋 Latest version:", result.versions[result.versions.length - 1]);
+  } else {
+    console.error("[ARTIFACT] ❌ Test save failed!");
+  }
+  
+  return result;
+};
 
 // Export for global access
 window.artifactView = {

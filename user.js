@@ -13,6 +13,15 @@ function isJoiningAsCollaborator() {
     window.location.hash.includes("collab-");
 }
 
+// Helper function to check if user should be treated as logged in (including collaborators)
+function shouldTreatAsLoggedIn() {
+  const session = window.user?.getActiveSession();
+  const isLoggedIn = !!session;
+  const isCollaborator = isJoiningAsCollaborator();
+  
+  return isLoggedIn || isCollaborator;
+}
+
 class SessionManager {
   constructor() {
     this.SESSION_KEYS = {
@@ -377,7 +386,9 @@ async function handleAuthenticatedState() {
     // Trigger contextual guidance for fresh logins only (not page refreshes)
     await window.sessionManager.handleFreshLogin();
   } else {
-    console.log('[AUTH] 🛡️ Collaborator detected - skipping fresh login process');
+    console.log('[AUTH] 🛡️ Collaborator detected - triggering process for collaborator');
+    // Trigger process for collaborators to enable AI responses
+    await window.sessionManager.triggerProcess("collaborator initialization", 0);
   }
   console.log('[AUTH] Authentication complete');
 }
@@ -411,6 +422,9 @@ function handleUnauthenticatedState() {
     );
     // Don't clear data or show intro screen during collaboration
     toggleUI(true);
+    
+    // Trigger process for collaborators to enable AI responses
+    window.sessionManager.triggerProcess("collaborator unauthenticated initialization", 1000);
     return;
   }
 
@@ -588,6 +602,8 @@ window.user = {
   getActiveSession,
   updateAuthState,
   initializeMainApp,
+  shouldTreatAsLoggedIn,
+  isJoiningAsCollaborator,
 
   // getters for the user data
   getUserData,

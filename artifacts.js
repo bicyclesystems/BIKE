@@ -101,6 +101,17 @@ function createArtifactBase(
 }
 
 function createArtifact(content, messageId, type = null) {
+  // Check collaboration permissions
+  if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
+    if (!window.collaboration.canPerformAction('createArtifact')) {
+      console.warn("[ARTIFACTS] Permission denied: Cannot create artifacts with current permissions");
+      // Trigger AI response for permission denial
+      if (window.actions?.addMessage) {
+        window.actions.addMessage("assistant", "I'm sorry, but as a collaborator with limited permissions, you are not allowed to create new artifacts. You can only view existing artifacts. Please contact the session leader if you need additional permissions.");
+      }
+      return null;
+    }
+  }
   return createArtifactBase(content, messageId, type, true);
 }
 
@@ -109,29 +120,339 @@ function createArtifactSilent(content, messageId, type = null) {
   return createArtifactBase(content, messageId, type, false);
 }
 
-function updateArtifact(id, content) {
+async function updateArtifact(id, content) {
+  console.log("[ARTIFACTS] 🔄 updateArtifact called with ID:", id, "Content length:", content.length);
+  
+  // Check collaboration permissions
+  if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
+    if (!window.collaboration.canPerformAction('editArtifact')) {
+      console.warn("[ARTIFACTS] Permission denied: Cannot edit artifacts with current permissions");
+      // Trigger AI response for permission denial
+      if (window.actions?.addMessage) {
+        window.actions.addMessage("assistant", "I'm sorry, but as a collaborator with limited permissions, you are not allowed to edit artifacts. You can only view them. Please contact the session leader if you need edit permissions.");
+      }
+      return null;
+    }
+  }
+  
   const artifacts = (window.context?.getArtifacts() || []).slice();
-  const activeChatId = window.context?.getActiveChatId();
-  const artifact = artifacts.find(
-    (a) => a.id === id && a.chatId === activeChatId
-  );
-  if (!artifact) return null;
-  artifact.versions.push({ content, timestamp: new Date().toISOString() });
+  console.log("[ARTIFACTS] 📋 Total artifacts found:", artifacts.length);
+  
+  // For collaborators, search all artifacts regardless of chatId
+  // For leaders, search only in active chat
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
+  let artifact;
+  
+  if (isCollaborator) {
+    // Search all artifacts for collaborators
+    artifact = artifacts.find(a => a.id === id);
+    console.log("[ARTIFACTS] 🔍 Searching all artifacts for collaborator, found:", artifact ? artifact.title : "NOT FOUND");
+  } else {
+    // For leaders, search only in active chat
+    const activeChatId = window.context?.getActiveChatId();
+    artifact = artifacts.find(a => a.id === id && a.chatId === activeChatId);
+    console.log("[ARTIFACTS] 🔍 Searching active chat artifacts for leader, activeChatId:", activeChatId, "found:", artifact ? artifact.title : "NOT FOUND");
+  }
+  
+  if (!artifact) {
+    console.warn("[ARTIFACTS] ❌ Artifact not found:", id);
+    console.log("[ARTIFACTS] 📋 Available artifact IDs:", artifacts.map(a => a.id));
+    return null;
+  }
+  
+  // Create new version with the updated content
+  const newVersion = { 
+    content, 
+    timestamp: new Date().toISOString(),
+    editedBy: isCollaborator ? 'collaborator' : 'leader'
+  };
+  
+  console.log("[ARTIFACTS] 📝 Creating new version:", newVersion);
+  console.log("[ARTIFACTS] 📚 Current versions count:", artifact.versions.length);
+  
+  artifact.versions.push(newVersion);
   artifact.updatedAt = new Date().toISOString();
+  
+  console.log("[ARTIFACTS] ✅ New version added, total versions:", artifact.versions.length);
+  
+  // Update state and set active version to the new version
+  const newActiveVersionIdx = artifact.versions.length - 1;
+  
+  console.log("[ARTIFACTS] 🔄 Updating context state with new artifacts array");
+  console.log("[ARTIFACTS] 📊 Setting active version index to:", newActiveVersionIdx);
+  
+  // Update the artifacts array in context state
   window.context?.setState({
     artifacts: artifacts,
-    activeVersionIdxByArtifact: {
-      ...(window.context.getActiveVersionIndex ? {} : {}),
-      [id]: artifact.versions.length - 1,
-    },
   });
-  window.context?.setActiveVersionIndex(id, artifact.versions.length - 1);
+  
+  // Set the active version index to the new version
+  window.context?.setActiveVersionIndex(id, newActiveVersionIdx);
+  
+  // Save artifacts to local storage
+  console.log("[ARTIFACTS] 💾 Saving artifacts to memory");
   window.memory?.saveArtifacts();
+  
+  // Immediately upsert to database - Direct Supabase call
+  console.log("[ARTIFACTS] 🗄️ Upserting artifact to database");
+  
+  // Create Supabase client directly
+  let supabaseClient = null;
+  
+  if (window.supabase && window.SUPABASE_CONFIG) {
+    try {
+      supabaseClient = window.supabase.createClient(
+        window.SUPABASE_CONFIG.url,
+        window.SUPABASE_CONFIG.key
+      );
+      console.log("[ARTIFACTS] 🔗 Created Supabase client for database update");
+    } catch (error) {
+      console.error("[ARTIFACTS] ❌ Failed to create Supabase client:", error);
+    }
+  }
+  
+  if (supabaseClient && window.SUPABASE_CONFIG) {
+    try {
+      console.log("[ARTIFACTS] 🔗 Making direct Supabase call to update versions");
+      console.log("[ARTIFACTS] 📋 Artifact ID:", artifact.id);
+      console.log("[ARTIFACTS] 📚 Versions to update:", artifact.versions.length);
+      
+      // Verify client has the required methods
+      if (typeof supabaseClient.from !== 'function') {
+        console.error("[ARTIFACTS] ❌ Supabase client missing 'from' method");
+        console.log("[ARTIFACTS] 🔍 Available methods:", Object.keys(supabaseClient));
+        return;
+      }
+      
+      const { data, error } = await supabaseClient
+        .from("artifacts")
+        .update({ 
+          versions: artifact.versions 
+        })
+        .eq("id", artifact.id);
+      
+      if (error) {
+        console.error("[ARTIFACTS] ❌ Database upsert failed:", error);
+      } else {
+        console.log("[ARTIFACTS] ✅ Database versions updated successfully");
+        console.log("[ARTIFACTS] 📊 Updated artifact ID:", artifact.id);
+        console.log("[ARTIFACTS] 📚 Total versions in DB:", artifact.versions.length);
+        console.log("[ARTIFACTS] 📤 Supabase response:", data);
+      }
+    } catch (error) {
+      console.error("[ARTIFACTS] ❌ Database upsert failed:", error);
+    }
+  } else {
+    console.warn("[ARTIFACTS] ⚠️ Supabase not available for database upsert");
+    console.log("[ARTIFACTS] 🔍 Available Supabase objects:");
+    console.log("  - window.supabase:", !!window.supabase);
+    console.log("  - window.user.supabase:", !!window.user?.supabase);
+    console.log("  - window.SUPABASE_CONFIG:", !!window.SUPABASE_CONFIG);
+    console.log("  - supabaseClient:", !!supabaseClient);
+    
+    if (window.supabase) {
+      console.log("  - window.supabase methods:", Object.keys(window.supabase));
+    }
+    if (window.user?.supabase) {
+      console.log("  - window.user.supabase methods:", Object.keys(window.user.supabase));
+    }
+  }
+  
+  // Log the update
+  console.log(`[ARTIFACTS] ✅ Updated artifact "${artifact.title}" (${artifact.type}) - now has ${artifact.versions.length} versions`);
+  
   return artifact;
 }
 
 function getArtifact(id) {
-  return window.context?.findCurrentChatArtifact(id);
+  // For collaborators, search all artifacts regardless of chatId
+  // For leaders, search only in active chat
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
+  
+  if (isCollaborator) {
+    // Search all artifacts for collaborators
+    const artifacts = window.context?.getArtifacts() || [];
+    return artifacts.find(a => a.id === id);
+  } else {
+    // For leaders, search only in active chat
+    return window.context?.findCurrentChatArtifact(id);
+  }
+}
+
+// Find artifact by title (case-insensitive)
+function findArtifactByTitle(title) {
+  const artifacts = window.context?.getArtifacts() || [];
+  
+  // For collaborators, search all artifacts regardless of chatId
+  // For leaders, search only in active chat
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
+  
+  if (isCollaborator) {
+    // Search all artifacts for collaborators
+    let artifact = artifacts.find(
+      (a) => a.title.toLowerCase() === title.toLowerCase()
+    );
+    
+    if (!artifact) {
+      artifact = artifacts.find(
+        (a) => a.title.toLowerCase().includes(title.toLowerCase())
+      );
+    }
+    
+    return artifact;
+  } else {
+    // For leaders, search only in active chat
+    const activeChatId = window.context?.getActiveChatId();
+    
+    let artifact = artifacts.find(
+      (a) => a.title.toLowerCase() === title.toLowerCase() && a.chatId === activeChatId
+    );
+    
+    if (!artifact) {
+      artifact = artifacts.find(
+        (a) => a.title.toLowerCase().includes(title.toLowerCase()) && a.chatId === activeChatId
+      );
+    }
+    
+    return artifact;
+  }
+}
+
+// Update artifact by title
+function updateArtifactByTitle(title, content) {
+  const artifact = findArtifactByTitle(title);
+  if (!artifact) {
+    // Trigger AI response for artifact not found
+    if (window.actions?.addMessage) {
+      window.actions.addMessage("assistant", `I couldn't find an artifact with the title "${title}". Please check the title and try again, or ask me to list all available artifacts.`);
+    }
+    return { success: false, error: `No artifact found with title "${title}"` };
+  }
+  
+  // Check collaboration permissions before updating
+  if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
+    if (!window.collaboration.canPerformAction('editArtifact')) {
+      // Trigger AI response for permission denial
+      if (window.actions?.addMessage) {
+        window.actions.addMessage("assistant", `I'm sorry, but as a collaborator with limited permissions, you are not allowed to edit artifacts. You can only view them. Please contact the session leader if you need edit permissions.`);
+      }
+      return { success: false, error: "Permission denied: Cannot edit artifacts with current permissions" };
+    }
+  }
+  
+  const result = updateArtifact(artifact.id, content);
+  if (result) {
+    return { success: true, artifact: result };
+  } else {
+    return { success: false, error: "Failed to update artifact" };
+  }
+}
+
+// Show artifact by title
+function showArtifactByTitle(title) {
+  const artifact = findArtifactByTitle(title);
+  if (!artifact) {
+    // Trigger AI response for artifact not found
+    if (window.actions?.addMessage) {
+      window.actions.addMessage("assistant", `I couldn't find an artifact with the title "${title}". Please check the title and try again, or ask me to list all available artifacts.`);
+    }
+    return { success: false, error: `No artifact found with title "${title}"` };
+  }
+  
+  // Set as active artifact and switch to artifact view
+  if (window.context?.setActiveArtifactId) {
+    window.context.setActiveArtifactId(artifact.id);
+  }
+  
+  if (window.views?.switchToView) {
+    window.views.switchToView("artifact", { artifactId: artifact.id });
+  }
+  
+  return { success: true, artifact: artifact };
+}
+
+// List all available artifacts
+function listAllArtifacts() {
+  const artifacts = window.context?.getArtifacts() || [];
+  
+  // For collaborators, show all artifacts from all chats
+  // For leaders, show only artifacts from active chat
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
+  
+  let relevantArtifacts;
+  let message;
+  
+  if (isCollaborator) {
+    relevantArtifacts = artifacts; // All artifacts for collaborators
+    message = "Here are all the artifacts available in this collaboration session:\n\n";
+  } else {
+    const activeChatId = window.context?.getActiveChatId();
+    relevantArtifacts = artifacts.filter(a => a.chatId === activeChatId);
+    message = "Here are all the artifacts in the current chat:\n\n";
+  }
+  
+  if (relevantArtifacts.length === 0) {
+    if (window.actions?.addMessage) {
+      const noArtifactsMessage = isCollaborator 
+        ? "There are no artifacts available in this collaboration session."
+        : "There are no artifacts in the current chat.";
+      window.actions.addMessage("assistant", noArtifactsMessage);
+    }
+    return { success: false, artifacts: [] };
+  }
+  
+  const artifactList = relevantArtifacts.map(a => `- ${a.title} (${a.type})`).join('\n');
+  
+  if (window.actions?.addMessage) {
+    window.actions.addMessage("assistant", `${message}${artifactList}\n\nYou can ask me to show or modify any of these artifacts by their title.`);
+  }
+  
+  return { success: true, artifacts: relevantArtifacts };
+}
+
+// Handle natural language artifact modification requests
+function handleArtifactModificationRequest(userMessage) {
+  // Extract artifact title from various natural language patterns
+  const patterns = [
+    /(?:i wanna|i want to|can you|please) (?:modify|edit|change|update) (?:the )?artifact\s+(.+)/i,
+    /(?:modify|edit|change|update) (?:the )?artifact\s+(.+)/i,
+    /(?:i wanna|i want to|can you|please) (?:modify|edit|change|update)\s+(.+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = userMessage.match(pattern);
+    if (match) {
+      const title = match[1].trim();
+      
+      // First check if the artifact exists
+      const artifact = findArtifactByTitle(title);
+      if (!artifact) {
+        if (window.actions?.addMessage) {
+          window.actions.addMessage("assistant", `I couldn't find an artifact with the title "${title}". Please check the title and try again, or ask me to list all available artifacts.`);
+        }
+        return { success: false, error: `No artifact found with title "${title}"` };
+      }
+      
+      // Check collaboration permissions
+      if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
+        if (!window.collaboration.canPerformAction('editArtifact')) {
+          if (window.actions?.addMessage) {
+            window.actions.addMessage("assistant", `I'm sorry, but as a collaborator with limited permissions, you are not allowed to edit artifacts. You can only view them. Please contact the session leader if you need edit permissions.`);
+          }
+          return { success: false, error: "Permission denied: Cannot edit artifacts with current permissions" };
+        }
+      }
+      
+      // If we get here, the artifact exists and user has permission
+      if (window.actions?.addMessage) {
+        window.actions.addMessage("assistant", `I found the artifact "${title}". What would you like to change it to? Please provide the new content for the artifact.`);
+      }
+      
+      return { success: true, artifact: artifact, title: title };
+    }
+  }
+  
+  return { success: false, error: "No artifact modification request detected" };
 }
 
 // =================== Artifact Click Handlers ===================
@@ -235,6 +556,18 @@ function setArtifactVersion(artifactId, versionIdx) {
 }
 
 function deleteArtifactVersion(artifactId, versionIdx) {
+  // Check collaboration permissions
+  if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
+    if (!window.collaboration.canPerformAction('deleteArtifact')) {
+      console.warn("[ARTIFACTS] Permission denied: Cannot delete artifacts with current permissions");
+      // Trigger AI response for permission denial
+      if (window.actions?.addMessage) {
+        window.actions.addMessage("assistant", "I'm sorry, but as a collaborator with limited permissions, you are not allowed to delete artifacts. You can only view them. Please contact the session leader if you need delete permissions.");
+      }
+      return false;
+    }
+  }
+  
   const artifacts = (window.context?.getArtifacts() || []).slice();
   const activeChatId = window.context?.getActiveChatId();
   const artifact = artifacts.find(
@@ -1918,6 +2251,11 @@ window.artifactsModule = {
   createArtifactSilent,
   updateArtifact,
   getArtifact,
+  findArtifactByTitle,
+  updateArtifactByTitle,
+  showArtifactByTitle,
+  listAllArtifacts,
+  handleArtifactModificationRequest,
   getArtifactVersion,
   setArtifactVersion,
   deleteArtifactVersion,

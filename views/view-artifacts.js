@@ -1,37 +1,79 @@
 // =================== Artifacts View ===================
 
 function renderArtifactsView(data) {
-  const artifacts = window.context?.getCurrentChatArtifacts() || [];
+  // For collaborators, show all artifacts from all chats
+  // For leaders, show only artifacts from active chat
+  const isCollaborator = window.collaboration?.isCollaborating && !window.collaboration?.isLeader;
   
-  if (artifacts.length === 0) {
+  let artifacts;
+  if (isCollaborator) {
+    artifacts = window.context?.getArtifacts() || []; // All artifacts for collaborators
+  } else {
+    artifacts = window.context?.getCurrentChatArtifacts() || []; // Only active chat for leaders
+  }
+  
+  // Group artifacts by their base artifact (same id) to show all versions together
+  const artifactGroups = {};
+  artifacts.forEach(artifact => {
+    if (!artifactGroups[artifact.id]) {
+      artifactGroups[artifact.id] = [];
+    }
+    artifactGroups[artifact.id].push(artifact);
+  });
+  
+  // Convert to array and sort each group by version timestamp
+  const groupedArtifacts = Object.values(artifactGroups).map(group => 
+    group.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+  );
+  
+  if (groupedArtifacts.length === 0) {
+    const emptyMessage = isCollaborator 
+      ? "No artifacts available in this collaboration session yet"
+      : "No artifacts in this chat yet";
+    const subMessage = isCollaborator
+      ? "The leader will create artifacts that you can view here"
+      : "Create some content to see it here";
+      
     return `
       <div class="column align-center justify-center padding-xl">
         <div class="text-xl opacity-s">📁</div>
-        <div class="text-m opacity-s">No artifacts in this chat yet</div>
-        <div class="text-s opacity-s">Create some content to see it here</div>
+        <div class="text-m opacity-s">${emptyMessage}</div>
+        <div class="text-s opacity-s">${subMessage}</div>
       </div>
     `;
   }
+  
+  const headerTitle = isCollaborator ? "All Artifacts" : "Artifacts";
+  const headerSubtitle = isCollaborator ? "from all chats" : "";
+  
+  // Check if collaborator can edit artifacts
+  const canEditArtifacts = window.collaboration?.canPerformAction('editArtifact') || false;
   
   let html = `
     <div class="column gap-l padding-l">
       <div class="row align-center gap-s">
         <div class="text-xl">🎨</div>
-        <h2 class="text-xl">Artifacts</h2>
-        <div class="background-tertiary padding-xs radius-s text-s opacity-s">${artifacts.length}</div>
+        <h2 class="text-xl">${headerTitle}</h2>
+        <div class="background-tertiary padding-xs radius-s text-s opacity-s">${groupedArtifacts.length}</div>
+        ${isCollaborator && canEditArtifacts ? '<div class="background-primary padding-xs radius-s text-s">✏️ Can Edit</div>' : ''}
+        ${isCollaborator && !canEditArtifacts ? '<div class="background-secondary padding-xs radius-s text-s">👁️ View Only</div>' : ''}
       </div>
+      ${headerSubtitle ? `<div class="text-s opacity-s">${headerSubtitle}</div>` : ''}
+      ${isCollaborator ? `<div class="text-s opacity-s">${canEditArtifacts ? 'You can edit artifacts by saying "edit artifact [title]" in chat' : 'You can only view artifacts - ask leader for edit permissions'}</div>` : ''}
       <div class="row gap-m" style="flex-wrap: wrap;">`;
   
-  artifacts.forEach(artifact => {
-    const currentVersionIdx = window.context?.getActiveVersionIndex(artifact.id) ?? artifact.versions.length - 1;
-    const currentVersion = artifact.versions[currentVersionIdx];
-    const versionCount = artifact.versions.length;
+  // Render each artifact group (with all versions)
+  groupedArtifacts.forEach(artifactGroup => {
+    const latestArtifact = artifactGroup[0]; // First one is the latest due to sorting
+    const currentVersionIdx = window.context?.getActiveVersionIndex(latestArtifact.id) ?? latestArtifact.versions.length - 1;
+    const currentVersion = latestArtifact.versions[currentVersionIdx];
+    const versionCount = latestArtifact.versions.length;
     const hasMultipleVersions = versionCount > 1;
     
     let preview = currentVersion.content.substring(0, 100) + '...';
     let typeEmoji = '📄';
     
-    if (artifact.type === 'link') {
+    if (latestArtifact.type === 'link') {
       const url = currentVersion.content.trim();
       const domain = window.utils.getDomainFromUrl(url);
       const contentType = window.artifactView.detectLinkContentType ? 
@@ -59,7 +101,7 @@ function renderArtifactsView(data) {
           preview = `Website: ${domain}`;
           break;
       }
-    } else if (artifact.type === 'files') {
+    } else if (latestArtifact.type === 'files') {
       try {
         const fileData = JSON.parse(currentVersion.content);
         const fileSize = window.artifactsModule.formatFileSize(fileData.size);
@@ -81,8 +123,8 @@ function renderArtifactsView(data) {
     }
     
     // For file artifacts, add emoji to title for display
-    let displayTitle = artifact.title;
-    if (artifact.type === 'files') {
+    let displayTitle = latestArtifact.title;
+    if (latestArtifact.type === 'files') {
       try {
         const fileData = JSON.parse(currentVersion.content);
         const fileIcon = window.artifactsModule.getFileIcon(fileData.name, fileData.type);
@@ -94,25 +136,25 @@ function renderArtifactsView(data) {
     
     const escapedTitle = window.utils.escapeHtml(displayTitle);
     const escapedPreview = window.utils.escapeHtml(preview);
-    const escapedId = window.utils.escapeHtml(artifact.id);
+    const escapedId = window.utils.escapeHtml(latestArtifact.id);
     
 
     
     // Handle click behavior differently for link artifacts
     let clickHandler;
-    if (artifact.type === 'link') {
+    if (latestArtifact.type === 'link') {
       const url = currentVersion.content.trim();
       const escapedUrl = window.utils.escapeHtml(url);
       clickHandler = `onclick="window.open('${escapedUrl}', '_blank', 'noopener,noreferrer')"`;
     } else {
-      clickHandler = `onclick="window.context.setActiveView('artifact', { artifactId: '${escapedId}' })"`;
+      clickHandler = `onclick="console.log('[ARTIFACTS] Clicking artifact:', '${escapedId}'); window.context.setActiveView('artifact', { artifactId: '${escapedId}' })"`;
     }
     
     // Enhanced version indicator with expandable version history
     let versionIndicator = '';
     if (hasMultipleVersions) {
-      const isCurrentVersion = currentVersionIdx === artifact.versions.length - 1;
-      const versionHistoryId = `version-history-${artifact.id}`;
+      const isCurrentVersion = currentVersionIdx === latestArtifact.versions.length - 1;
+      const versionHistoryId = `version-history-${latestArtifact.id}`;
       
       versionIndicator = `
         <div class="column gap-xs">
@@ -129,20 +171,20 @@ function renderArtifactsView(data) {
             ${!isCurrentVersion ? '<div class="text-xs color-negative">⚠️ Older</div>' : '<div class="text-xs color-positive">✓ Current</div>'}
           </div>
           
-          <div class="column gap-xs background-primary padding-m radius-s transition" id="${versionHistoryId}" style="display: none;">
+          <div class="column gap-xs background-primary padding-m radius-s transition" id="${versionHistoryId}" style="display: block;">
             <div class="text-s color-primary">Version History</div>
             <div class="column gap-xs">
-              ${artifact.versions.map((version, idx) => {
+              ${latestArtifact.versions.map((version, idx) => {
                 const isActive = idx === currentVersionIdx;
                 const timestamp = new Date(version.timestamp).toLocaleString();
                 return `
                   <div class="row align-center gap-s padding-s radius-s transition artifact-version-item ${isActive ? 'background-secondary' : 'background-tertiary'}" 
-                       data-artifact-id="${artifact.id}" 
+                       data-artifact-id="${latestArtifact.id}" 
                        data-version-idx="${idx}"
                        style="cursor: pointer; border: calc(var(--base-size) * 0.25) solid var(--color-tertiary-background); opacity: ${isActive ? '1' : '0.7'};"
                        onmouseover="this.style.opacity='1'; this.style.background='var(--color-tertiary-background)'; this.style.transform='translateX(calc(var(--base-size) * 1))'"
                        onmouseout="this.style.opacity='${isActive ? '1' : '0.7'}'; this.style.background='${isActive ? 'var(--color-secondary-background)' : 'var(--color-tertiary-background)'}'; this.style.transform='translateX(0)'"
-                       onclick="event.stopPropagation(); window.artifactsView.switchToArtifactVersion('${artifact.id}', ${idx});">
+                       onclick="event.stopPropagation(); window.artifactsView.switchToArtifactVersion('${latestArtifact.id}', ${idx});">
                     <div class="background-${isActive ? 'primary' : 'tertiary'} padding-xs radius-s text-xs">v${idx + 1}</div>
                     <div class="text-xs opacity-s">${timestamp}</div>
                     ${isActive ? '<div class="text-xs color-positive">Current</div>' : ''}
@@ -158,7 +200,16 @@ function renderArtifactsView(data) {
 
     
     // Card styling with better visual hierarchy
-    const cardClass = `background-secondary padding-l radius-l transition ${currentVersionIdx < artifact.versions.length - 1 ? 'opacity-s' : ''}`;
+    const cardClass = `background-secondary padding-l radius-l transition`;
+    
+    // Add chat information for collaborators
+    let chatInfo = '';
+    if (isCollaborator && latestArtifact.chatId) {
+      const chats = window.context?.getChats() || [];
+      const chat = chats.find(c => c.id === latestArtifact.chatId);
+      const chatName = chat ? chat.name : `Chat ${latestArtifact.chatId.substring(0, 8)}`;
+      chatInfo = `<div class="text-xs opacity-s background-tertiary padding-xs radius-s">📝 ${window.utils.escapeHtml(chatName)}</div>`;
+    }
     
     html += `
       <div class="${cardClass}" ${clickHandler} style="min-width: 320px; max-width: 400px; flex: 1;">
@@ -170,6 +221,7 @@ function renderArtifactsView(data) {
               <div class="column gap-xs">
                 <div class="text-l">${escapedTitle}</div>
                 <div class="text-s opacity-s">${escapedPreview}</div>
+                ${chatInfo}
               </div>
             </div>
             <div class="row align-center gap-s">
@@ -182,11 +234,11 @@ function renderArtifactsView(data) {
             <div class="text-xs opacity-s">
               ${hasMultipleVersions ? 
                 `Version ${currentVersionIdx + 1} of ${versionCount} • ${new Date(currentVersion.timestamp).toLocaleString()}` :
-                `Updated ${new Date(artifact.updatedAt).toLocaleString()}`
+                `Updated ${new Date(latestArtifact.updatedAt).toLocaleString()}`
               }
             </div>
             ${hasMultipleVersions ? 
-              `<div class="text-xs opacity-s">Created ${new Date(artifact.createdAt).toLocaleString()}</div>` : 
+              `<div class="text-xs opacity-s">Created ${new Date(latestArtifact.createdAt).toLocaleString()}</div>` : 
               ''
             }
           </div>

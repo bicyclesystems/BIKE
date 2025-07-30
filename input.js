@@ -315,12 +315,13 @@ class InputManager {
     document.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       
-      // Check if user is logged in
-      const session = window.user?.getActiveSession();
-      const isLoggedIn = !!session;
+      // Check if user should be treated as logged in (including collaborators)
+      const shouldBeLoggedIn = window.user?.shouldTreatAsLoggedIn ? 
+        window.user.shouldTreatAsLoggedIn() : 
+        !!window.user?.getActiveSession();
       
-      if (isLoggedIn) {
-        // Logged in mode: trigger processing
+      if (shouldBeLoggedIn) {
+        // Logged in mode or collaborator: trigger processing
         if (window.processModule?.process) {
           window.processModule.process();
         } else if (window.process) {

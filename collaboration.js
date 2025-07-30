@@ -57,17 +57,35 @@ const collaboration = {
     return match ? match[1] : null;
   },
 
+  // Extract permissions from URL (check both search params and hash)
+  extractPermissionsFromUrl() {
+    // First check search parameters (main URL)
+    const urlParams = new URLSearchParams(window.location.search);
+    let permissions = urlParams.get('perms');
+    
+    // If not found in search, check hash fragment
+    if (!permissions) {
+      const hash = window.location.hash;
+      const hashMatch = hash.match(/[?&]perms=([^&#]+)/);
+      if (hashMatch) {
+        permissions = hashMatch[1];
+      }
+    }
+    
+    return permissions || 'view';
+  },
+
   // Create a shareable collaboration link
-  async createCollaborationLink() {
+  async createCollaborationLink(permissions = 'view') {
     try {
       // Generate collaboration ID
       const collaborationId = this.generateCollaborationId();
 
-      // Create the shareable link
-      const shareableLink = `${window.location.origin}${window.location.pathname}#/collab-${collaborationId}`;
+      // Create the shareable link with permissions in main URL
+      const shareableLink = `${window.location.origin}${window.location.pathname}?perms=${permissions}#/collab-${collaborationId}`;
 
-      // Create the session
-      const result = await this.createSession(collaborationId);
+      // Create the session with permissions
+      const result = await this.createSession(collaborationId, permissions);
 
       if (result.success) {
         // Mark as leader and persist state
@@ -110,14 +128,22 @@ const collaboration = {
       return { success: false, error: "No collaboration ID found in URL" };
     }
 
+    // Extract permissions from URL (check both search params and hash)
+    const permissions = this.extractPermissionsFromUrl();
+    console.log("[COLLAB] Extracted permissions from URL:", permissions);
+
     // Mark as collaborator (not leader) and persist state
     this.isLeader = false;
     localStorage.setItem("collaborationLeader", "false");
     localStorage.setItem("collaborationId", collaborationId);
     localStorage.setItem("collaborationActive", "true");
+    localStorage.setItem("collaborationPermissions", permissions);
     localStorage.setItem("COLLABORATION_DATA_TIMESTAMP", Date.now().toString());
 
-    return await this.joinSession(collaborationId);
+    // Force clear any old permission data to ensure fresh start
+    console.log("[COLLAB] 🔄 Ensuring fresh permission state for collaborator");
+    
+    return await this.joinSession(collaborationId, permissions);
   },
 
   // Check for existing collaboration session and restore it
@@ -152,7 +178,8 @@ const collaboration = {
         const result = await this.createSession(storedCollabId);
       } else {
         // Collaborator: rejoin
-        const result = await this.joinSession(storedCollabId);
+        const storedPermissions = localStorage.getItem("collaborationPermissions") || 'view';
+        const result = await this.joinSession(storedCollabId, storedPermissions);
         if (result.success) {
           // Request current data after successful rejoin
           setTimeout(() => {
@@ -167,7 +194,7 @@ const collaboration = {
   },
 
   // Create a collaboration session
-  async createSession(roomName = null) {
+  async createSession(roomName = null, permissions = 'view') {
     try {
       // Generate room name if not provided
       if (!roomName) {
@@ -219,6 +246,7 @@ const collaboration = {
       this.collaborationId = roomName;
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
+      localStorage.setItem("collaborationPermissions", permissions);
 
       return { success: true, roomName };
     } catch (error) {
@@ -228,9 +256,9 @@ const collaboration = {
   },
 
   // Join an existing collaboration session
-  async joinSession(roomName) {
+  async joinSession(roomName, permissions = null) {
     try {
-      console.log("[COLLAB] Joining session:", roomName);
+      console.log("[COLLAB] Joining session:", roomName, "with permissions:", permissions);
 
       // Create Yjs document
       this.ydoc = new window.Y.Doc();
@@ -273,6 +301,12 @@ const collaboration = {
       this.collaborationId = roomName;
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
+      
+      // Store permissions if provided
+      if (permissions) {
+        localStorage.setItem("collaborationPermissions", permissions);
+        console.log("[COLLAB] Stored permissions:", permissions);
+      }
 
       console.log("[COLLAB] Joined session:", roomName);
       return { success: true, roomName };
@@ -767,12 +801,15 @@ const collaboration = {
     this.peers.clear();
     this.isLeader = false;
 
-    // Clear persistence
+    // Clear persistence - COMPLETE cleanup including permissions
     localStorage.removeItem("collaborationActive");
     localStorage.removeItem("collaborationLeader");
     localStorage.removeItem("collaborationId");
+    localStorage.removeItem("collaborationPermissions");
     localStorage.removeItem("COLLABORATION_ACTIVE");
     localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
+    
+    console.log("[COLLAB] ✅ All collaboration data cleared from localStorage");
   },
 
   // Set up page unload cleanup
@@ -942,8 +979,8 @@ const collaboration = {
         // Initialize default activeView for collaborator if not set
         const currentView = window.context?.getActiveView();
         if (!currentView) {
-          console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
-          window.context.setActiveView("memory", {}, { withTransition: false });
+          console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator");
+          window.context.setActiveView("artifacts", {}, { withTransition: false });
         }
 
         // Initialize default userPreferences for collaborator if not set
@@ -1777,8 +1814,8 @@ const collaboration = {
           // Initialize default activeView for collaborator if not set
           const currentView = window.context?.getActiveView();
           if (!currentView) {
-            console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
-            window.context.setActiveView("memory", {}, { withTransition: false });
+            console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator");
+            window.context.setActiveView("artifacts", {}, { withTransition: false });
           }
 
           // Initialize default userPreferences for collaborator if not set
@@ -1853,6 +1890,11 @@ const collaboration = {
       syncMap.set("artifacts", JSON.stringify(artifacts));
       // Don't sync userPreferences - collaborators keep their own
       // Don't sync activeChatId - collaborators keep their own
+      
+      // Set collaboration permissions in sync map
+      const permissions = localStorage.getItem("collaborationPermissions") || 'view';
+      syncMap.set("collaborationPermissions", permissions);
+      
       syncMap.set("initializedByLeader", true);
     } else if (syncMap.size === 0 && !this.isLeader) {
       // Collaborator waits for leader's data
@@ -1863,20 +1905,8 @@ const collaboration = {
   leaveSession() {
     console.log("[COLLAB] Leaving session...");
 
-    if (this.provider) {
-      this.provider.destroy();
-      this.provider = null;
-    }
-
-    if (this.ydoc) {
-      this.ydoc.destroy();
-      this.ydoc = null;
-    }
-
-    this.isCollaborating = false;
-    this.collaborationId = null;
-    this.peers.clear();
-    this.isLeader = false;
+    // Complete cleanup - clear all collaboration data
+    this.clearSessionData();
 
     // Clear collaboration protection
     this.clearCollaborationProtection();
@@ -1884,7 +1914,7 @@ const collaboration = {
     // Update UI
     this.updateUI();
 
-    console.log("[COLLAB] Session left");
+    console.log("[COLLAB] ✅ Session left and all data cleared");
   },
 
   // Get collaboration status
@@ -1895,6 +1925,7 @@ const collaboration = {
       peerCount: this.peers.size,
       peers: Array.from(this.peers),
       isLeader: this.isLeader,
+      permissions: this.getCollaborationPermissions(),
     };
   },
 
@@ -2359,8 +2390,8 @@ const collaboration = {
       // Initialize default activeView for collaborator if not set
       const currentView = window.context?.getActiveView();
       if (!currentView) {
-        console.log("[COLLAB] 🔧 Initializing default memory view for collaborator");
-        window.context.setActiveView("memory", {}, { withTransition: false });
+        console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator");
+        window.context.setActiveView("artifacts", {}, { withTransition: false });
       }
 
       // Initialize default userPreferences for collaborator if not set
@@ -2427,6 +2458,35 @@ const collaboration = {
         },
       });
       document.dispatchEvent(event);
+
+              // Trigger process for collaborator to enable AI responses after data is loaded
+      if (window.sessionManager?.triggerProcess) {
+        window.sessionManager.triggerProcess("collaborator data loaded", 500);
+      }
+
+      // Force refresh permissions from leader's sync map
+      if (!this.isLeader) {
+        const syncMap = this.getSharedSyncMap();
+        if (syncMap) {
+          const leaderPermissions = syncMap.get("collaborationPermissions");
+          if (leaderPermissions) {
+            console.log("[COLLAB] 🔄 Updating permissions from leader:", leaderPermissions);
+            localStorage.setItem("collaborationPermissions", leaderPermissions);
+          }
+        }
+      }
+
+      // Debug: Log collaborator state
+      console.log("[COLLAB] 🔍 Debug - Collaborator state:");
+      console.log("- isCollaborating:", this.isCollaborating);
+      console.log("- isLeader:", this.isLeader);
+      console.log("- collaborationId:", this.collaborationId);
+      console.log("- activeView:", window.context?.getActiveView());
+      console.log("- activeChatId:", window.context?.getActiveChatId());
+      console.log("- artifacts count:", (window.context?.getArtifacts() || []).length);
+      console.log("- processModule available:", !!window.processModule);
+      console.log("- shouldTreatAsLoggedIn:", window.user?.shouldTreatAsLoggedIn?.());
+      console.log("- current permissions:", this.getCollaborationPermissions());
 
       console.log(
         "[COLLAB] ✅ Database data applied and UI refreshed successfully"
@@ -2576,6 +2636,65 @@ const collaboration = {
     }
   },
 
+  // =================== PERMISSION SYSTEM ===================
+
+  // Define permission mappings
+  PERMISSION_MAP: {
+    view: { canView: true, canEdit: false, canCreate: false, canDelete: false },
+    edit: { canView: true, canEdit: true, canCreate: false, canDelete: false },
+    full: { canView: true, canEdit: true, canCreate: true, canDelete: true }
+  },
+
+  // Get collaboration permissions (hybrid approach)
+  getCollaborationPermissions() {
+    console.log("[COLLAB] 🔍 Getting collaboration permissions...");
+    
+    // First check sync map (leader's permissions)
+    const syncMap = this.getSharedSyncMap();
+    if (syncMap) {
+      const syncPerms = syncMap.get("collaborationPermissions");
+      if (syncPerms) {
+        console.log("[COLLAB] ✅ Found permissions in sync map:", syncPerms);
+        return syncPerms;
+      }
+    }
+    
+    // Fallback to URL (for fresh joins)
+    const urlPerms = this.extractPermissionsFromUrl();
+    if (urlPerms && urlPerms !== 'view') {
+      console.log("[COLLAB] ✅ Found permissions in URL:", urlPerms);
+      return urlPerms;
+    }
+    
+    // Final fallback to localStorage
+    const localPerms = localStorage.getItem("collaborationPermissions") || 'view';
+    console.log("[COLLAB] ✅ Using permissions from localStorage:", localPerms);
+    return localPerms;
+  },
+
+  // Check if collaborator can perform action
+  canPerformAction(action) {
+    const permissions = this.getCollaborationPermissions();
+    const permObj = this.PERMISSION_MAP[permissions] || this.PERMISSION_MAP.view;
+    
+    switch(action) {
+      case 'editArtifact':
+        return permObj.canEdit;
+      case 'createArtifact':
+        return permObj.canCreate;
+      case 'deleteArtifact':
+        return permObj.canDelete;
+      case 'viewArtifact':
+        return permObj.canView;
+      case 'sendMessage':
+        return true; // Everyone can send messages
+      case 'createChat':
+        return permObj.canCreate;
+      default:
+        return false;
+    }
+  },
+
   // Set up automatic data listeners
   setupDataListeners() {
     if (!this.ydoc) {
@@ -2675,6 +2794,31 @@ const collaboration = {
         console.log("[COLLAB] ✅ Test map listener set up");
       }
 
+      // Listen to shared sync map changes (for permissions and other sync data)
+      const syncMap = this.getSharedSyncMap();
+      if (syncMap) {
+        syncMap.observe((event) => {
+          console.log("[COLLAB] 🔔 Shared sync map changed:", event);
+          event.changes.keys.forEach((change, key) => {
+            if (change.action === "add" || change.action === "update") {
+              const value = syncMap.get(key);
+              if (key === "collaborationPermissions" && value) {
+                console.log("[COLLAB] 📥 Permissions updated from leader:", value);
+                // Update local storage with leader's permissions
+                localStorage.setItem("collaborationPermissions", value);
+                console.log("[COLLAB] ✅ Permissions synced to localStorage");
+                
+                // Trigger UI update to reflect new permissions
+                if (window.views?.renderCurrentView) {
+                  window.views.renderCurrentView(false);
+                }
+              }
+            }
+          });
+        });
+        console.log("[COLLAB] ✅ Shared sync map listener set up");
+      }
+
       // Listen for collaboration data updates to refresh UI
       document.addEventListener("collaborationDataUpdate", (event) => {
         console.log(
@@ -2697,6 +2841,37 @@ const collaboration = {
     } catch (error) {
       console.error("[COLLAB] ❌ Error setting up data listeners:", error);
     }
+  },
+
+  // Debug function to check permission sources
+  debugPermissions() {
+    console.log("[COLLAB] 🔍 DEBUG: Permission Sources Check");
+    console.log("--- URL Permissions ---");
+    const urlPerms = this.extractPermissionsFromUrl();
+    console.log("URL perms parameter:", urlPerms);
+    console.log("Full URL:", window.location.href);
+    
+    console.log("--- localStorage Permissions ---");
+    const localPerms = localStorage.getItem("collaborationPermissions");
+    console.log("localStorage collaborationPermissions:", localPerms);
+    
+    console.log("--- Sync Map Permissions ---");
+    const syncMap = this.getSharedSyncMap();
+    if (syncMap) {
+      const syncPerms = syncMap.get("collaborationPermissions");
+      console.log("Sync map collaborationPermissions:", syncPerms);
+    } else {
+      console.log("No sync map available");
+    }
+    
+    console.log("--- Current Permissions ---");
+    const currentPerms = this.getCollaborationPermissions();
+    console.log("getCollaborationPermissions() result:", currentPerms);
+    
+    console.log("--- Collaboration State ---");
+    console.log("isLeader:", this.isLeader);
+    console.log("isCollaborating:", this.isCollaborating);
+    console.log("collaborationId:", this.collaborationId);
   },
 };
 
@@ -2763,6 +2938,32 @@ window.getCollaborationStatus = function () {
   }
 
   return window.collaboration.getStatus();
+};
+
+window.debugCollaborationPermissions = function () {
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  return window.collaboration.debugPermissions();
+};
+
+window.testArtifactEdit = function () {
+  if (!window.collaboration) {
+    console.error("[COLLAB] ❌ Collaboration module not available");
+    return;
+  }
+  
+  const canEdit = window.collaboration.canPerformAction('editArtifact');
+  console.log("[COLLAB] 🧪 Testing artifact edit permission:", canEdit);
+  
+  if (canEdit) {
+    console.log("[COLLAB] ✅ Can edit artifacts - try saying 'edit artifact [title]' in chat");
+  } else {
+    console.log("[COLLAB] ❌ Cannot edit artifacts - need edit permissions");
+  }
+  
+  return canEdit;
 };
 
 // Global protection function for other modules to check

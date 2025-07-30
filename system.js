@@ -107,6 +107,33 @@ const SYSTEM_SECTIONS = {
 - If user prefers to continue in current chat, proceed normally with their request
 - Don't suggest new chats for minor topic variations or follow-up questions within the same domain`,
 
+  ARTIFACT_MANAGEMENT: `📄 ARTIFACT MANAGEMENT (STEP 9): Handle artifact operations by title:
+
+**Artifact Operations by Title**: Users can reference artifacts by their title for various operations:
+- **Show Artifact**: When user asks to "show artifact [title]" or "display [title]", use artifactsModule.showArtifactByTitle(title)
+- **Modify Artifact**: When user asks to "modify artifact [title]" or "edit [title]", use artifactsModule.updateArtifactByTitle(title, newContent)
+- **List Artifacts**: When user asks to "list artifacts" or "show all artifacts", use artifactsModule.listAllArtifacts()
+- **Find Artifact**: When user asks to "find artifact [title]", use artifactsModule.findArtifactByTitle(title)
+
+**Title Matching**: The system supports both exact and partial title matching (case-insensitive):
+- Exact match: "show artifact Test Document"
+- Partial match: "modify artifact Test" (will find "Test Document" or "Test Results")
+- Case insensitive: "SHOW ARTIFACT test" works the same as "show artifact Test"
+
+**Collaboration Artifact Access**: 
+- **Collaborators**: Can see ALL artifacts from ALL chats in the collaboration session, regardless of activeChatId
+- **Leaders**: Can only see artifacts from their active chat
+- **New Artifacts**: Always created under the user's activeChatId (for both collaborators and leaders)
+- **Default View**: Collaborators start in artifacts view by default
+
+**Permission Handling**: In collaboration mode, check permissions before allowing artifact operations:
+- View operations are always allowed
+- Edit operations require 'edit' or 'full' permissions
+- Create operations require 'full' permissions
+- Delete operations require 'full' permissions
+
+**Error Handling**: If artifact not found, provide helpful response with available artifacts list`,
+
   CONTEXTUAL_GUIDANCE: `🔄 CONTEXTUAL GUIDANCE MODE: You are being called to provide contextual advice and guidance based on the current app state. This is NOT a response to user input - instead, assess the current situation and provide helpful guidance about what the user might want to do next.
 
 Key guidance behaviors:
@@ -152,7 +179,8 @@ You MUST follow this response style in ALL your messages. This is the user's exp
     SYSTEM_SECTIONS.RESPONSE_FORMAT,
     SYSTEM_SECTIONS.CAPABILITIES,
     SYSTEM_SECTIONS.USAGE_GUIDELINES,
-    SYSTEM_SECTIONS.CHAT_MANAGEMENT
+    SYSTEM_SECTIONS.CHAT_MANAGEMENT,
+    SYSTEM_SECTIONS.ARTIFACT_MANAGEMENT
   );
 
   // Add critical reminder

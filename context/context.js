@@ -99,6 +99,8 @@ function loadChat() {
 // =================== View Management ===================
 
 function setActiveView(viewType, data = {}, options = {}) {
+  console.log("[CONTEXT] setActiveView called:", viewType, data);
+  
   const { withTransition = true } = options;
 
   // Handle null viewType by setting activeView to null (shows chat or empty state)
