@@ -80,6 +80,10 @@ function createArtifactBase(
   //  Generate slug
   const slug = Math.random().toString(36).substring(2, 10);
   const localUrl = `https://say.bike/artifact/${id}?slug=${slug}&chatId=${activeChatId}`;
+  // Determine if this is a collaboration artifact
+  const isCollaborating = window.collaboration?.isCollaborating || false;
+  const isLeader = window.collaboration?.isLeader || false;
+  
   const artifact = {
     id,
     title,
@@ -98,6 +102,7 @@ function createArtifactBase(
     updatedAt: new Date().toISOString(),
     messageId,
     chatId: activeChatId,
+    isSaved: false, // Will be set to true after successful database save
   };
 
   if (!artifact.chatId) {

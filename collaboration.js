@@ -1446,6 +1446,22 @@ const collaboration = {
         userId: msgObj.userId || (this.isLeader ? this.userId : null), // Include userId
       };
 
+      console.log("[COLLAB-DEBUG] 📤 === PUSH MESSAGE TO COLLAB DEBUG ===");
+      console.log("[COLLAB-DEBUG] 📋 Original message object:", {
+        role: msgObj.role,
+        content: msgObj.content?.substring(0, 50) + "...",
+        message_id: msgObj.message_id,
+        isSaved: msgObj.isSaved,
+        userId: msgObj.userId
+      });
+      console.log("[COLLAB-DEBUG] 📋 Message to sync:", {
+        role: messageToSync.role,
+        content: messageToSync.content?.substring(0, 50) + "...",
+        message_id: messageToSync.message_id,
+        isSaved: messageToSync.isSaved,
+        userId: messageToSync.userId
+      });
+
       // If this is a collaborator, modify the role and use leader's userId
       if (!this.isLeader) {
         messageToSync.role = "collab";
@@ -1601,13 +1617,29 @@ const collaboration = {
         }
 
         newMessages.forEach((newMsg, msgIndex) => {
+          console.log("[COLLAB-DEBUG] 📨 === SHARED MESSAGES OBSERVER DEBUG ===");
+          console.log("[COLLAB-DEBUG] 📋 Received message:", {
+            role: newMsg.role,
+            content: newMsg.content?.substring(0, 50) + "...",
+            message_id: newMsg.message_id,
+            isSaved: newMsg.isSaved,
+            userId: newMsg.userId,
+            chatId: newMsg.chatId
+          });
+          console.log("[COLLAB-DEBUG] 📋 Current user:", {
+            isLeader: this.isLeader,
+            isCollaborating: this.isCollaborating
+          });
+          
           // Skip processing our own messages (prevent self-echo)
           if (newMsg.role === "collab" && !this.isLeader) {
             // This is a collaborator message and we are the collaborator - skip
+            console.log("[COLLAB-DEBUG] ⏭️ Skipping own collaborator message");
             return;
           }
           if (newMsg.role !== "collab" && this.isLeader) {
             // This is a leader message and we are the leader - skip
+            console.log("[COLLAB-DEBUG] ⏭️ Skipping own leader message");
             return;
           }
 
@@ -5163,6 +5195,104 @@ window.testViewBehavior = function() {
       storedView: storedView?.type,
       localStorageView: localStorageView ? JSON.parse(localStorageView).type : null,
       expectedBehavior: isLeader ? "memory" : (isCollaborating ? (storedView ? storedView.type : "artifacts") : "memory")
+    };
+    
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
+    return { error: error.message };
+  }
+};
+
+// Global helper function to test isSaved flag transmission
+window.testIsSavedTransmission = async function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING ISSAVED FLAG TRANSMISSION ===");
+  
+  try {
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isLeader = window.collaboration?.isLeader;
+    
+    console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
+      isCollaborating,
+      isLeader,
+      hasCollaboration: !!window.collaboration
+    });
+    
+    if (!isCollaborating) {
+      console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
+      return { error: "Not in collaboration mode" };
+    }
+    
+    // Create a test message with explicit isSaved flag
+    const testMessage = {
+      role: "user",
+      content: "Test message for isSaved flag transmission",
+      timestamp: new Date().toLocaleTimeString(),
+      message_id: `test_issaved_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      isSaved: false, // Explicitly set to false
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId"),
+      chatId: window.context?.getActiveChatId()
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test message created:", {
+      role: testMessage.role,
+      content: testMessage.content,
+      message_id: testMessage.message_id,
+      isSaved: testMessage.isSaved,
+      userId: testMessage.userId
+    });
+    
+    // Push the message to collaboration
+    if (window.collaboration?.pushMessageToCollab) {
+      console.log("[COLLAB-DEBUG] 🚀 Pushing test message to collaboration...");
+      window.collaboration.pushMessageToCollab(testMessage);
+      console.log("[COLLAB-DEBUG] ✅ Test message pushed to collaboration");
+    } else {
+      console.error("[COLLAB-DEBUG] ❌ pushMessageToCollab not available");
+      return { error: "pushMessageToCollab not available" };
+    }
+    
+    // Wait a moment for the message to be processed
+    await new Promise(resolve => setTimeout(resolve, 1000));
+    
+    // Check if the message was received and has the isSaved flag
+    const messagesByChat = window.context?.getMessagesByChat() || {};
+    const activeChatId = window.context?.getActiveChatId();
+    const messagesInChat = messagesByChat[activeChatId] || [];
+    const receivedMessage = messagesInChat.find(m => m.message_id === testMessage.message_id);
+    
+    console.log("[COLLAB-DEBUG] 📊 Message reception check:", {
+      activeChatId,
+      totalMessagesInChat: messagesInChat.length,
+      messageFound: !!receivedMessage,
+      receivedMessageIsSaved: receivedMessage?.isSaved,
+      expectedIsSaved: testMessage.isSaved
+    });
+    
+    if (receivedMessage) {
+      console.log("[COLLAB-DEBUG] 📋 Received message details:", {
+        role: receivedMessage.role,
+        content: receivedMessage.content,
+        message_id: receivedMessage.message_id,
+        isSaved: receivedMessage.isSaved,
+        userId: receivedMessage.userId
+      });
+    }
+    
+    return {
+      success: true,
+      isLeader,
+      testMessage: {
+        role: testMessage.role,
+        message_id: testMessage.message_id,
+        isSaved: testMessage.isSaved
+      },
+      receivedMessage: receivedMessage ? {
+        role: receivedMessage.role,
+        message_id: receivedMessage.message_id,
+        isSaved: receivedMessage.isSaved,
+        userId: receivedMessage.userId
+      } : null,
+      isSavedTransmitted: receivedMessage && receivedMessage.isSaved === testMessage.isSaved
     };
     
   } catch (error) {

@@ -168,8 +168,8 @@ class SupabaseSync {
         this.userId = session.user.id;
         // Only store userId in localStorage if it's not null (for collaborators)
         if (this.userId) {
-          localStorage.setItem("userId", this.userId);
-          window.userId = this.userId;
+        localStorage.setItem("userId", this.userId);
+        window.userId = this.userId;
         } else {
           console.log("[SYNC] 📋 Collaborator mode - userId is null");
         }
@@ -177,7 +177,7 @@ class SupabaseSync {
 
       // Initialize user in database (skip for collaborators with null userId)
       if (this.userId) {
-        await this.initializeUser();
+      await this.initializeUser();
       } else {
         console.log("[SYNC] 📋 Skipping user initialization for collaborator");
       }
@@ -421,6 +421,7 @@ class SupabaseSync {
       type: serverArtifact.type,
       versions: serverArtifact.versions || [],
       updatedAt: serverArtifact.updated_at,
+      isSaved: true, // Artifacts from database are already saved
     };
 
     // Use memory module to save the artifact
@@ -760,6 +761,7 @@ class SupabaseSync {
         type: serverArtifact.type,
         versions: serverArtifact.versions || [],
         updatedAt: serverArtifact.updated_at,
+        isSaved: true, // Artifacts from database are already saved
       };
 
       const existing = mergedArtifacts.get(artifact.id);
@@ -774,10 +776,10 @@ class SupabaseSync {
     const finalArtifacts = Array.from(mergedArtifacts.values());
     window.context?.setState({ artifacts: finalArtifacts });
 
-    // Upload local-only artifacts to server
+    // Upload local-only artifacts to server (only those that haven't been saved)
     const serverArtifactIds = new Set(serverArtifacts.map((a) => a.id));
     const localOnlyArtifacts = localArtifacts.filter(
-      (artifact) => !serverArtifactIds.has(artifact.id)
+      (artifact) => !serverArtifactIds.has(artifact.id) && artifact.isSaved === false
     );
 
     for (const artifact of localOnlyArtifacts) {
@@ -835,11 +837,11 @@ class SupabaseSync {
       // Prepare chat data based on collaboration context
       console.log("[COLLAB-DEBUG] 📝 === PREPARING CHAT DATA ===");
       let chatData = {
-        id: chat.id,
-        title: chat.title,
-        description: chat.description || "",
-        timestamp: chat.timestamp,
-        endTime: chat.endTime,
+          id: chat.id,
+          title: chat.title,
+          description: chat.description || "",
+          timestamp: chat.timestamp,
+          endTime: chat.endTime,
       };
 
       if (isCollaborating && collaborationId) {
@@ -888,7 +890,7 @@ class SupabaseSync {
 
       console.log("[COLLAB-DEBUG] ✅ Chat uploaded successfully");
       console.log("[COLLAB-DEBUG] 📋 Database response data:", data);
-      
+  
     } catch (error) {
       console.error("[COLLAB-DEBUG] ❌ === SYNC UPLOAD CHAT ERROR ===");
       console.error("[COLLAB-DEBUG] Exception during chat upload:", error);
@@ -951,11 +953,11 @@ class SupabaseSync {
       // Prepare message data based on collaboration context
       console.log("[COLLAB-DEBUG] 📝 === PREPARING MESSAGE DATA ===");
       let messageData = {
-        chat_id: chatId,
-        role: message.role,
-        content: message.content,
-        metadata: message.metadata || {},
-        message_id: message.message_id,
+          chat_id: chatId,
+          role: message.role,
+          content: message.content,
+          metadata: message.metadata || {},
+          message_id: message.message_id,
       };
 
       if (isCollaborating && collaborationId) {
@@ -1034,7 +1036,7 @@ class SupabaseSync {
     if (!this.supabase) {
       console.warn("[COLLAB-DATA] ⚠️ No Supabase client - queuing artifact");
       this.queueOperation("uploadArtifact", artifact);
-      return;
+      return { success: false, error: "No Supabase client" };
     }
 
     // Get collaboration context
@@ -1058,19 +1060,19 @@ class SupabaseSync {
     if (isCollabProtected && !isCollaborating) {
       console.log("[COLLAB-DATA] ⚠️ Skipping upload - collaboration protection active and not collaboration data");
       this.queueOperation("uploadArtifact", artifact);
-      return;
+      return { success: false, error: "Collaboration protection active" };
     }
 
     try {
       // Prepare artifact data based on collaboration context
       let artifactData = {
-        id: artifact.id,
-        chat_id: artifact.chatId,
-        title: artifact.title,
-        type: artifact.type,
-        versions: artifact.versions || [],
+          id: artifact.id,
+          chat_id: artifact.chatId,
+          title: artifact.title,
+          type: artifact.type,
+          versions: artifact.versions || [],
         slug: artifact.slug,
-        live_url: artifact.liveUrl,
+          live_url: artifact.liveUrl,
       };
 
       if (isCollaborating && collaborationId) {
@@ -1091,7 +1093,7 @@ class SupabaseSync {
         if (!this.userId) {
           console.warn("[COLLAB-DATA] ⚠️ No user ID for regular artifact - queuing");
           this.queueOperation("uploadArtifact", artifact);
-          return;
+          return { success: false, error: "No user ID" };
         }
         
         artifactData = {
@@ -1110,15 +1112,18 @@ class SupabaseSync {
 
       if (error) {
         console.error("[COLLAB-DATA] ❌ Artifact upload failed:", error);
-        throw error;
+        return { success: false, error: error.message };
       }
 
       console.log("[COLLAB-DATA] ✅ Artifact uploaded successfully");
       console.log("[COLLAB-DATA] 📋 Database response:", data);
       
+      return { success: true, data };
+      
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Exception during artifact upload:", error);
       this.queueOperation("uploadArtifact", artifact);
+      return { success: false, error: error.message };
     }
   }
 

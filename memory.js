@@ -356,18 +356,18 @@ async function saveChat(chat) {
     console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE SAVE ===");
     console.log("[COLLAB-DEBUG] 📊 Current AppState.chats count:", AppState.chats.length);
     
-    const chats = [...AppState.chats];
-    const existingIndex = chats.findIndex((c) => c.id === chat.id);
+  const chats = [...AppState.chats];
+  const existingIndex = chats.findIndex((c) => c.id === chat.id);
 
-    if (existingIndex >= 0) {
-      chats[existingIndex] = chat;
+  if (existingIndex >= 0) {
+    chats[existingIndex] = chat;
       console.log("[COLLAB-DEBUG] 📝 Updated existing chat in local state");
-    } else {
-      chats.push(chat);
+  } else {
+    chats.push(chat);
       console.log("[COLLAB-DEBUG] 📝 Added new chat to local state");
-    }
+  }
 
-    setState({ chats });
+  setState({ chats });
     debouncedSaveChats(); // Save to localStorage
 
     // Sync chat to collaboration (like messages do)
@@ -421,7 +421,7 @@ async function saveChat(chat) {
 
     // Notify sync system for retry
     console.log("[COLLAB-DEBUG] 📡 Dispatching data change event for retry...");
-    dispatchDataChange("chat", chat);
+  dispatchDataChange("chat", chat);
     
     return { success: false, error: error.message, savedLocally: true };
   }
@@ -676,9 +676,9 @@ async function saveMessage(chatId, message) {
     console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE SAVE ===");
     console.log("[COLLAB-DEBUG] 📊 Current AppState.messagesByChat keys:", Object.keys(AppState.messagesByChat || {}));
     
-    const messagesByChat = { ...AppState.messagesByChat };
-    if (!messagesByChat[chatId]) {
-      messagesByChat[chatId] = [];
+  const messagesByChat = { ...AppState.messagesByChat };
+  if (!messagesByChat[chatId]) {
+    messagesByChat[chatId] = [];
       console.log("[COLLAB-DEBUG] 📝 Created new chat array for chatId:", chatId);
     }
 
@@ -689,12 +689,12 @@ async function saveMessage(chatId, message) {
     if (existingMessage) {
       console.log("[COLLAB-DEBUG] ⚠️ Message already exists, skipping save:", message.message_id);
       return { success: true, chatId, message, skipped: true };
-    }
-    
-    messagesByChat[chatId].push(message);
+  }
+
+  messagesByChat[chatId].push(message);
     console.log("[COLLAB-DEBUG] 📊 Messages in chat after save:", messagesByChat[chatId].length);
     
-    setState({ messagesByChat });
+  setState({ messagesByChat });
     debouncedSaveMessages(); // Save to localStorage
 
     console.log("[COLLAB-DEBUG] ✅ Message saved successfully (DB + Local)");
@@ -776,7 +776,7 @@ async function saveMessage(chatId, message) {
 
     // Notify sync system for retry
     console.log("[COLLAB-DEBUG] 📡 Dispatching data change event for retry...");
-    dispatchDataChange("message", { chatId, message });
+  dispatchDataChange("message", { chatId, message });
     
     return { success: false, error: error.message, savedLocally: true };
   }
@@ -852,9 +852,16 @@ async function saveArtifact(artifact) {
     if (window.syncManager?.uploadArtifact) {
       console.log("[COLLAB-DATA] 📤 Uploading artifact to database...");
       try {
-        await window.syncManager.uploadArtifact(artifact);
-        console.log("[COLLAB-DATA] ✅ Artifact uploaded to database successfully");
+        const uploadResult = await window.syncManager.uploadArtifact(artifact);
+        if (uploadResult && uploadResult.success) {
+          artifact.isSaved = true;
+          console.log("[COLLAB-DATA] ✅ Artifact uploaded to database successfully, isSaved set to true");
+        } else {
+          artifact.isSaved = false;
+          console.warn("[COLLAB-DATA] ⚠️ Database upload failed, isSaved remains false");
+        }
       } catch (error) {
+        artifact.isSaved = false;
         console.error("[COLLAB-DATA] ❌ Database upload error:", error);
         
         // Check if the error is due to chat_id not found
@@ -873,26 +880,27 @@ async function saveArtifact(artifact) {
       }
     } else {
       console.warn("[COLLAB-DATA] ⚠️ No sync manager available - skipping database save");
+      artifact.isSaved = false;
     }
 
     // Step 2: Save to local state
     console.log("[COLLAB-DATA] 💾 Saving artifact to local state...");
-    const artifacts = [...AppState.artifacts];
-    const existingIndex = artifacts.findIndex((a) => a.id === artifact.id);
+  const artifacts = [...AppState.artifacts];
+  const existingIndex = artifacts.findIndex((a) => a.id === artifact.id);
 
-    if (existingIndex >= 0) {
-      artifacts[existingIndex] = artifact;
+  if (existingIndex >= 0) {
+    artifacts[existingIndex] = artifact;
       console.log("[COLLAB-DATA] 📝 Updated existing artifact in local state");
-    } else {
-      artifacts.push(artifact);
+  } else {
+    artifacts.push(artifact);
       console.log("[COLLAB-DATA] 📝 Added new artifact to local state");
-    }
+  }
 
-    setState({ artifacts });
+  setState({ artifacts });
     debouncedSaveArtifacts(); // Save to localStorage
 
-    // Also save to IndexedDB asynchronously
-    saveArtifactsToIndexedDB().catch((error) => {
+  // Also save to IndexedDB asynchronously
+  saveArtifactsToIndexedDB().catch((error) => {
       console.warn("[COLLAB-DATA] ⚠️ IndexedDB artifact save failed:", error);
     });
 
@@ -958,7 +966,7 @@ async function saveArtifact(artifact) {
     }, 5000);
 
     // Notify sync system for retry
-    dispatchDataChange("artifact", artifact);
+  dispatchDataChange("artifact", artifact);
     
     return { success: false, error: error.message, savedLocally: true };
   }
