@@ -27,7 +27,7 @@ const collaboration = {
   // Initialize collaboration
   async init() {
     console.log("[COLLAB-DATA] 🚀 Initializing collaboration system...");
-    
+
     // Wait for Yjs to be loaded
     await this.waitForYjs();
 
@@ -39,7 +39,7 @@ const collaboration = {
 
     // Check for existing collaboration session or auto-join
     await this.checkForExistingSession();
-    
+
     console.log("[COLLAB-DATA] ✅ Collaboration system initialized");
   },
 
@@ -73,8 +73,8 @@ const collaboration = {
   extractPermissionsFromUrl() {
     // First check search parameters (main URL)
     const urlParams = new URLSearchParams(window.location.search);
-    let permissions = urlParams.get('perms');
-    
+    let permissions = urlParams.get("perms");
+
     // If not found in search, check hash fragment
     if (!permissions) {
       const hash = window.location.hash;
@@ -83,12 +83,12 @@ const collaboration = {
         permissions = hashMatch[1];
       }
     }
-    
-    return permissions || 'view';
+
+    return permissions || "view";
   },
 
   // Create a shareable collaboration link
-  async createCollaborationLink(permissions = 'view') {
+  async createCollaborationLink(permissions = "view") {
     try {
       // Generate collaboration ID
       const collaborationId = this.generateCollaborationId();
@@ -154,7 +154,7 @@ const collaboration = {
 
     // Force clear any old permission data to ensure fresh start
     console.log("[COLLAB] 🔄 Ensuring fresh permission state for collaborator");
-    
+
     return await this.joinSession(collaborationId, permissions);
   },
 
@@ -190,8 +190,12 @@ const collaboration = {
         const result = await this.createSession(storedCollabId);
       } else {
         // Collaborator: rejoin
-        const storedPermissions = localStorage.getItem("collaborationPermissions") || 'view';
-        const result = await this.joinSession(storedCollabId, storedPermissions);
+        const storedPermissions =
+          localStorage.getItem("collaborationPermissions") || "view";
+        const result = await this.joinSession(
+          storedCollabId,
+          storedPermissions
+        );
         if (result.success) {
           // Request current data after successful rejoin
           setTimeout(() => {
@@ -206,10 +210,10 @@ const collaboration = {
   },
 
   // Create a collaboration session
-  async createSession(roomName = null, permissions = 'view') {
+  async createSession(roomName = null, permissions = "view") {
     try {
       console.log("[COLLAB-DATA] 🚀 Creating collaboration session...");
-      
+
       // Generate room name if not provided
       if (!roomName) {
         roomName = "room-" + Math.random().toString(36).substr(2, 9);
@@ -260,10 +264,16 @@ const collaboration = {
 
       // Create collaboration session in database
       console.log("[COLLAB-DATA] 📝 Creating database record...");
-      const dbResult = await this.createCollaborationInDatabase(roomName, permissions);
-      
+      const dbResult = await this.createCollaborationInDatabase(
+        roomName,
+        permissions
+      );
+
       if (!dbResult.success) {
-        console.error("[COLLAB-DATA] ❌ Failed to create database record:", dbResult.error);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to create database record:",
+          dbResult.error
+        );
         // Continue with local session even if database fails
       } else {
         console.log("[COLLAB-DATA] ✅ Database record created successfully");
@@ -275,28 +285,36 @@ const collaboration = {
       this.collaborationId = roomName;
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
-              localStorage.setItem("collaborationPermissions", permissions);
-        localStorage.setItem("collaborationLeader", "true");
-        
-        // Store leader's userId in localStorage for immediate access
-        const currentUserId = localStorage.getItem("userId") || window.userId;
-        if (currentUserId) {
-          localStorage.setItem("collaborationLeaderId", currentUserId);
-          console.log("[COLLAB-DATA] 📋 Leader userId stored in localStorage:", currentUserId);
-        }
-        
-        // Store leader's userId in shared sync map for collaborators to access
-        // This will be done after Yjs is set up in setupEventListeners
- 
-        console.log("[COLLAB-DATA] ✅ Collaboration session created successfully");
-        console.log("[COLLAB-DATA] 📋 Database Collaboration ID:", this.databaseCollaborationId);
+      localStorage.setItem("collaborationPermissions", permissions);
+      localStorage.setItem("collaborationLeader", "true");
+
+      // Store leader's userId in localStorage for immediate access
+      const currentUserId = localStorage.getItem("userId") || window.userId;
+      if (currentUserId) {
+        localStorage.setItem("collaborationLeaderId", currentUserId);
+        console.log(
+          "[COLLAB-DATA] 📋 Leader userId stored in localStorage:",
+          currentUserId
+        );
+      }
+
+      // Store leader's userId in shared sync map for collaborators to access
+      // This will be done after Yjs is set up in setupEventListeners
+
+      console.log(
+        "[COLLAB-DATA] ✅ Collaboration session created successfully"
+      );
+      console.log(
+        "[COLLAB-DATA] 📋 Database Collaboration ID:",
+        this.databaseCollaborationId
+      );
       console.log("[COLLAB-DATA] 📋 Participant ID:", this.participantId);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         roomName,
         databaseCollaborationId: this.databaseCollaborationId,
-        participantId: this.participantId
+        participantId: this.participantId,
       };
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Error creating session:", error);
@@ -337,42 +355,57 @@ const collaboration = {
 
       console.log("[COLLAB-DATA] ✅ WebRTC provider created successfully");
 
-              // Set up event listeners
-        this.setupEventListeners();
+      // Set up event listeners
+      this.setupEventListeners();
 
-        // Wait for Yjs to be ready and retrieve leader's userId from shared map
-        await this.waitForYjs();
-        
-        // Retry mechanism to get leaderId from shared map
-        let retryCount = 0;
-        const maxRetries = 10;
-        
-        while (retryCount < maxRetries && !this.leaderId) {
-          const sharedSyncMap = this.getSharedSyncMap();
-          if (sharedSyncMap) {
-            this.leaderId = sharedSyncMap.get('leaderId');
-            if (this.leaderId) {
-              console.log("[COLLAB-DATA] 📋 Retrieved leaderId from shared map:", this.leaderId);
-              localStorage.setItem("collaborationLeaderId", this.leaderId);
-              break;
-            }
+      // Wait for Yjs to be ready and retrieve leader's userId from shared map
+      await this.waitForYjs();
+
+      // Retry mechanism to get leaderId from shared map
+      let retryCount = 0;
+      const maxRetries = 10;
+
+      while (retryCount < maxRetries && !this.leaderId) {
+        const sharedSyncMap = this.getSharedSyncMap();
+        if (sharedSyncMap) {
+          this.leaderId = sharedSyncMap.get("leaderId");
+          if (this.leaderId) {
+            console.log(
+              "[COLLAB-DATA] 📋 Retrieved leaderId from shared map:",
+              this.leaderId
+            );
+            localStorage.setItem("collaborationLeaderId", this.leaderId);
+            break;
           }
-          
-          console.log(`[COLLAB-DATA] 🔄 Attempt ${retryCount + 1}/${maxRetries} to get leaderId...`);
-          await new Promise(resolve => setTimeout(resolve, 500));
-          retryCount++;
         }
-        
-        if (!this.leaderId) {
-          console.warn("[COLLAB-DATA] ⚠️ Could not retrieve leaderId from shared map after retries");
-        }
- 
-        // Join collaboration session in database
+
+        console.log(
+          `[COLLAB-DATA] 🔄 Attempt ${
+            retryCount + 1
+          }/${maxRetries} to get leaderId...`
+        );
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        retryCount++;
+      }
+
+      if (!this.leaderId) {
+        console.warn(
+          "[COLLAB-DATA] ⚠️ Could not retrieve leaderId from shared map after retries"
+        );
+      }
+
+      // Join collaboration session in database
       console.log("[COLLAB-DATA] 📝 Joining database record...");
-      const dbResult = await this.joinCollaborationInDatabase(roomName, permissions);
-      
+      const dbResult = await this.joinCollaborationInDatabase(
+        roomName,
+        permissions
+      );
+
       if (!dbResult.success) {
-        console.error("[COLLAB-DATA] ❌ Failed to join database record:", dbResult.error);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to join database record:",
+          dbResult.error
+        );
         // Continue with local session even if database fails
       } else {
         console.log("[COLLAB-DATA] ✅ Database record joined successfully");
@@ -385,7 +418,7 @@ const collaboration = {
       localStorage.setItem("collaborationActive", "true");
       localStorage.setItem("collaborationId", roomName);
       localStorage.setItem("collaborationLeader", "false");
-      
+
       // Store permissions if provided
       if (permissions) {
         localStorage.setItem("collaborationPermissions", permissions);
@@ -393,14 +426,17 @@ const collaboration = {
       }
 
       console.log("[COLLAB-DATA] ✅ Joined session successfully");
-      console.log("[COLLAB-DATA] 📋 Database Collaboration ID:", this.databaseCollaborationId);
+      console.log(
+        "[COLLAB-DATA] 📋 Database Collaboration ID:",
+        this.databaseCollaborationId
+      );
       console.log("[COLLAB-DATA] 📋 Participant ID:", this.participantId);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         roomName,
         databaseCollaborationId: this.databaseCollaborationId,
-        participantId: this.participantId
+        participantId: this.participantId,
       };
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Error joining session:", error);
@@ -475,16 +511,21 @@ const collaboration = {
           // Don't sync userPreferences - collaborators keep their own
           // Don't sync activeChatId - collaborators keep their own
           syncMap.set("initializedByLeader", true);
-          
+
           // Store leader's userId in shared sync map for collaborators to access
           const currentUserId = localStorage.getItem("userId") || window.userId;
           if (currentUserId) {
-            syncMap.set('leaderId', currentUserId);
-            console.log("[COLLAB-DATA] 📋 Leader userId pushed to shared map:", currentUserId);
+            syncMap.set("leaderId", currentUserId);
+            console.log(
+              "[COLLAB-DATA] 📋 Leader userId pushed to shared map:",
+              currentUserId
+            );
           } else {
-            console.log("[COLLAB-DATA] ⚠️ No userId available to push to shared map");
+            console.log(
+              "[COLLAB-DATA] ⚠️ No userId available to push to shared map"
+            );
           }
-          
+
           syncMap.set("lastUpdated", Date.now().toString());
 
           // Also push current messages to sharedMessages array
@@ -910,7 +951,7 @@ const collaboration = {
     localStorage.removeItem("collaborationPermissions");
     localStorage.removeItem("COLLABORATION_ACTIVE");
     localStorage.removeItem("COLLABORATION_DATA_TIMESTAMP");
-    
+
     console.log("[COLLAB] ✅ All collaboration data cleared from localStorage");
   },
 
@@ -1059,11 +1100,14 @@ const collaboration = {
           syncMap.get("userPreferences") || "{}"
         );
         const activeChatId = syncMap.get("activeChatId") || null;
-        
+
         // Retrieve leader's userId from shared sync map
         const leaderId = syncMap.get("leaderId");
         if (leaderId) {
-          console.log("[COLLAB-DATA] 📋 Retrieved leaderId from shared map:", leaderId);
+          console.log(
+            "[COLLAB-DATA] 📋 Retrieved leaderId from shared map:",
+            leaderId
+          );
           this.leaderId = leaderId;
           localStorage.setItem("collaborationLeaderId", leaderId);
         } else {
@@ -1075,12 +1119,15 @@ const collaboration = {
         localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
         localStorage.setItem("artifacts", JSON.stringify(artifacts));
         // Don't sync userPreferences - collaborators keep their own
-        
+
         // Set default activeChatId for collaborator if not already set (use first available chat)
         const currentActiveChatId = localStorage.getItem("activeChatId");
         if (!currentActiveChatId && chats.length > 0) {
           const defaultChatId = chats[0].id;
-          console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator:", defaultChatId);
+          console.log(
+            "[COLLAB] 🔧 Setting default activeChatId for collaborator:",
+            defaultChatId
+          );
           localStorage.setItem("activeChatId", defaultChatId);
           if (window.context?.setActiveChat) {
             window.context.setActiveChat(defaultChatId);
@@ -1101,23 +1148,41 @@ const collaboration = {
         } catch (error) {
           console.warn("[COLLAB] ⚠️ Error parsing stored view:", error);
         }
-        
+
         if (!currentView && !storedView) {
-          console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)");
-          window.context.setActiveView("artifacts", {}, { withTransition: false });
+          console.log(
+            "[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)"
+          );
+          window.context.setActiveView(
+            "artifacts",
+            {},
+            { withTransition: false }
+          );
         } else if (storedView && !currentView) {
-          console.log("[COLLAB] 🔧 Restoring stored view for collaborator:", storedView.type);
-          window.context.setActiveView(storedView.type, storedView.data || {}, { withTransition: false });
+          console.log(
+            "[COLLAB] 🔧 Restoring stored view for collaborator:",
+            storedView.type
+          );
+          window.context.setActiveView(storedView.type, storedView.data || {}, {
+            withTransition: false,
+          });
         }
 
         // Initialize default userPreferences for collaborator if not set
-        const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+        const currentPreferences = JSON.parse(
+          localStorage.getItem("userPreferences") || "{}"
+        );
         if (!currentPreferences.name) {
-          console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+          console.log(
+            "[COLLAB] 🔧 Initializing default userPreferences for collaborator"
+          );
           const defaultPreferences = {
-            name: "collaborator"
+            name: "collaborator",
           };
-          localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+          localStorage.setItem(
+            "userPreferences",
+            JSON.stringify(defaultPreferences)
+          );
           if (window.context?.setUserPreferences) {
             window.context.setUserPreferences(defaultPreferences);
           }
@@ -1165,7 +1230,10 @@ const collaboration = {
       const currentMessages = this.sharedMessages.toArray();
       if (currentMessages.length === 0) return;
 
-      console.log("[COLLAB] 🔄 Syncing messages from shared array:", currentMessages.length);
+      console.log(
+        "[COLLAB] 🔄 Syncing messages from shared array:",
+        currentMessages.length
+      );
 
       // Use the memory system to add messages properly
       if (window.memory && window.memory.saveMessage) {
@@ -1174,22 +1242,31 @@ const collaboration = {
           if (!chatId) return;
 
           // Check if message already exists to avoid duplicates
-          const existingMessages = window.context?.getMessagesByChat()[chatId] || [];
+          const existingMessages =
+            window.context?.getMessagesByChat()[chatId] || [];
           const exists = existingMessages.some(
             (m) => m.message_id === msg.message_id
           );
-          
+
           if (!exists) {
-            console.log("[COLLAB] 💾 Adding message via memory system:", msg.message_id);
+            console.log(
+              "[COLLAB] 💾 Adding message via memory system:",
+              msg.message_id
+            );
             window.memory.saveMessage(chatId, msg);
           } else {
-            console.log("[COLLAB] ⚠️ Message already exists, skipping:", msg.message_id);
+            console.log(
+              "[COLLAB] ⚠️ Message already exists, skipping:",
+              msg.message_id
+            );
           }
         });
       } else {
         // Fallback to direct localStorage manipulation only if memory system is not available
-        console.warn("[COLLAB] ⚠️ Memory system not available, using direct localStorage");
-        
+        console.warn(
+          "[COLLAB] ⚠️ Memory system not available, using direct localStorage"
+        );
+
         let messagesByChat = {};
         currentMessages.forEach((msg) => {
           const chatId = msg.chatId;
@@ -1228,9 +1305,12 @@ const collaboration = {
           }
         });
 
-        localStorage.setItem("messagesByChat", JSON.stringify(existingMessages));
+        localStorage.setItem(
+          "messagesByChat",
+          JSON.stringify(existingMessages)
+        );
       }
-      
+
       console.log("[COLLAB] 🔄 Messages synced");
     } catch (e) {
       console.warn("[COLLAB] ⚠️ Error syncing messages from shared array:", e);
@@ -1276,7 +1356,8 @@ const collaboration = {
               message_id: msg.message_id,
               timestamp: msg.timestamp,
               chatId: msg.chatId || chatId,
-              userId: msg.userId || this.userId || localStorage.getItem("userId"),
+              userId:
+                msg.userId || this.userId || localStorage.getItem("userId"),
               isSaved: msg.isSaved || false,
             };
             this.sharedMessages.push([messageToSync]);
@@ -1437,7 +1518,6 @@ const collaboration = {
 
     // On local message add (example: call this when sending a message)
     this.pushMessageToCollab = (msgObj) => {
-      
       // Determine correct chatId based on role
       let chatId;
       if (this.isLeader) {
@@ -1456,7 +1536,7 @@ const collaboration = {
           window.context?.getActiveChatId() ||
           localStorage.getItem("activeChatId");
 
-
+        console.log(`[test12] 🎯 Collab using shared chatId: ${chatId}`);
       }
 
       // Create a clean message structure with only essential fields
@@ -1476,23 +1556,25 @@ const collaboration = {
         content: msgObj.content?.substring(0, 50) + "...",
         message_id: msgObj.message_id,
         isSaved: msgObj.isSaved,
-        userId: msgObj.userId
+        userId: msgObj.userId,
       });
       console.log("[COLLAB-DEBUG] 📋 Message to sync:", {
         role: messageToSync.role,
         content: messageToSync.content?.substring(0, 50) + "...",
         message_id: messageToSync.message_id,
         isSaved: messageToSync.isSaved,
-        userId: messageToSync.userId
+        userId: messageToSync.userId,
       });
 
       // If this is a collaborator, modify the role and use leader's userId
       if (!this.isLeader) {
         messageToSync.role = "collab";
-        messageToSync.userId = localStorage.getItem("collaborationLeaderId") || "unknown";
+        messageToSync.userId =
+          localStorage.getItem("collaborationLeaderId") || "unknown";
       } else {
         // For leader, ensure userId is set
-        messageToSync.userId = messageToSync.userId || this.userId || localStorage.getItem("userId");
+        messageToSync.userId =
+          messageToSync.userId || this.userId || localStorage.getItem("userId");
       }
 
       console.log(
@@ -1528,7 +1610,7 @@ const collaboration = {
     this.pushChatToCollab = (chatObj) => {
       console.log("[COLLAB-DEBUG] 📤 === PUSH CHAT TO COLLAB START ===");
       console.log("[COLLAB-DEBUG] 📋 Chat object:", chatObj);
-      
+
       const chatToSync = {
         id: chatObj.id,
         title: chatObj.title,
@@ -1545,7 +1627,7 @@ const collaboration = {
         isReconnecting: this.isReconnecting,
         providerConnected: this.provider?.connected || false,
         peers: this.peers.size,
-        hasSharedChats: !!this.sharedChats
+        hasSharedChats: !!this.sharedChats,
       });
 
       console.log(
@@ -1560,20 +1642,33 @@ const collaboration = {
 
       // Always try to push to shared array first, queue as fallback
       try {
-        console.log("[COLLAB-DEBUG] 📤 Attempting to push to sharedChats array...");
-        console.log("[COLLAB-DEBUG] 📊 Shared chats length before:", this.sharedChats.length);
+        console.log(
+          "[COLLAB-DEBUG] 📤 Attempting to push to sharedChats array..."
+        );
+        console.log(
+          "[COLLAB-DEBUG] 📊 Shared chats length before:",
+          this.sharedChats.length
+        );
         this.sharedChats.push([chatToSync]);
-        console.log("[COLLAB-DEBUG] 📊 Shared chats length after:", this.sharedChats.length);
+        console.log(
+          "[COLLAB-DEBUG] 📊 Shared chats length after:",
+          this.sharedChats.length
+        );
         console.log("[COLLAB] ✅ Chat synced to peers");
         console.log("[COLLAB-DEBUG] ✅ === PUSH CHAT TO COLLAB SUCCESS ===");
       } catch (error) {
         console.warn("[COLLAB] ⚠️ Chat send failed, queueing:", error);
-        console.error("[COLLAB-DEBUG] ❌ === PUSH CHAT TO COLLAB ERROR ===", error);
+        console.error(
+          "[COLLAB-DEBUG] ❌ === PUSH CHAT TO COLLAB ERROR ===",
+          error
+        );
         this.chatQueue.push(chatToSync);
-        
+
         // Try to process queue immediately if provider is actually connected
         if (this.provider?.connected && this.chatQueue.length > 0) {
-          console.log("[COLLAB-DEBUG] 🔄 Provider is connected, attempting to process queue...");
+          console.log(
+            "[COLLAB-DEBUG] 🔄 Provider is connected, attempting to process queue..."
+          );
           setTimeout(() => {
             this.processMessageQueue();
           }, 100);
@@ -1639,101 +1734,6 @@ const collaboration = {
           // Single message
           newMessages = [item.content];
         }
-
-        newMessages.forEach((newMsg, msgIndex) => {
-          
-          // Skip processing our own messages (prevent self-echo)
-          if (newMsg.role === "collab" && !this.isLeader) {
-            // This is a collaborator message and we are the collaborator - skip
-            console.log("[COLLAB-DEBUG] ⏭️ Skipping own collaborator message");
-            return;
-          }
-          if (newMsg.role !== "collab" && this.isLeader) {
-            // This is a leader message and we are the leader - skip
-            console.log("[COLLAB-DEBUG] ⏭️ Skipping own leader message");
-            return;
-          }
-
-          // Get current messagesByChat state
-          let messagesByChat = {};
-          try {
-            messagesByChat = JSON.parse(
-              localStorage.getItem("messagesByChat") || "{}"
-            );
-          } catch (e) {
-            console.warn("[COLLAB] ⚠️ Error parsing messagesByChat:", e);
-            messagesByChat = {};
-          }
-
-          const chatId = newMsg.chatId;
-          if (!chatId) {
-            console.warn("[COLLAB] ⚠️ Message missing chatId:", newMsg);
-            return;
-          }
-
-          // Ensure chatId array exists
-          if (!messagesByChat[chatId]) {
-            messagesByChat[chatId] = [];
-          }
-
-          // Check for duplicates using message_id
-          const exists = messagesByChat[chatId].some(
-            (m) => m.message_id === newMsg.message_id
-          );
-
-          if (!exists) {
-            // Preserve the original isSaved status from the message
-            // Don't modify isSaved - let it be exactly as it was sent
-            
-            console.log(
-              `[COLLAB] 📨 ${this.isLeader ? "Leader" : "Collab"} ← "${
-                newMsg.content
-              }"`
-            );
-
-            // Clear last sent message (sync is working)
-            if (this.lastSentMessage) {
-              this.lastSentMessage = null;
-            }
-
-            // Use the memory system to add the message properly
-            // This prevents duplication by using the centralized message management
-            if (window.memory && window.memory.saveMessage) {
-              console.log("[COLLAB] 💾 Using memory system to add received message");
-              window.memory.saveMessage(chatId, newMsg);
-            } else {
-              // Fallback to direct localStorage manipulation only if memory system is not available
-              console.warn("[COLLAB] ⚠️ Memory system not available, using direct localStorage");
-              messagesByChat[chatId].push(newMsg);
-              localStorage.setItem(
-                "messagesByChat",
-                JSON.stringify(messagesByChat)
-              );
-            }
-
-            // Update UI/state with proper timing
-            setTimeout(() => {
-              if (window.views && window.views.renderCurrentView) {
-                window.views.renderCurrentView(false);
-              }
-              if (window.memoryView && window.memoryView.refreshView) {
-                window.memoryView.refreshView();
-              }
-              if (window.memory && window.memory.events) {
-                window.memory.events.dispatchEvent(
-                  new CustomEvent("memoryUpdated", {
-                    detail: { source: "collaboration", chatId: chatId },
-                  })
-                );
-              }
-              document.dispatchEvent(
-                new CustomEvent("collaborationDataUpdate", {
-                  detail: { type: "messageReceived", chatId: chatId },
-                })
-              );
-            }, 100);
-          }
-        });
       });
     });
 
@@ -1741,11 +1741,18 @@ const collaboration = {
     this.sharedChats.observe((event) => {
       console.log("[COLLAB-DEBUG] 📨 === SHARED CHATS OBSERVER TRIGGERED ===");
       console.log("[COLLAB-DEBUG] 📋 Event changes:", event.changes);
-      console.log("[COLLAB-DEBUG] 📋 Added items count:", event.changes.added.length);
-      
+      console.log(
+        "[COLLAB-DEBUG] 📋 Added items count:",
+        event.changes.added.length
+      );
+
       event.changes.added.forEach((item, itemIndex) => {
-        console.log("[COLLAB-DEBUG] 📋 Processing added item:", itemIndex, item);
-        
+        console.log(
+          "[COLLAB-DEBUG] 📋 Processing added item:",
+          itemIndex,
+          item
+        );
+
         // Extract actual chat from Yjs ContentAny wrapper
         let newChats = [];
         if (
@@ -1754,23 +1761,35 @@ const collaboration = {
           Array.isArray(item.content.arr)
         ) {
           newChats = item.content.arr;
-          console.log("[COLLAB-DEBUG] 📋 Extracted from content.arr:", newChats);
+          console.log(
+            "[COLLAB-DEBUG] 📋 Extracted from content.arr:",
+            newChats
+          );
         } else if (Array.isArray(item.content)) {
           newChats = item.content;
-          console.log("[COLLAB-DEBUG] 📋 Extracted from content array:", newChats);
+          console.log(
+            "[COLLAB-DEBUG] 📋 Extracted from content array:",
+            newChats
+          );
         } else {
           newChats = [item.content];
-          console.log("[COLLAB-DEBUG] 📋 Extracted from single content:", newChats);
+          console.log(
+            "[COLLAB-DEBUG] 📋 Extracted from single content:",
+            newChats
+          );
         }
 
         newChats.forEach((newChat) => {
           console.log("[COLLAB-DEBUG] 📋 Processing new chat:", newChat);
-          
+
           // Get current chats state
           let chats = [];
           try {
             chats = JSON.parse(localStorage.getItem("chats") || "[]");
-            console.log("[COLLAB-DEBUG] 📊 Current chats from localStorage:", chats.length);
+            console.log(
+              "[COLLAB-DEBUG] 📊 Current chats from localStorage:",
+              chats.length
+            );
           } catch (e) {
             console.warn("[COLLAB] ⚠️ Error parsing chats:", e);
             chats = [];
@@ -1783,7 +1802,10 @@ const collaboration = {
           if (!exists) {
             // Add chat to the array
             chats.push(newChat);
-            console.log("[COLLAB-DEBUG] 📝 Added chat to array, new count:", chats.length);
+            console.log(
+              "[COLLAB-DEBUG] 📝 Added chat to array, new count:",
+              chats.length
+            );
 
             // Save to localStorage
             localStorage.setItem("chats", JSON.stringify(chats));
@@ -1804,7 +1826,9 @@ const collaboration = {
 
             // Update UI/state with proper timing
             setTimeout(() => {
-              console.log("[COLLAB-DEBUG] 🔄 Updating UI after chat received...");
+              console.log(
+                "[COLLAB-DEBUG] 🔄 Updating UI after chat received..."
+              );
               if (window.memory && window.memory.loadAll) {
                 window.memory.loadAll();
                 console.log("[COLLAB-DEBUG] ✅ Memory loaded");
@@ -1822,10 +1846,15 @@ const collaboration = {
                   detail: { type: "chatReceived", chatId: newChat.id },
                 })
               );
-              console.log("[COLLAB-DEBUG] ✅ Collaboration data update event dispatched");
+              console.log(
+                "[COLLAB-DEBUG] ✅ Collaboration data update event dispatched"
+              );
             }, 100);
           } else {
-            console.log("[COLLAB-DEBUG] ⚠️ Skipping duplicate chat:", newChat.id);
+            console.log(
+              "[COLLAB-DEBUG] ⚠️ Skipping duplicate chat:",
+              newChat.id
+            );
           }
         });
       });
@@ -2025,18 +2054,21 @@ const collaboration = {
           );
           localStorage.setItem("artifacts", JSON.stringify(artifacts));
           // Don't sync userPreferences - collaborators keep their own
-          
+
           // Set default activeChatId for collaborator if not already set (use first available chat)
           const currentActiveChatId = localStorage.getItem("activeChatId");
           if (!currentActiveChatId && chats.length > 0) {
             const defaultChatId = chats[0].id;
-            console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator from bidirectional sync:", defaultChatId);
+            console.log(
+              "[COLLAB] 🔧 Setting default activeChatId for collaborator from bidirectional sync:",
+              defaultChatId
+            );
             localStorage.setItem("activeChatId", defaultChatId);
             if (window.context?.setActiveChat) {
               window.context.setActiveChat(defaultChatId);
             }
           }
-          
+
           hasAppliedInitialSync = true;
           // Initialize default activeView for collaborator if not set (only on initial load)
           const currentView = window.context?.getActiveView();
@@ -2049,23 +2081,43 @@ const collaboration = {
           } catch (error) {
             console.warn("[COLLAB] ⚠️ Error parsing stored view:", error);
           }
-          
+
           if (!currentView && !storedView) {
-            console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)");
-            window.context.setActiveView("artifacts", {}, { withTransition: false });
+            console.log(
+              "[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)"
+            );
+            window.context.setActiveView(
+              "artifacts",
+              {},
+              { withTransition: false }
+            );
           } else if (storedView && !currentView) {
-            console.log("[COLLAB] 🔧 Restoring stored view for collaborator:", storedView.type);
-            window.context.setActiveView(storedView.type, storedView.data || {}, { withTransition: false });
+            console.log(
+              "[COLLAB] 🔧 Restoring stored view for collaborator:",
+              storedView.type
+            );
+            window.context.setActiveView(
+              storedView.type,
+              storedView.data || {},
+              { withTransition: false }
+            );
           }
 
           // Initialize default userPreferences for collaborator if not set
-          const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+          const currentPreferences = JSON.parse(
+            localStorage.getItem("userPreferences") || "{}"
+          );
           if (!currentPreferences.name) {
-            console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+            console.log(
+              "[COLLAB] 🔧 Initializing default userPreferences for collaborator"
+            );
             const defaultPreferences = {
-              name: "collaborator"
+              name: "collaborator",
             };
-            localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+            localStorage.setItem(
+              "userPreferences",
+              JSON.stringify(defaultPreferences)
+            );
             if (window.context?.setUserPreferences) {
               window.context.setUserPreferences(defaultPreferences);
             }
@@ -2130,11 +2182,12 @@ const collaboration = {
       syncMap.set("artifacts", JSON.stringify(artifacts));
       // Don't sync userPreferences - collaborators keep their own
       // Don't sync activeChatId - collaborators keep their own
-      
+
       // Set collaboration permissions in sync map
-      const permissions = localStorage.getItem("collaborationPermissions") || 'view';
+      const permissions =
+        localStorage.getItem("collaborationPermissions") || "view";
       syncMap.set("collaborationPermissions", permissions);
-      
+
       syncMap.set("initializedByLeader", true);
     } else if (syncMap.size === 0 && !this.isLeader) {
       // Collaborator waits for leader's data
@@ -2592,7 +2645,10 @@ const collaboration = {
       const currentActiveChatId = localStorage.getItem("activeChatId");
       if (!currentActiveChatId && data.chats && data.chats.length > 0) {
         const defaultChatId = data.chats[0].id;
-        console.log("[COLLAB] 🔧 Setting default activeChatId for collaborator from database data:", defaultChatId);
+        console.log(
+          "[COLLAB] 🔧 Setting default activeChatId for collaborator from database data:",
+          defaultChatId
+        );
         localStorage.setItem("activeChatId", defaultChatId);
         if (window.context?.setActiveChat) {
           window.context.setActiveChat(defaultChatId);
@@ -2638,23 +2694,41 @@ const collaboration = {
       } catch (error) {
         console.warn("[COLLAB] ⚠️ Error parsing stored view:", error);
       }
-      
+
       if (!currentView && !storedView) {
-        console.log("[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)");
-        window.context.setActiveView("artifacts", {}, { withTransition: false });
+        console.log(
+          "[COLLAB] 🔧 Initializing default artifacts view for collaborator (initial load)"
+        );
+        window.context.setActiveView(
+          "artifacts",
+          {},
+          { withTransition: false }
+        );
       } else if (storedView && !currentView) {
-        console.log("[COLLAB] 🔧 Restoring stored view for collaborator:", storedView.type);
-        window.context.setActiveView(storedView.type, storedView.data || {}, { withTransition: false });
+        console.log(
+          "[COLLAB] 🔧 Restoring stored view for collaborator:",
+          storedView.type
+        );
+        window.context.setActiveView(storedView.type, storedView.data || {}, {
+          withTransition: false,
+        });
       }
 
       // Initialize default userPreferences for collaborator if not set
-      const currentPreferences = JSON.parse(localStorage.getItem("userPreferences") || "{}");
+      const currentPreferences = JSON.parse(
+        localStorage.getItem("userPreferences") || "{}"
+      );
       if (!currentPreferences.name) {
-        console.log("[COLLAB] 🔧 Initializing default userPreferences for collaborator");
+        console.log(
+          "[COLLAB] 🔧 Initializing default userPreferences for collaborator"
+        );
         const defaultPreferences = {
-          name: "collaborator"
+          name: "collaborator",
         };
-        localStorage.setItem("userPreferences", JSON.stringify(defaultPreferences));
+        localStorage.setItem(
+          "userPreferences",
+          JSON.stringify(defaultPreferences)
+        );
         if (window.context?.setUserPreferences) {
           window.context.setUserPreferences(defaultPreferences);
         }
@@ -2712,7 +2786,7 @@ const collaboration = {
       });
       document.dispatchEvent(event);
 
-              // Trigger process for collaborator to enable AI responses after data is loaded
+      // Trigger process for collaborator to enable AI responses after data is loaded
       if (window.sessionManager?.triggerProcess) {
         window.sessionManager.triggerProcess("collaborator data loaded", 500);
       }
@@ -2723,7 +2797,10 @@ const collaboration = {
         if (syncMap) {
           const leaderPermissions = syncMap.get("collaborationPermissions");
           if (leaderPermissions) {
-            console.log("[COLLAB] 🔄 Updating permissions from leader:", leaderPermissions);
+            console.log(
+              "[COLLAB] 🔄 Updating permissions from leader:",
+              leaderPermissions
+            );
             localStorage.setItem("collaborationPermissions", leaderPermissions);
           }
         }
@@ -2736,9 +2813,15 @@ const collaboration = {
       console.log("- collaborationId:", this.collaborationId);
       console.log("- activeView:", window.context?.getActiveView());
       console.log("- activeChatId:", window.context?.getActiveChatId());
-      console.log("- artifacts count:", (window.context?.getArtifacts() || []).length);
+      console.log(
+        "- artifacts count:",
+        (window.context?.getArtifacts() || []).length
+      );
       console.log("- processModule available:", !!window.processModule);
-      console.log("- shouldTreatAsLoggedIn:", window.user?.shouldTreatAsLoggedIn?.());
+      console.log(
+        "- shouldTreatAsLoggedIn:",
+        window.user?.shouldTreatAsLoggedIn?.()
+      );
       console.log("- current permissions:", this.getCollaborationPermissions());
 
       console.log(
@@ -2895,13 +2978,13 @@ const collaboration = {
   PERMISSION_MAP: {
     view: { canView: true, canEdit: false, canCreate: false, canDelete: false },
     edit: { canView: true, canEdit: true, canCreate: false, canDelete: false },
-    full: { canView: true, canEdit: true, canCreate: true, canDelete: true }
+    full: { canView: true, canEdit: true, canCreate: true, canDelete: true },
   },
 
   // Get collaboration permissions (hybrid approach)
   getCollaborationPermissions() {
     console.log("[COLLAB] 🔍 Getting collaboration permissions...");
-    
+
     // First check sync map (leader's permissions)
     const syncMap = this.getSharedSyncMap();
     if (syncMap) {
@@ -2911,16 +2994,17 @@ const collaboration = {
         return syncPerms;
       }
     }
-    
+
     // Fallback to URL (for fresh joins)
     const urlPerms = this.extractPermissionsFromUrl();
-    if (urlPerms && urlPerms !== 'view') {
+    if (urlPerms && urlPerms !== "view") {
       console.log("[COLLAB] ✅ Found permissions in URL:", urlPerms);
       return urlPerms;
     }
-    
+
     // Final fallback to localStorage
-    const localPerms = localStorage.getItem("collaborationPermissions") || 'view';
+    const localPerms =
+      localStorage.getItem("collaborationPermissions") || "view";
     console.log("[COLLAB] ✅ Using permissions from localStorage:", localPerms);
     return localPerms;
   },
@@ -2928,20 +3012,21 @@ const collaboration = {
   // Check if collaborator can perform action
   canPerformAction(action) {
     const permissions = this.getCollaborationPermissions();
-    const permObj = this.PERMISSION_MAP[permissions] || this.PERMISSION_MAP.view;
-    
-    switch(action) {
-      case 'editArtifact':
+    const permObj =
+      this.PERMISSION_MAP[permissions] || this.PERMISSION_MAP.view;
+
+    switch (action) {
+      case "editArtifact":
         return permObj.canEdit;
-      case 'createArtifact':
+      case "createArtifact":
         return permObj.canCreate;
-      case 'deleteArtifact':
+      case "deleteArtifact":
         return permObj.canDelete;
-      case 'viewArtifact':
+      case "viewArtifact":
         return permObj.canView;
-      case 'sendMessage':
+      case "sendMessage":
         return true; // Everyone can send messages
-      case 'createChat':
+      case "createChat":
         return permObj.canCreate;
       default:
         return false;
@@ -3056,11 +3141,14 @@ const collaboration = {
             if (change.action === "add" || change.action === "update") {
               const value = syncMap.get(key);
               if (key === "collaborationPermissions" && value) {
-                console.log("[COLLAB] 📥 Permissions updated from leader:", value);
+                console.log(
+                  "[COLLAB] 📥 Permissions updated from leader:",
+                  value
+                );
                 // Update local storage with leader's permissions
                 localStorage.setItem("collaborationPermissions", value);
                 console.log("[COLLAB] ✅ Permissions synced to localStorage");
-                
+
                 // Trigger UI update to reflect new permissions
                 if (window.views?.renderCurrentView) {
                   window.views.renderCurrentView(false);
@@ -3103,11 +3191,11 @@ const collaboration = {
     const urlPerms = this.extractPermissionsFromUrl();
     console.log("URL perms parameter:", urlPerms);
     console.log("Full URL:", window.location.href);
-    
+
     console.log("--- localStorage Permissions ---");
     const localPerms = localStorage.getItem("collaborationPermissions");
     console.log("localStorage collaborationPermissions:", localPerms);
-    
+
     console.log("--- Sync Map Permissions ---");
     const syncMap = this.getSharedSyncMap();
     if (syncMap) {
@@ -3116,11 +3204,11 @@ const collaboration = {
     } else {
       console.log("No sync map available");
     }
-    
+
     console.log("--- Current Permissions ---");
     const currentPerms = this.getCollaborationPermissions();
     console.log("getCollaborationPermissions() result:", currentPerms);
-    
+
     console.log("--- Collaboration State ---");
     console.log("isLeader:", this.isLeader);
     console.log("isCollaborating:", this.isCollaborating);
@@ -3131,22 +3219,29 @@ const collaboration = {
 
   // Initialize Supabase client for collaboration
   initSupabaseClient() {
-    console.log("[COLLAB-DATA] 🔗 Initializing Supabase client for collaboration...");
-    
+    console.log(
+      "[COLLAB-DATA] 🔗 Initializing Supabase client for collaboration..."
+    );
+
     if (window.supabase && window.SUPABASE_CONFIG) {
       try {
         this.supabaseClient = window.supabase.createClient(
           window.SUPABASE_CONFIG.url,
           window.SUPABASE_CONFIG.key
         );
-        console.log("[COLLAB-DATA] ✅ Supabase client initialized successfully");
-        
+        console.log(
+          "[COLLAB-DATA] ✅ Supabase client initialized successfully"
+        );
+
         // Initialize sync manager with the Supabase client for collaborators
         this.initializeSyncManagerForCollaborator();
-        
+
         return true;
       } catch (error) {
-        console.error("[COLLAB-DATA] ❌ Failed to initialize Supabase client:", error);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to initialize Supabase client:",
+          error
+        );
         return false;
       }
     } else {
@@ -3157,8 +3252,10 @@ const collaboration = {
 
   // Initialize sync manager for collaborators
   initializeSyncManagerForCollaborator() {
-    console.log("[COLLAB-DATA] 🔄 Initializing sync manager for collaborator...");
-    
+    console.log(
+      "[COLLAB-DATA] 🔄 Initializing sync manager for collaborator..."
+    );
+
     if (!window.syncManager) {
       console.warn("[COLLAB-DATA] ⚠️ Sync manager not available");
       return;
@@ -3169,194 +3266,259 @@ const collaboration = {
       return;
     }
 
-          try {
-        // Create a mock session for the collaborator
-        // Use leader's userId for collaborators so data is properly attributed
-        const leaderId = localStorage.getItem("collaborationLeaderId");
-        const mockSession = {
-          access_token: `collab_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          user: {
-            id: leaderId // Use leader's userId for proper data attribution
-          }
-        };
+    try {
+      // Create a mock session for the collaborator
+      // Use leader's userId for collaborators so data is properly attributed
+      const leaderId = localStorage.getItem("collaborationLeaderId");
+      const mockSession = {
+        access_token: `collab_${Date.now()}_${Math.random()
+          .toString(36)
+          .substr(2, 9)}`,
+        user: {
+          id: leaderId, // Use leader's userId for proper data attribution
+        },
+      };
 
       console.log("[COLLAB-DATA] 📋 Mock session created for collaborator:", {
         participantId: this.participantId,
         accessToken: mockSession.access_token,
-        userId: mockSession.user.id
+        userId: mockSession.user.id,
       });
 
-      console.log("[COLLAB-DATA] 🔍 Sync manager state before initialization:", {
-        hasSupabase: !!window.syncManager.supabase,
-        isInitialized: window.syncManager.isInitialized,
-        userId: window.syncManager.userId
-      });
+      console.log(
+        "[COLLAB-DATA] 🔍 Sync manager state before initialization:",
+        {
+          hasSupabase: !!window.syncManager.supabase,
+          isInitialized: window.syncManager.isInitialized,
+          userId: window.syncManager.userId,
+        }
+      );
 
       // Initialize sync manager with the Supabase client and mock session
-      window.syncManager.initializeWithAuth(this.supabaseClient, mockSession)
+      window.syncManager
+        .initializeWithAuth(this.supabaseClient, mockSession)
         .then((result) => {
           if (result) {
-            console.log("[COLLAB-DATA] ✅ Sync manager initialized successfully for collaborator");
-            console.log("[COLLAB-DATA] 🔍 Sync manager state after initialization:", {
-              hasSupabase: !!window.syncManager.supabase,
-              isInitialized: window.syncManager.isInitialized,
-              userId: window.syncManager.userId
-            });
+            console.log(
+              "[COLLAB-DATA] ✅ Sync manager initialized successfully for collaborator"
+            );
+            console.log(
+              "[COLLAB-DATA] 🔍 Sync manager state after initialization:",
+              {
+                hasSupabase: !!window.syncManager.supabase,
+                isInitialized: window.syncManager.isInitialized,
+                userId: window.syncManager.userId,
+              }
+            );
           } else {
-            console.error("[COLLAB-DATA] ❌ Failed to initialize sync manager for collaborator");
+            console.error(
+              "[COLLAB-DATA] ❌ Failed to initialize sync manager for collaborator"
+            );
           }
         })
         .catch((error) => {
-          console.error("[COLLAB-DATA] ❌ Error initializing sync manager for collaborator:", error);
+          console.error(
+            "[COLLAB-DATA] ❌ Error initializing sync manager for collaborator:",
+            error
+          );
         });
-
     } catch (error) {
-      console.error("[COLLAB-DATA] ❌ Error creating mock session for collaborator:", error);
+      console.error(
+        "[COLLAB-DATA] ❌ Error creating mock session for collaborator:",
+        error
+      );
     }
   },
 
   // Create collaboration session in database
-  async createCollaborationInDatabase(roomName, permissions = 'view') {
-    console.log("[COLLAB-DATA] 📝 Creating collaboration session in database...");
+  async createCollaborationInDatabase(roomName, permissions = "view") {
+    console.log(
+      "[COLLAB-DATA] 📝 Creating collaboration session in database..."
+    );
     console.log("[COLLAB-DATA] 📋 Room ID:", roomName);
     console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
 
     if (!this.supabaseClient) {
       if (!this.initSupabaseClient()) {
-        console.error("[COLLAB-DATA] ❌ Cannot create collaboration - no Supabase client");
+        console.error(
+          "[COLLAB-DATA] ❌ Cannot create collaboration - no Supabase client"
+        );
         return { success: false, error: "No Supabase client available" };
       }
     }
 
     try {
       // Generate a unique doc ID for this collaboration
-      const docId = `doc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-      
+      const docId = `doc-${Date.now()}-${Math.random()
+        .toString(36)
+        .substr(2, 9)}`;
+
       console.log("[COLLAB-DATA] 📋 Generated Doc ID:", docId);
 
       // Create collaboration record
-      const { data: collaborationData, error: collaborationError } = await this.supabaseClient
-        .from('collaborations')
-        .insert([{
-          room_id: roomName,
-          doc_id: docId,
-          leader_user_id: window.userId || null, // Can be null for anonymous leaders
-          title: `Collaboration Session - ${roomName}`,
-          description: `Real-time collaboration session`,
-          permissions: permissions,
-          status: 'active',
-          max_participants: 10
-        }])
-        .select()
-        .single();
+      const { data: collaborationData, error: collaborationError } =
+        await this.supabaseClient
+          .from("collaborations")
+          .insert([
+            {
+              room_id: roomName,
+              doc_id: docId,
+              leader_user_id: window.userId || null, // Can be null for anonymous leaders
+              title: `Collaboration Session - ${roomName}`,
+              description: `Real-time collaboration session`,
+              permissions: permissions,
+              status: "active",
+              max_participants: 10,
+            },
+          ])
+          .select()
+          .single();
 
       if (collaborationError) {
-        console.error("[COLLAB-DATA] ❌ Failed to create collaboration record:", collaborationError);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to create collaboration record:",
+          collaborationError
+        );
         return { success: false, error: collaborationError.message };
       }
 
-      console.log("[COLLAB-DATA] ✅ Collaboration record created:", collaborationData);
+      console.log(
+        "[COLLAB-DATA] ✅ Collaboration record created:",
+        collaborationData
+      );
       this.databaseCollaborationId = collaborationData.id;
 
       // Create leader participant record
       const leaderParticipantId = window.userId || `leader_${Date.now()}`;
       const { error: participantError } = await this.supabaseClient
-        .from('collaboration_participants')
-        .insert([{
-          collaboration_id: this.databaseCollaborationId,
-          participant_id: leaderParticipantId,
-          peer_id: roomName, // Use room_id as peer_id for leader
-          display_name: 'Leader',
-          permissions: 'full',
-          metadata: {
-            is_leader: true,
-            user_id: window.userId || null
-          }
-        }]);
+        .from("collaboration_participants")
+        .insert([
+          {
+            collaboration_id: this.databaseCollaborationId,
+            participant_id: leaderParticipantId,
+            peer_id: roomName, // Use room_id as peer_id for leader
+            display_name: "Leader",
+            permissions: "full",
+            metadata: {
+              is_leader: true,
+              user_id: window.userId || null,
+            },
+          },
+        ]);
 
       if (participantError) {
-        console.error("[COLLAB-DATA] ❌ Failed to create leader participant record:", participantError);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to create leader participant record:",
+          participantError
+        );
         // Don't fail the whole operation, just log the error
       } else {
         console.log("[COLLAB-DATA] ✅ Leader participant record created");
       }
 
       // Store collaboration data locally
-      localStorage.setItem("databaseCollaborationId", this.databaseCollaborationId);
+      localStorage.setItem(
+        "databaseCollaborationId",
+        this.databaseCollaborationId
+      );
       localStorage.setItem("collaborationDocId", docId);
       localStorage.setItem("collaborationParticipantId", leaderParticipantId);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         collaborationId: this.databaseCollaborationId,
         docId: docId,
-        participantId: leaderParticipantId
+        participantId: leaderParticipantId,
       };
-
     } catch (error) {
-      console.error("[COLLAB-DATA] ❌ Exception creating collaboration:", error);
+      console.error(
+        "[COLLAB-DATA] ❌ Exception creating collaboration:",
+        error
+      );
       return { success: false, error: error.message };
     }
   },
 
   // Join collaboration session in database
-  async joinCollaborationInDatabase(roomName, permissions = 'view') {
-    console.log("[COLLAB-DATA] 🔗 Joining collaboration session in database...");
+  async joinCollaborationInDatabase(roomName, permissions = "view") {
+    console.log(
+      "[COLLAB-DATA] 🔗 Joining collaboration session in database..."
+    );
     console.log("[COLLAB-DATA] 📋 Room ID:", roomName);
     console.log("[COLLAB-DATA] 📋 Permissions:", permissions);
 
     if (!this.supabaseClient) {
       if (!this.initSupabaseClient()) {
-        console.error("[COLLAB-DATA] ❌ Cannot join collaboration - no Supabase client");
+        console.error(
+          "[COLLAB-DATA] ❌ Cannot join collaboration - no Supabase client"
+        );
         return { success: false, error: "No Supabase client available" };
       }
     }
 
     try {
       // First, find the collaboration by room_id
-      const { data: collaborationData, error: findError } = await this.supabaseClient
-        .from('collaborations')
-        .select('*')
-        .eq('room_id', roomName)
-        .eq('status', 'active')
-        .single();
+      const { data: collaborationData, error: findError } =
+        await this.supabaseClient
+          .from("collaborations")
+          .select("*")
+          .eq("room_id", roomName)
+          .eq("status", "active")
+          .single();
 
       if (findError) {
-        console.error("[COLLAB-DATA] ❌ Collaboration session not found:", findError);
-        return { success: false, error: "Collaboration session not found or inactive" };
+        console.error(
+          "[COLLAB-DATA] ❌ Collaboration session not found:",
+          findError
+        );
+        return {
+          success: false,
+          error: "Collaboration session not found or inactive",
+        };
       }
 
-      console.log("[COLLAB-DATA] ✅ Found collaboration session:", collaborationData);
+      console.log(
+        "[COLLAB-DATA] ✅ Found collaboration session:",
+        collaborationData
+      );
       this.databaseCollaborationId = collaborationData.id;
 
       // Generate participant ID for this collaborator
       const peerId = this.provider?.room?.peerId || `peer_${Date.now()}`;
       const participantId = `collab_${peerId}_${Date.now()}`;
-      
+
       console.log("[COLLAB-DATA] 📋 Generated Participant ID:", participantId);
       console.log("[COLLAB-DATA] 📋 Peer ID:", peerId);
 
       // Create or update participant record
       const { error: participantError } = await this.supabaseClient
-        .from('collaboration_participants')
-        .upsert([{
-          collaboration_id: this.databaseCollaborationId,
-          participant_id: participantId,
-          peer_id: peerId,
-          display_name: 'Anonymous Collaborator',
-          permissions: permissions,
-          is_active: true,
-          last_seen: new Date().toISOString(),
-          metadata: {
-            is_leader: false,
-            user_id: window.userId || null
+        .from("collaboration_participants")
+        .upsert(
+          [
+            {
+              collaboration_id: this.databaseCollaborationId,
+              participant_id: participantId,
+              peer_id: peerId,
+              display_name: "Anonymous Collaborator",
+              permissions: permissions,
+              is_active: true,
+              last_seen: new Date().toISOString(),
+              metadata: {
+                is_leader: false,
+                user_id: window.userId || null,
+              },
+            },
+          ],
+          {
+            onConflict: "collaboration_id,participant_id",
           }
-        }], {
-          onConflict: 'collaboration_id,participant_id'
-        });
+        );
 
       if (participantError) {
-        console.error("[COLLAB-DATA] ❌ Failed to create participant record:", participantError);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to create participant record:",
+          participantError
+        );
         return { success: false, error: participantError.message };
       }
 
@@ -3367,17 +3529,19 @@ const collaboration = {
       this.initializeSyncManagerForCollaborator();
 
       // Store collaboration data locally
-      localStorage.setItem("databaseCollaborationId", this.databaseCollaborationId);
+      localStorage.setItem(
+        "databaseCollaborationId",
+        this.databaseCollaborationId
+      );
       localStorage.setItem("collaborationDocId", collaborationData.doc_id);
       localStorage.setItem("collaborationParticipantId", participantId);
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         collaborationId: this.databaseCollaborationId,
         docId: collaborationData.doc_id,
-        participantId: participantId
+        participantId: participantId,
       };
-
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Exception joining collaboration:", error);
       return { success: false, error: error.message };
@@ -3386,9 +3550,15 @@ const collaboration = {
 
   // Leave collaboration session in database
   async leaveCollaborationInDatabase() {
-    console.log("[COLLAB-DATA] 👋 Leaving collaboration session in database...");
+    console.log(
+      "[COLLAB-DATA] 👋 Leaving collaboration session in database..."
+    );
 
-    if (!this.supabaseClient || !this.databaseCollaborationId || !this.participantId) {
+    if (
+      !this.supabaseClient ||
+      !this.databaseCollaborationId ||
+      !this.participantId
+    ) {
       console.warn("[COLLAB-DATA] ⚠️ No database session to leave");
       return { success: true };
     }
@@ -3396,16 +3566,19 @@ const collaboration = {
     try {
       // Mark participant as inactive
       const { error } = await this.supabaseClient
-        .from('collaboration_participants')
+        .from("collaboration_participants")
         .update({
           is_active: false,
-          last_seen: new Date().toISOString()
+          last_seen: new Date().toISOString(),
         })
-        .eq('collaboration_id', this.databaseCollaborationId)
-        .eq('participant_id', this.participantId);
+        .eq("collaboration_id", this.databaseCollaborationId)
+        .eq("participant_id", this.participantId);
 
       if (error) {
-        console.error("[COLLAB-DATA] ❌ Failed to mark participant as inactive:", error);
+        console.error(
+          "[COLLAB-DATA] ❌ Failed to mark participant as inactive:",
+          error
+        );
       } else {
         console.log("[COLLAB-DATA] ✅ Participant marked as inactive");
       }
@@ -3420,7 +3593,6 @@ const collaboration = {
       this.participantId = null;
 
       return { success: true };
-
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Exception leaving collaboration:", error);
       return { success: false, error: error.message };
@@ -3429,27 +3601,39 @@ const collaboration = {
 
   // Load collaboration data from localStorage
   loadCollaborationData() {
-    console.log("[COLLAB-DATA] 📂 Loading collaboration data from localStorage...");
-    
-          this.databaseCollaborationId = localStorage.getItem("databaseCollaborationId");
-      this.participantId = localStorage.getItem("collaborationParticipantId");
-      this.leaderId = localStorage.getItem("collaborationLeaderId");
-      
-      if (this.databaseCollaborationId) {
-      console.log("[COLLAB-DATA] ✅ Loaded database collaboration ID:", this.databaseCollaborationId);
+    console.log(
+      "[COLLAB-DATA] 📂 Loading collaboration data from localStorage..."
+    );
+
+    this.databaseCollaborationId = localStorage.getItem(
+      "databaseCollaborationId"
+    );
+    this.participantId = localStorage.getItem("collaborationParticipantId");
+    this.leaderId = localStorage.getItem("collaborationLeaderId");
+
+    if (this.databaseCollaborationId) {
+      console.log(
+        "[COLLAB-DATA] ✅ Loaded database collaboration ID:",
+        this.databaseCollaborationId
+      );
     }
-    
-          if (this.participantId) {
-        console.log("[COLLAB-DATA] ✅ Loaded participant ID:", this.participantId);
-      }
-      
-      if (this.leaderId) {
-        console.log("[COLLAB-DATA] ✅ Loaded leaderId:", this.leaderId);
-      }
+
+    if (this.participantId) {
+      console.log(
+        "[COLLAB-DATA] ✅ Loaded participant ID:",
+        this.participantId
+      );
+    }
+
+    if (this.leaderId) {
+      console.log("[COLLAB-DATA] ✅ Loaded leaderId:", this.leaderId);
+    }
 
     // If we have collaboration data, initialize the sync manager
     if (this.databaseCollaborationId && this.participantId) {
-      console.log("[COLLAB-DATA] 🔄 Initializing sync manager for existing collaboration...");
+      console.log(
+        "[COLLAB-DATA] 🔄 Initializing sync manager for existing collaboration..."
+      );
       // Initialize Supabase client first, then sync manager
       if (this.initSupabaseClient()) {
         this.initializeSyncManagerForCollaborator();
@@ -3462,55 +3646,77 @@ const collaboration = {
   // Test database integration
   async testDatabaseIntegration() {
     console.log("[COLLAB-DATA] 🧪 Testing database integration...");
-    
+
     // Test 1: Initialize Supabase client
     console.log("[COLLAB-DATA] 🧪 Test 1: Initializing Supabase client...");
     const clientResult = this.initSupabaseClient();
-    console.log("[COLLAB-DATA] 🧪 Test 1 Result:", clientResult ? "PASS" : "FAIL");
-    
+    console.log(
+      "[COLLAB-DATA] 🧪 Test 1 Result:",
+      clientResult ? "PASS" : "FAIL"
+    );
+
     if (!clientResult) {
-      console.error("[COLLAB-DATA] ❌ Cannot proceed with tests - no Supabase client");
+      console.error(
+        "[COLLAB-DATA] ❌ Cannot proceed with tests - no Supabase client"
+      );
       return { success: false, error: "No Supabase client available" };
     }
-    
+
     // Test 2: Check if collaborations table exists
     console.log("[COLLAB-DATA] 🧪 Test 2: Checking collaborations table...");
     try {
       const { data, error } = await this.supabaseClient
-        .from('collaborations')
-        .select('count')
+        .from("collaborations")
+        .select("count")
         .limit(1);
-      
+
       if (error) {
-        console.error("[COLLAB-DATA] ❌ Test 2 FAILED - Table access error:", error);
+        console.error(
+          "[COLLAB-DATA] ❌ Test 2 FAILED - Table access error:",
+          error
+        );
         return { success: false, error: "Cannot access collaborations table" };
       }
-      
+
       console.log("[COLLAB-DATA] 🧪 Test 2 Result: PASS - Table accessible");
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Test 2 FAILED - Exception:", error);
-      return { success: false, error: "Exception accessing collaborations table" };
+      return {
+        success: false,
+        error: "Exception accessing collaborations table",
+      };
     }
-    
+
     // Test 3: Check if collaboration_participants table exists
-    console.log("[COLLAB-DATA] 🧪 Test 3: Checking collaboration_participants table...");
+    console.log(
+      "[COLLAB-DATA] 🧪 Test 3: Checking collaboration_participants table..."
+    );
     try {
       const { data, error } = await this.supabaseClient
-        .from('collaboration_participants')
-        .select('count')
+        .from("collaboration_participants")
+        .select("count")
         .limit(1);
-      
+
       if (error) {
-        console.error("[COLLAB-DATA] ❌ Test 3 FAILED - Table access error:", error);
-        return { success: false, error: "Cannot access collaboration_participants table" };
+        console.error(
+          "[COLLAB-DATA] ❌ Test 3 FAILED - Table access error:",
+          error
+        );
+        return {
+          success: false,
+          error: "Cannot access collaboration_participants table",
+        };
       }
-      
+
       console.log("[COLLAB-DATA] 🧪 Test 3 Result: PASS - Table accessible");
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Test 3 FAILED - Exception:", error);
-      return { success: false, error: "Exception accessing collaboration_participants table" };
+      return {
+        success: false,
+        error: "Exception accessing collaboration_participants table",
+      };
     }
-    
+
     console.log("[COLLAB-DATA] ✅ All database integration tests PASSED");
     return { success: true };
   },
@@ -3525,7 +3731,7 @@ const collaboration = {
       participantId: this.participantId,
       peers: Array.from(this.peers),
       permissions: localStorage.getItem("collaborationPermissions"),
-      hasSupabaseClient: !!this.supabaseClient
+      hasSupabaseClient: !!this.supabaseClient,
     };
   },
 
@@ -3534,22 +3740,47 @@ const collaboration = {
     console.log("[COLLAB-DATA] 🔍 === COLLABORATION DATA DEBUG ===");
     console.log("[COLLAB-DATA] 📋 Status:", this.getCollaborationStatus());
     console.log("[COLLAB-DATA] 📋 LocalStorage Keys:");
-    console.log("  - collaborationActive:", localStorage.getItem("collaborationActive"));
-    console.log("  - collaborationId:", localStorage.getItem("collaborationId"));
-    console.log("  - collaborationLeader:", localStorage.getItem("collaborationLeader"));
-    console.log("  - collaborationPermissions:", localStorage.getItem("collaborationPermissions"));
-    console.log("  - databaseCollaborationId:", localStorage.getItem("databaseCollaborationId"));
-    console.log("  - collaborationParticipantId:", localStorage.getItem("collaborationParticipantId"));
-    console.log("  - collaborationDocId:", localStorage.getItem("collaborationDocId"));
+    console.log(
+      "  - collaborationActive:",
+      localStorage.getItem("collaborationActive")
+    );
+    console.log(
+      "  - collaborationId:",
+      localStorage.getItem("collaborationId")
+    );
+    console.log(
+      "  - collaborationLeader:",
+      localStorage.getItem("collaborationLeader")
+    );
+    console.log(
+      "  - collaborationPermissions:",
+      localStorage.getItem("collaborationPermissions")
+    );
+    console.log(
+      "  - databaseCollaborationId:",
+      localStorage.getItem("databaseCollaborationId")
+    );
+    console.log(
+      "  - collaborationParticipantId:",
+      localStorage.getItem("collaborationParticipantId")
+    );
+    console.log(
+      "  - collaborationDocId:",
+      localStorage.getItem("collaborationDocId")
+    );
     console.log("[COLLAB-DATA] 🔍 === END DEBUG ===");
   },
 
   // Test message saving with collaboration context
   async testMessageSaving() {
-    console.log("[COLLAB-DATA] 🧪 Testing message saving with collaboration...");
-    
+    console.log(
+      "[COLLAB-DATA] 🧪 Testing message saving with collaboration..."
+    );
+
     if (!this.isCollaborating) {
-      console.error("[COLLAB-DATA] ❌ Not in collaboration mode - cannot test message saving");
+      console.error(
+        "[COLLAB-DATA] ❌ Not in collaboration mode - cannot test message saving"
+      );
       return { success: false, error: "Not in collaboration mode" };
     }
 
@@ -3561,18 +3792,21 @@ const collaboration = {
     // Create a test message
     const testMessage = {
       role: "user",
-      content: `Test collaboration message from ${this.isLeader ? 'leader' : 'collaborator'} at ${new Date().toISOString()}`,
+      content: `Test collaboration message from ${
+        this.isLeader ? "leader" : "collaborator"
+      } at ${new Date().toISOString()}`,
       metadata: {
         test: true,
         collaboration_test: true,
-        timestamp: Date.now()
+        timestamp: Date.now(),
       },
-      message_id: `test_msg_${Date.now()}`
+      message_id: `test_msg_${Date.now()}`,
     };
 
     // Get active chat ID
-    const activeChatId = window.context?.activeChatId || localStorage.getItem("activeChatId");
-    
+    const activeChatId =
+      window.context?.activeChatId || localStorage.getItem("activeChatId");
+
     if (!activeChatId) {
       console.error("[COLLAB-DATA] ❌ No active chat ID available");
       return { success: false, error: "No active chat ID available" };
@@ -3594,18 +3828,17 @@ const collaboration = {
         console.log("[COLLAB-DATA] ✅ Message sync triggered");
       }
 
-      return { 
-        success: true, 
+      return {
+        success: true,
         message: testMessage,
         chatId: activeChatId,
         collaborationContext: {
           isCollaborating: this.isCollaborating,
           isLeader: this.isLeader,
           collaborationId: this.databaseCollaborationId,
-          participantId: this.participantId
-        }
+          participantId: this.participantId,
+        },
       };
-
     } catch (error) {
       console.error("[COLLAB-DATA] ❌ Error testing message saving:", error);
       return { success: false, error: error.message };
@@ -3615,9 +3848,11 @@ const collaboration = {
   // Test database-first message creation
   async testDatabaseFirstMessage() {
     console.log("[COLLAB-DATA] 🧪 Testing database-first message creation...");
-    
+
     if (!this.isCollaborating) {
-      console.error("[COLLAB-DATA] ❌ Not in collaboration mode - cannot test database-first message");
+      console.error(
+        "[COLLAB-DATA] ❌ Not in collaboration mode - cannot test database-first message"
+      );
       return { success: false, error: "Not in collaboration mode" };
     }
 
@@ -3626,33 +3861,37 @@ const collaboration = {
       return { success: false, error: "No messages module available" };
     }
 
-    const testContent = `Database-first test message from ${this.isLeader ? 'leader' : 'collaborator'} at ${new Date().toISOString()}`;
-    
+    const testContent = `Database-first test message from ${
+      this.isLeader ? "leader" : "collaborator"
+    } at ${new Date().toISOString()}`;
+
     console.log("[COLLAB-DATA] 📋 Test Content:", testContent);
 
     try {
       // Use the new database-first addMessage function
-      const result = await window.messages.addMessage('user', testContent, {
+      const result = await window.messages.addMessage("user", testContent, {
         test: true,
         database_first: true,
-        collaboration_test: true
+        collaboration_test: true,
       });
 
       console.log("[COLLAB-DATA] ✅ Database-first message creation completed");
-      return { 
-        success: true, 
+      return {
+        success: true,
         content: testContent,
         result: result,
         collaborationContext: {
           isCollaborating: this.isCollaborating,
           isLeader: this.isLeader,
           collaborationId: this.databaseCollaborationId,
-          participantId: this.participantId
-        }
+          participantId: this.participantId,
+        },
       };
-
     } catch (error) {
-      console.error("[COLLAB-DATA] ❌ Error testing database-first message:", error);
+      console.error(
+        "[COLLAB-DATA] ❌ Error testing database-first message:",
+        error
+      );
       return { success: false, error: error.message };
     }
   },
@@ -3660,7 +3899,7 @@ const collaboration = {
   // Debug function to check collaboration and sync status
   debugCollaborationAndSync() {
     console.log("[COLLAB-DEBUG] 🔍 === COLLABORATION & SYNC STATUS ===");
-    
+
     // Collaboration status
     console.log("[COLLAB-DEBUG] 🤝 Collaboration Status:", {
       isCollaborating: this.isCollaborating,
@@ -3670,53 +3909,59 @@ const collaboration = {
       participantId: this.participantId,
       peers: this.peers.size,
       provider: !!this.provider,
-      providerConnected: this.provider?.connected || false
+      providerConnected: this.provider?.connected || false,
     });
-    
+
     // Sync manager status
     console.log("[COLLAB-DEBUG] 🔄 Sync Manager Status:", {
       hasSyncManager: !!window.syncManager,
-      syncManagerKeys: window.syncManager ? Object.keys(window.syncManager) : 'N/A',
+      syncManagerKeys: window.syncManager
+        ? Object.keys(window.syncManager)
+        : "N/A",
       hasUploadMessage: !!window.syncManager?.uploadMessage,
       hasUploadChat: !!window.syncManager?.uploadChat,
       hasUploadArtifact: !!window.syncManager?.uploadArtifact,
       hasSupabase: !!window.syncManager?.supabase,
-      userId: window.syncManager?.userId || 'N/A'
+      userId: window.syncManager?.userId || "N/A",
     });
-    
+
     // Memory module status
     console.log("[COLLAB-DEBUG] 🧠 Memory Module Status:", {
       hasMemory: !!window.memory,
-      memoryKeys: window.memory ? Object.keys(window.memory) : 'N/A',
+      memoryKeys: window.memory ? Object.keys(window.memory) : "N/A",
       hasSaveMessage: !!window.memory?.saveMessage,
       hasSaveChat: !!window.memory?.saveChat,
-      hasSaveArtifact: !!window.memory?.saveArtifact
+      hasSaveArtifact: !!window.memory?.saveArtifact,
     });
-    
+
     // Context status
     console.log("[COLLAB-DEBUG] 📋 Context Status:", {
       hasContext: !!window.context,
       activeChatId: window.context?.getActiveChatId(),
       activeView: window.context?.getActiveView(),
-      messagesByChat: window.context?.getMessagesByChat ? Object.keys(window.context.getMessagesByChat()) : 'N/A'
+      messagesByChat: window.context?.getMessagesByChat
+        ? Object.keys(window.context.getMessagesByChat())
+        : "N/A",
     });
-    
+
     // Collaboration protection status
     console.log("[COLLAB-DEBUG] 🛡️ Protection Status:", {
       isCollabProtected: this.isCollaborationProtected(),
       collaborationActive: localStorage.getItem("collaborationActive"),
-      collaborationDataTimestamp: localStorage.getItem("COLLABORATION_DATA_TIMESTAMP")
+      collaborationDataTimestamp: localStorage.getItem(
+        "COLLABORATION_DATA_TIMESTAMP"
+      ),
     });
-    
+
     console.log("[COLLAB-DEBUG] ✅ === STATUS CHECK COMPLETE ===");
-  }
+  },
 };
 
 // Make collaboration available globally
 window.collaboration = collaboration;
 
 // Global debug function
-window.debugCollaborationAndSync = function() {
+window.debugCollaborationAndSync = function () {
   if (window.collaboration) {
     window.collaboration.debugCollaborationAndSync();
   } else {
@@ -3799,16 +4044,18 @@ window.testArtifactEdit = function () {
     console.error("[COLLAB] ❌ Collaboration module not available");
     return;
   }
-  
-  const canEdit = window.collaboration.canPerformAction('editArtifact');
+
+  const canEdit = window.collaboration.canPerformAction("editArtifact");
   console.log("[COLLAB] 🧪 Testing artifact edit permission:", canEdit);
-  
+
   if (canEdit) {
-    console.log("[COLLAB] ✅ Can edit artifacts - try saying 'edit artifact [title]' in chat");
+    console.log(
+      "[COLLAB] ✅ Can edit artifacts - try saying 'edit artifact [title]' in chat"
+    );
   } else {
     console.log("[COLLAB] ❌ Cannot edit artifacts - need edit permissions");
   }
-  
+
   return canEdit;
 };
 
@@ -3828,63 +4075,71 @@ collaboration.init();
 window.collaboration = collaboration;
 
 // Global debug functions
-window.testCollaborationDatabase = async function() {
+window.testCollaborationDatabase = async function () {
   console.log("[COLLAB-DATA] 🧪 Running collaboration database tests...");
   return await collaboration.testDatabaseIntegration();
 };
 
-window.debugCollaboration = function() {
+window.debugCollaboration = function () {
   console.log("[COLLAB-DATA] 🔍 Debugging collaboration system...");
   collaboration.debugCollaborationData();
 };
 
-window.getCollaborationStatus = function() {
+window.getCollaborationStatus = function () {
   console.log("[COLLAB-DATA] 📊 Getting collaboration status...");
   const status = collaboration.getCollaborationStatus();
   console.log("[COLLAB-DATA] 📊 Status:", status);
   return status;
 };
 
-window.createTestCollaboration = async function(permissions = 'view') {
+window.createTestCollaboration = async function (permissions = "view") {
   console.log("[COLLAB-DATA] 🧪 Creating test collaboration...");
   const result = await collaboration.createSession(null, permissions);
   console.log("[COLLAB-DATA] 🧪 Test collaboration result:", result);
   return result;
 };
 
-window.joinTestCollaboration = async function(roomName, permissions = 'view') {
+window.joinTestCollaboration = async function (roomName, permissions = "view") {
   console.log("[COLLAB-DATA] 🧪 Joining test collaboration...");
   const result = await collaboration.joinSession(roomName, permissions);
   console.log("[COLLAB-DATA] 🧪 Test join result:", result);
   return result;
 };
 
-window.testCollaborationMessageSaving = async function() {
+window.testCollaborationMessageSaving = async function () {
   console.log("[COLLAB-DATA] 🧪 Testing collaboration message saving...");
   const result = await collaboration.testMessageSaving();
   console.log("[COLLAB-DATA] 🧪 Message saving test result:", result);
   return result;
 };
 
-window.testDatabaseFirstMessage = async function() {
+window.testDatabaseFirstMessage = async function () {
   console.log("[COLLAB-DATA] 🧪 Testing database-first message creation...");
   const result = await collaboration.testDatabaseFirstMessage();
   console.log("[COLLAB-DATA] 🧪 Database-first message test result:", result);
   return result;
 };
 
-console.log("[COLLAB-DATA] 🚀 Collaboration system loaded with database integration");
+console.log(
+  "[COLLAB-DATA] 🚀 Collaboration system loaded with database integration"
+);
 console.log("[COLLAB-DATA] 📋 Available debug functions:");
 console.log("  - testCollaborationDatabase() - Test database connectivity");
 console.log("  - debugCollaboration() - Show all collaboration data");
 console.log("  - getCollaborationStatus() - Get current status");
 console.log("  - createTestCollaboration(permissions) - Create test session");
-console.log("  - joinTestCollaboration(roomName, permissions) - Join test session");
-console.log("  - testCollaborationMessageSaving() - Test message saving with collaboration");
-console.log("  - testDatabaseFirstMessage() - Test database-first message creation");
+console.log(
+  "  - joinTestCollaboration(roomName, permissions) - Join test session"
+);
+console.log(
+  "  - testCollaborationMessageSaving() - Test message saving with collaboration"
+);
+console.log(
+  "  - testDatabaseFirstMessage() - Test database-first message creation"
+);
 
 // Global debug function
-window.debugCollaborationAndSync = function() {
+window.debugCollaborationAndSync = function () {
   if (window.collaboration) {
     window.collaboration.debugCollaborationAndSync();
   } else {
@@ -3893,25 +4148,30 @@ window.debugCollaborationAndSync = function() {
 };
 
 // Test function to simulate collaboration message
-window.testCollaborationMessage = function(messageText = "Test collaboration message") {
+window.testCollaborationMessage = function (
+  messageText = "Test collaboration message"
+) {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING COLLABORATION MESSAGE ===");
   console.log("[COLLAB-DEBUG] 📋 Test message:", messageText);
-  
+
   if (!window.messages || !window.messages.addMessage) {
     console.error("[COLLAB-DEBUG] ❌ Messages module not available");
     return;
   }
-  
+
   // Call addMessage directly to test the flow
-  window.messages.addMessage('user', messageText).then((result) => {
-    console.log("[COLLAB-DEBUG] ✅ Test message result:", result);
-  }).catch((error) => {
-    console.error("[COLLAB-DEBUG] ❌ Test message error:", error);
-  });
+  window.messages
+    .addMessage("user", messageText)
+    .then((result) => {
+      console.log("[COLLAB-DEBUG] ✅ Test message result:", result);
+    })
+    .catch((error) => {
+      console.error("[COLLAB-DEBUG] ❌ Test message error:", error);
+    });
 };
 
 // Global helper function for testing sync manager initialization
-window.testSyncManagerInit = function() {
+window.testSyncManagerInit = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING SYNC MANAGER INITIALIZATION ===");
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
@@ -3921,41 +4181,41 @@ window.testSyncManagerInit = function() {
     console.error("[COLLAB-DEBUG] ❌ Sync manager not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 🔍 Current sync manager state:", {
     hasSupabase: !!window.syncManager.supabase,
     isInitialized: window.syncManager.isInitialized,
-    userId: window.syncManager.userId
+    userId: window.syncManager.userId,
   });
-  
+
   console.log("[COLLAB-DEBUG] 🔍 Collaboration state:", {
     hasSupabaseClient: !!window.collaboration.supabaseClient,
     participantId: window.collaboration.participantId,
-    databaseCollaborationId: window.collaboration.databaseCollaborationId
+    databaseCollaborationId: window.collaboration.databaseCollaborationId,
   });
-  
+
   // Try to initialize sync manager
   window.collaboration.initializeSyncManagerForCollaborator();
 };
 
 // Global helper function to test message structure
-window.testMessageStructure = function() {
+window.testMessageStructure = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING MESSAGE STRUCTURE ===");
-  
+
   // Simulate what the message data should look like for collaborators
   const isCollaborating = window.collaboration?.isCollaborating || false;
   const collaborationId = window.collaboration?.databaseCollaborationId || null;
   const participantId = window.collaboration?.participantId || null;
   const isLeader = window.collaboration?.isLeader || false;
   const syncManagerUserId = window.syncManager?.userId || null;
-  
+
   console.log("[COLLAB-DEBUG] 📋 Current context:");
   console.log("  - Is Collaborating:", isCollaborating);
   console.log("  - Collaboration ID:", collaborationId);
   console.log("  - Participant ID:", participantId);
   console.log("  - Is Leader:", isLeader);
   console.log("  - Sync Manager User ID:", syncManagerUserId);
-  
+
   if (isCollaborating && collaborationId) {
     const expectedMessageData = {
       chat_id: "test_chat_id",
@@ -3964,87 +4224,97 @@ window.testMessageStructure = function() {
       metadata: {
         collaboration_room: window.collaboration?.collaborationId,
         peer_id: window.collaboration?.provider?.room?.peerId,
-        display_name: isLeader ? 'Leader' : 'Anonymous Collaborator',
+        display_name: isLeader ? "Leader" : "Anonymous Collaborator",
         is_leader: isLeader,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
       },
       message_id: "test_message_id",
       collaboration_id: collaborationId,
       participant_id: participantId,
       is_collaboration_message: true,
-      user_id: isLeader ? syncManagerUserId : null
+      user_id: isLeader ? syncManagerUserId : null,
     };
-    
-    console.log("[COLLAB-DEBUG] ✅ Expected message structure for collaborator:");
+
+    console.log(
+      "[COLLAB-DEBUG] ✅ Expected message structure for collaborator:"
+    );
     console.log(JSON.stringify(expectedMessageData, null, 2));
   } else {
-    console.log("[COLLAB-DEBUG] ⚠️ Not in collaboration mode or missing collaboration ID");
+    console.log(
+      "[COLLAB-DEBUG] ⚠️ Not in collaboration mode or missing collaboration ID"
+    );
   }
 };
 
 // Global helper function to test chat creation
-window.testChatCreation = function() {
+window.testChatCreation = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING CHAT CREATION ===");
-  
+
   if (!window.actions || !window.actions.executeAction) {
     console.error("[COLLAB-DEBUG] ❌ Actions module not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 📋 Creating test chat...");
-  window.actions.executeAction('messages.create', {
-    title: 'Test Collaboration Chat',
-    description: 'This is a test chat created by collaborator'
-  }).then((result) => {
-    console.log("[COLLAB-DEBUG] ✅ Chat creation result:", result);
-  }).catch((error) => {
-    console.error("[COLLAB-DEBUG] ❌ Chat creation error:", error);
-  });
+  window.actions
+    .executeAction("messages.create", {
+      title: "Test Collaboration Chat",
+      description: "This is a test chat created by collaborator",
+    })
+    .then((result) => {
+      console.log("[COLLAB-DEBUG] ✅ Chat creation result:", result);
+    })
+    .catch((error) => {
+      console.error("[COLLAB-DEBUG] ❌ Chat creation error:", error);
+    });
 };
 
 // Global helper function to test chat sync
-window.testChatSync = function() {
+window.testChatSync = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING CHAT SYNC ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 🔍 Collaboration status:", {
     isCollaborating: window.collaboration.isCollaborating,
     isLeader: window.collaboration.isLeader,
     peers: window.collaboration.peers.size,
     providerConnected: window.collaboration.provider?.connected || false,
-    isReconnecting: window.collaboration.isReconnecting
+    isReconnecting: window.collaboration.isReconnecting,
   });
-  
+
   console.log("[COLLAB-DEBUG] 🔍 Shared chats array:", {
     hasSharedChats: !!window.collaboration.sharedChats,
-    sharedChatsLength: window.collaboration.sharedChats?.length || 0
+    sharedChatsLength: window.collaboration.sharedChats?.length || 0,
   });
-  
+
   if (window.collaboration.sharedChats) {
     const chats = window.collaboration.sharedChats.toArray();
     console.log("[COLLAB-DEBUG] 📋 Current shared chats:", chats);
   }
-  
+
   // Check queue status
   console.log("[COLLAB-DEBUG] 📋 Queue status:", {
     messageQueueLength: window.collaboration.messageQueue?.length || 0,
     chatQueueLength: window.collaboration.chatQueue?.length || 0,
-    artifactQueueLength: window.collaboration.artifactQueue?.length || 0
+    artifactQueueLength: window.collaboration.artifactQueue?.length || 0,
   });
-  
+
   // Also check localStorage chats
   try {
     const localStorageChats = JSON.parse(localStorage.getItem("chats") || "[]");
     console.log("[COLLAB-DEBUG] 📋 localStorage chats:", localStorageChats);
-    console.log("[COLLAB-DEBUG] 📊 localStorage chats count:", localStorageChats.length);
+    console.log(
+      "[COLLAB-DEBUG] 📊 localStorage chats count:",
+      localStorageChats.length
+    );
   } catch (e) {
     console.error("[COLLAB-DEBUG] ❌ Error reading localStorage chats:", e);
   }
-  
+
   // Check context chats
   if (window.context) {
     const contextChats = window.context.getChats() || [];
@@ -4054,27 +4324,33 @@ window.testChatSync = function() {
 };
 
 // Global helper function to manually process chat queue
-window.processChatQueue = function() {
+window.processChatQueue = function () {
   console.log("[COLLAB-DEBUG] 🧪 === MANUALLY PROCESSING CHAT QUEUE ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 📋 Current queue status:", {
     chatQueueLength: window.collaboration.chatQueue?.length || 0,
     isReconnecting: window.collaboration.isReconnecting,
-    providerConnected: window.collaboration.provider?.connected || false
+    providerConnected: window.collaboration.provider?.connected || false,
   });
-  
-  if (window.collaboration.chatQueue && window.collaboration.chatQueue.length > 0) {
-    console.log("[COLLAB-DEBUG] 📋 Queued chats:", window.collaboration.chatQueue);
-    
+
+  if (
+    window.collaboration.chatQueue &&
+    window.collaboration.chatQueue.length > 0
+  ) {
+    console.log(
+      "[COLLAB-DEBUG] 📋 Queued chats:",
+      window.collaboration.chatQueue
+    );
+
     // Temporarily clear reconnection flag to force processing
     const wasReconnecting = window.collaboration.isReconnecting;
     window.collaboration.isReconnecting = false;
-    
+
     try {
       window.collaboration.processMessageQueue();
       console.log("[COLLAB-DEBUG] ✅ Chat queue processed successfully");
@@ -4090,30 +4366,30 @@ window.processChatQueue = function() {
 };
 
 // Global helper function to force reconnection and clear reconnection state
-window.forceReconnection = function() {
+window.forceReconnection = function () {
   console.log("[COLLAB-DEBUG] 🧪 === FORCING RECONNECTION ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 📋 Current state:", {
     isReconnecting: window.collaboration.isReconnecting,
     providerConnected: window.collaboration.provider?.connected || false,
-    peers: window.collaboration.peers.size
+    peers: window.collaboration.peers.size,
   });
-  
+
   // Clear reconnection flag
   window.collaboration.isReconnecting = false;
   console.log("[COLLAB-DEBUG] ✅ Reconnection flag cleared");
-  
+
   // Try to refresh connection
   if (window.collaboration.refreshConnection) {
     window.collaboration.refreshConnection();
     console.log("[COLLAB-DEBUG] ✅ Connection refresh triggered");
   }
-  
+
   // Process any queued items
   setTimeout(() => {
     if (window.collaboration.processMessageQueue) {
@@ -4124,75 +4400,86 @@ window.forceReconnection = function() {
 };
 
 // Global helper function to check leaderId status
-window.checkLeaderId = function() {
+window.checkLeaderId = function () {
   console.log("[COLLAB-DEBUG] 🧪 === CHECKING LEADER ID STATUS ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   console.log("[COLLAB-DEBUG] 📋 Collaboration state:", {
     isCollaborating: window.collaboration.isCollaborating,
     isLeader: window.collaboration.isLeader,
     leaderId: window.collaboration.leaderId,
     databaseCollaborationId: window.collaboration.databaseCollaborationId,
-    participantId: window.collaboration.participantId
+    participantId: window.collaboration.participantId,
   });
-  
+
   // Check localStorage
   const localStorageLeaderId = localStorage.getItem("collaborationLeaderId");
   console.log("[COLLAB-DEBUG] 📋 localStorage leaderId:", localStorageLeaderId);
-  
+
   // Check shared sync map
   if (window.collaboration.getSharedSyncMap) {
     const sharedSyncMap = window.collaboration.getSharedSyncMap();
     if (sharedSyncMap) {
-      const sharedLeaderId = sharedSyncMap.get('leaderId');
-      console.log("[COLLAB-DEBUG] 📋 Shared sync map leaderId:", sharedLeaderId);
+      const sharedLeaderId = sharedSyncMap.get("leaderId");
+      console.log(
+        "[COLLAB-DEBUG] 📋 Shared sync map leaderId:",
+        sharedLeaderId
+      );
     }
   }
-  
+
   // Check sync manager
   if (window.syncManager) {
-    console.log("[COLLAB-DEBUG] 📋 Sync manager userId:", window.syncManager.userId);
+    console.log(
+      "[COLLAB-DEBUG] 📋 Sync manager userId:",
+      window.syncManager.userId
+    );
   }
 };
 
 // Global helper function to manually retrieve and store leaderId
-window.retrieveLeaderId = function() {
+window.retrieveLeaderId = function () {
   console.log("[COLLAB-DEBUG] 🧪 === MANUALLY RETRIEVING LEADER ID ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   if (window.collaboration.isLeader) {
-    console.log("[COLLAB-DEBUG] ⚠️ This is the leader - no need to retrieve leaderId");
+    console.log(
+      "[COLLAB-DEBUG] ⚠️ This is the leader - no need to retrieve leaderId"
+    );
     return;
   }
-  
+
   // Try to get leaderId from shared sync map
   if (window.collaboration.getSharedSyncMap) {
     const sharedSyncMap = window.collaboration.getSharedSyncMap();
     if (sharedSyncMap) {
-      const sharedLeaderId = sharedSyncMap.get('leaderId');
+      const sharedLeaderId = sharedSyncMap.get("leaderId");
       if (sharedLeaderId) {
-        console.log("[COLLAB-DEBUG] 📋 Retrieved leaderId from shared map:", sharedLeaderId);
-        
+        console.log(
+          "[COLLAB-DEBUG] 📋 Retrieved leaderId from shared map:",
+          sharedLeaderId
+        );
+
         // Store it locally
         window.collaboration.leaderId = sharedLeaderId;
         localStorage.setItem("collaborationLeaderId", sharedLeaderId);
-        
+
         console.log("[COLLAB-DEBUG] ✅ LeaderId stored locally");
-        
+
         // Update sync manager if it exists
         if (window.syncManager) {
           window.syncManager.userId = sharedLeaderId;
           console.log("[COLLAB-DEBUG] ✅ Sync manager userId updated");
         }
-        
+
         return sharedLeaderId;
       } else {
         console.log("[COLLAB-DEBUG] ⚠️ No leaderId found in shared map");
@@ -4203,44 +4490,49 @@ window.retrieveLeaderId = function() {
   } else {
     console.log("[COLLAB-DEBUG] ⚠️ getSharedSyncMap function not available");
   }
-  
+
   return null;
 };
 
 // Global helper function to force leaderId storage and retrieval
-window.forceLeaderIdSync = function() {
+window.forceLeaderIdSync = function () {
   console.log("[COLLAB-DEBUG] 🧪 === FORCING LEADER ID SYNC ===");
-  
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   // If this is the leader, store the leaderId
   if (window.collaboration.isLeader) {
     console.log("[COLLAB-DEBUG] 🔄 This is the leader - storing leaderId...");
     return window.storeLeaderIdInSharedMap();
   }
-  
+
   // If this is a collaborator, retrieve the leaderId
   if (!window.collaboration.isLeader) {
-    console.log("[COLLAB-DEBUG] 🔄 This is a collaborator - retrieving leaderId...");
+    console.log(
+      "[COLLAB-DEBUG] 🔄 This is a collaborator - retrieving leaderId..."
+    );
     return window.retrieveLeaderId();
   }
 };
 
 // Global helper function to check leader's session and userId
-window.checkLeaderSession = function() {
+window.checkLeaderSession = function () {
   console.log("[COLLAB-DEBUG] 🧪 === CHECKING LEADER SESSION ===");
-  
+
   // Check if this is the leader
   const isLeader = localStorage.getItem("collaborationLeader") === "true";
   console.log("[COLLAB-DEBUG] 📋 Is leader:", isLeader);
-  
+
   // Check various userId sources
   console.log("[COLLAB-DEBUG] 📋 window.userId:", window.userId);
-  console.log("[COLLAB-DEBUG] 📋 localStorage userId:", localStorage.getItem("userId"));
-  
+  console.log(
+    "[COLLAB-DEBUG] 📋 localStorage userId:",
+    localStorage.getItem("userId")
+  );
+
   // Check Supabase session
   if (window.supabase) {
     window.supabase.auth.getSession().then(({ data, error }) => {
@@ -4249,58 +4541,80 @@ window.checkLeaderSession = function() {
       } else {
         console.log("[COLLAB-DEBUG] 📋 Supabase session:", data.session);
         if (data.session?.user?.id) {
-          console.log("[COLLAB-DEBUG] 📋 Session userId:", data.session.user.id);
+          console.log(
+            "[COLLAB-DEBUG] 📋 Session userId:",
+            data.session.user.id
+          );
         }
       }
     });
   }
-  
+
   // Check collaboration module
   if (window.collaboration) {
-    console.log("[COLLAB-DEBUG] 📋 Collaboration userId:", window.collaboration.userId);
-    console.log("[COLLAB-DEBUG] 📋 Collaboration isLeader:", window.collaboration.isLeader);
+    console.log(
+      "[COLLAB-DEBUG] 📋 Collaboration userId:",
+      window.collaboration.userId
+    );
+    console.log(
+      "[COLLAB-DEBUG] 📋 Collaboration isLeader:",
+      window.collaboration.isLeader
+    );
   }
-  
+
   // Check sync manager
   if (window.syncManager) {
-    console.log("[COLLAB-DEBUG] 📋 Sync manager userId:", window.syncManager.userId);
+    console.log(
+      "[COLLAB-DEBUG] 📋 Sync manager userId:",
+      window.syncManager.userId
+    );
   }
 };
 
 // Global helper function to manually store leaderId in shared map
-window.storeLeaderIdInSharedMap = function() {
-  console.log("[COLLAB-DEBUG] 🧪 === MANUALLY STORING LEADER ID IN SHARED MAP ===");
-  
+window.storeLeaderIdInSharedMap = function () {
+  console.log(
+    "[COLLAB-DEBUG] 🧪 === MANUALLY STORING LEADER ID IN SHARED MAP ==="
+  );
+
   if (!window.collaboration) {
     console.error("[COLLAB-DEBUG] ❌ Collaboration module not available");
     return;
   }
-  
+
   if (!window.collaboration.isLeader) {
-    console.log("[COLLAB-DEBUG] ⚠️ This is not the leader - cannot store leaderId");
+    console.log(
+      "[COLLAB-DEBUG] ⚠️ This is not the leader - cannot store leaderId"
+    );
     return;
   }
-  
+
   // Get the current userId from multiple sources
-  const currentUserId = window.userId || localStorage.getItem("userId") || window.syncManager?.userId;
+  const currentUserId =
+    window.userId ||
+    localStorage.getItem("userId") ||
+    window.syncManager?.userId;
   console.log("[COLLAB-DEBUG] 📋 Current userId:", currentUserId);
-  
+
   if (!currentUserId) {
     console.error("[COLLAB-DEBUG] ❌ No userId available to store");
     return;
   }
-  
+
   // Store in shared sync map
   if (window.collaboration.getSharedSyncMap) {
     const sharedSyncMap = window.collaboration.getSharedSyncMap();
     if (sharedSyncMap) {
-      sharedSyncMap.set('leaderId', currentUserId);
-      console.log("[COLLAB-DEBUG] ✅ LeaderId stored in shared map:", currentUserId);
-      
+      sharedSyncMap.set("leaderId", currentUserId);
+      console.log(
+        "[COLLAB-DEBUG] ✅ LeaderId stored in shared map:",
+        currentUserId
+      );
+
       // Also store in localStorage for backup
       localStorage.setItem("collaborationLeaderId", currentUserId);
       console.log("[COLLAB-DEBUG] ✅ LeaderId stored in localStorage");
-      
+
       return currentUserId;
     } else {
       console.error("[COLLAB-DEBUG] ❌ Shared sync map not available");
@@ -4308,29 +4622,33 @@ window.storeLeaderIdInSharedMap = function() {
   } else {
     console.error("[COLLAB-DEBUG] ❌ getSharedSyncMap function not available");
   }
-  
+
   return null;
 };
 
 // Global helper function to check for and clean up duplicate messages
-window.checkAndCleanDuplicates = function() {
+window.checkAndCleanDuplicates = function () {
   console.log("[COLLAB-DEBUG] 🧪 === CHECKING FOR DUPLICATE MESSAGES ===");
-  
+
   try {
-    const messagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const messagesByChat = JSON.parse(
+      localStorage.getItem("messagesByChat") || "{}"
+    );
     let totalMessages = 0;
     let duplicateCount = 0;
     let cleanedCount = 0;
-    
+
     Object.entries(messagesByChat).forEach(([chatId, messages]) => {
-      console.log(`[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`);
+      console.log(
+        `[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`
+      );
       totalMessages += messages.length;
-      
+
       // Check for duplicates
       const seen = new Set();
       const uniqueMessages = [];
-      
-      messages.forEach(message => {
+
+      messages.forEach((message) => {
         const key = message.message_id;
         if (seen.has(key)) {
           duplicateCount++;
@@ -4340,18 +4658,22 @@ window.checkAndCleanDuplicates = function() {
           uniqueMessages.push(message);
         }
       });
-      
+
       if (uniqueMessages.length !== messages.length) {
-        console.log(`[COLLAB-DEBUG] 🧹 Cleaning chat ${chatId}: ${messages.length} → ${uniqueMessages.length} messages`);
+        console.log(
+          `[COLLAB-DEBUG] 🧹 Cleaning chat ${chatId}: ${messages.length} → ${uniqueMessages.length} messages`
+        );
         messagesByChat[chatId] = uniqueMessages;
-        cleanedCount += (messages.length - uniqueMessages.length);
+        cleanedCount += messages.length - uniqueMessages.length;
       }
     });
-    
+
     if (cleanedCount > 0) {
       localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
-      console.log(`[COLLAB-DEBUG] ✅ Cleaned up ${cleanedCount} duplicate messages`);
-      
+      console.log(
+        `[COLLAB-DEBUG] ✅ Cleaned up ${cleanedCount} duplicate messages`
+      );
+
       // Refresh UI
       if (window.memory && window.memory.loadAll) {
         window.memory.loadAll();
@@ -4360,9 +4682,11 @@ window.checkAndCleanDuplicates = function() {
         window.views.renderCurrentView(false);
       }
     } else {
-      console.log(`[COLLAB-DEBUG] ✅ No duplicates found. Total messages: ${totalMessages}`);
+      console.log(
+        `[COLLAB-DEBUG] ✅ No duplicates found. Total messages: ${totalMessages}`
+      );
     }
-    
+
     return { totalMessages, duplicateCount, cleanedCount };
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Error checking duplicates:", error);
@@ -4371,37 +4695,49 @@ window.checkAndCleanDuplicates = function() {
 };
 
 // Global helper function to ensure all messages have message_id
-window.ensureMessageIds = function() {
-  console.log("[COLLAB-DEBUG] 🧪 === ENSURING ALL MESSAGES HAVE MESSAGE_ID ===");
-  
+window.ensureMessageIds = function () {
+  console.log(
+    "[COLLAB-DEBUG] 🧪 === ENSURING ALL MESSAGES HAVE MESSAGE_ID ==="
+  );
+
   try {
-    const messagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const messagesByChat = JSON.parse(
+      localStorage.getItem("messagesByChat") || "{}"
+    );
     let totalMessages = 0;
     let fixedCount = 0;
-    
+
     Object.entries(messagesByChat).forEach(([chatId, messages]) => {
-      console.log(`[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`);
+      console.log(
+        `[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`
+      );
       totalMessages += messages.length;
-      
+
       messages.forEach((message, index) => {
         if (!message.message_id) {
           // Generate a message_id for messages that don't have one
           const userId = localStorage.getItem("userId") || "guest";
           const timePart = Date.now().toString(36);
           const randPart = Math.random().toString(36).slice(2, 8);
-          const message_id = `${userId.slice(-4)}_${timePart}_${randPart}_${index}`;
-          
+          const message_id = `${userId.slice(
+            -4
+          )}_${timePart}_${randPart}_${index}`;
+
           message.message_id = message_id;
-          console.log(`[COLLAB-DEBUG] 🔧 Fixed message ${index} in chat ${chatId}: ${message_id}`);
+          console.log(
+            `[COLLAB-DEBUG] 🔧 Fixed message ${index} in chat ${chatId}: ${message_id}`
+          );
           fixedCount++;
         }
       });
     });
-    
+
     if (fixedCount > 0) {
       localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
-      console.log(`[COLLAB-DEBUG] ✅ Fixed ${fixedCount} messages with missing message_id`);
-      
+      console.log(
+        `[COLLAB-DEBUG] ✅ Fixed ${fixedCount} messages with missing message_id`
+      );
+
       // Refresh UI
       if (window.memory && window.memory.loadAll) {
         window.memory.loadAll();
@@ -4410,9 +4746,11 @@ window.ensureMessageIds = function() {
         window.views.renderCurrentView(false);
       }
     } else {
-      console.log(`[COLLAB-DEBUG] ✅ All ${totalMessages} messages already have message_id`);
+      console.log(
+        `[COLLAB-DEBUG] ✅ All ${totalMessages} messages already have message_id`
+      );
     }
-    
+
     return { totalMessages, fixedCount };
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Error ensuring message IDs:", error);
@@ -4421,20 +4759,24 @@ window.ensureMessageIds = function() {
 };
 
 // Global helper function to check isSaved status of messages
-window.checkMessageSavedStatus = function() {
+window.checkMessageSavedStatus = function () {
   console.log("[COLLAB-DEBUG] 🧪 === CHECKING MESSAGE SAVED STATUS ===");
-  
+
   try {
-    const messagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const messagesByChat = JSON.parse(
+      localStorage.getItem("messagesByChat") || "{}"
+    );
     let totalMessages = 0;
     let savedMessages = 0;
     let unsavedMessages = 0;
     let messagesWithoutFlag = 0;
-    
+
     Object.entries(messagesByChat).forEach(([chatId, messages]) => {
-      console.log(`[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`);
+      console.log(
+        `[COLLAB-DEBUG] 📋 Chat ${chatId}: ${messages.length} messages`
+      );
       totalMessages += messages.length;
-      
+
       messages.forEach((message, index) => {
         if (message.isSaved === true) {
           savedMessages++;
@@ -4442,87 +4784,104 @@ window.checkMessageSavedStatus = function() {
           unsavedMessages++;
         } else {
           messagesWithoutFlag++;
-          console.log(`[COLLAB-DEBUG] ⚠️ Message ${index} in chat ${chatId} missing isSaved flag:`, message.message_id);
+          console.log(
+            `[COLLAB-DEBUG] ⚠️ Message ${index} in chat ${chatId} missing isSaved flag:`,
+            message.message_id
+          );
         }
       });
     });
-    
+
     console.log(`[COLLAB-DEBUG] 📊 Message Status Summary:`);
     console.log(`  - Total messages: ${totalMessages}`);
     console.log(`  - Saved to DB: ${savedMessages}`);
     console.log(`  - Not saved to DB: ${unsavedMessages}`);
     console.log(`  - Missing isSaved flag: ${messagesWithoutFlag}`);
-    
-    return { totalMessages, savedMessages, unsavedMessages, messagesWithoutFlag };
+
+    return {
+      totalMessages,
+      savedMessages,
+      unsavedMessages,
+      messagesWithoutFlag,
+    };
   } catch (error) {
-    console.error("[COLLAB-DEBUG] ❌ Error checking message saved status:", error);
+    console.error(
+      "[COLLAB-DEBUG] ❌ Error checking message saved status:",
+      error
+    );
     return { error: error.message };
   }
 };
 
 // Global helper function to test collaborator message flow
-window.testCollaboratorMessageFlow = async function() {
+window.testCollaboratorMessageFlow = async function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING COLLABORATOR MESSAGE FLOW ===");
-  
+
   try {
     // Check if we're in collaboration mode
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Create a test message as collaborator
     const testMessage = {
       role: "user",
       content: "Test collaborator message",
       timestamp: new Date().toLocaleTimeString(),
-      message_id: `collab_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      isSaved: false
+      message_id: `collab_test_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      isSaved: false,
     };
-    
+
     const chatId = window.context?.getActiveChatId();
     console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
     console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
-    
+
     if (!chatId) {
       console.error("[COLLAB-DEBUG] ❌ No active chat ID");
       return { error: "No active chat ID" };
     }
-    
+
     if (!window.memory?.saveMessage) {
-      console.error("[COLLAB-DEBUG] ❌ Memory saveMessage function not available");
+      console.error(
+        "[COLLAB-DEBUG] ❌ Memory saveMessage function not available"
+      );
       return { error: "Memory saveMessage function not available" };
     }
-    
+
     console.log("[COLLAB-DEBUG] 🚀 Starting collaborator message save...");
     const result = await window.memory.saveMessage(chatId, testMessage);
-    
+
     console.log("[COLLAB-DEBUG] 📊 Save result:", result);
-    console.log("[COLLAB-DEBUG] 📊 Final message isSaved status:", testMessage.isSaved);
-    
+    console.log(
+      "[COLLAB-DEBUG] 📊 Final message isSaved status:",
+      testMessage.isSaved
+    );
+
     // Check if message was pushed to collaboration
     if (window.collaboration?.pushMessageToCollab) {
       console.log("[COLLAB-DEBUG] 📤 Pushing message to collaboration...");
       window.collaboration.pushMessageToCollab(testMessage);
     }
-    
+
     return {
       success: true,
       result,
       finalMessageStatus: testMessage.isSaved,
       messageId: testMessage.message_id,
-      isCollaborator: !isLeader
+      isCollaborator: !isLeader,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -4530,32 +4889,35 @@ window.testCollaboratorMessageFlow = async function() {
 };
 
 // Global helper function to check collaborator sync manager status
-window.checkCollaboratorSyncManager = function() {
+window.checkCollaboratorSyncManager = function () {
   console.log("[COLLAB-DEBUG] 🧪 === CHECKING COLLABORATOR SYNC MANAGER ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
     const syncManager = window.syncManager;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     console.log("[COLLAB-DEBUG] 📋 Sync manager status:", {
       hasSyncManager: !!syncManager,
       hasSupabase: !!syncManager?.supabase,
       isInitialized: syncManager?.isInitialized,
       userId: syncManager?.userId,
-      hasUploadMessage: !!syncManager?.uploadMessage
+      hasUploadMessage: !!syncManager?.uploadMessage,
     });
-    
+
     if (syncManager) {
-      console.log("[COLLAB-DEBUG] 📋 Sync manager methods:", Object.keys(syncManager));
+      console.log(
+        "[COLLAB-DEBUG] 📋 Sync manager methods:",
+        Object.keys(syncManager)
+      );
     }
-    
+
     return {
       success: true,
       isCollaborating,
@@ -4565,10 +4927,9 @@ window.checkCollaboratorSyncManager = function() {
         hasSupabase: !!syncManager?.supabase,
         isInitialized: syncManager?.isInitialized,
         userId: syncManager?.userId,
-        hasUploadMessage: !!syncManager?.uploadMessage
-      }
+        hasUploadMessage: !!syncManager?.uploadMessage,
+      },
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Error checking sync manager:", error);
     return { error: error.message };
@@ -4576,46 +4937,52 @@ window.checkCollaboratorSyncManager = function() {
 };
 
 // Global helper function to test message upload flow
-window.testMessageUploadFlow = async function() {
+window.testMessageUploadFlow = async function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING MESSAGE UPLOAD FLOW ===");
-  
+
   try {
     // Create a test message
     const testMessage = {
       role: "user",
       content: "Test message for upload flow",
       timestamp: new Date().toLocaleTimeString(),
-      message_id: `test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      isSaved: false
+      message_id: `test_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      isSaved: false,
     };
-    
+
     const chatId = window.context?.getActiveChatId();
     console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
     console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
-    
+
     if (!chatId) {
       console.error("[COLLAB-DEBUG] ❌ No active chat ID");
       return { error: "No active chat ID" };
     }
-    
+
     if (!window.memory?.saveMessage) {
-      console.error("[COLLAB-DEBUG] ❌ Memory saveMessage function not available");
+      console.error(
+        "[COLLAB-DEBUG] ❌ Memory saveMessage function not available"
+      );
       return { error: "Memory saveMessage function not available" };
     }
-    
+
     console.log("[COLLAB-DEBUG] 🚀 Starting test upload...");
     const result = await window.memory.saveMessage(chatId, testMessage);
-    
+
     console.log("[COLLAB-DEBUG] 📊 Test result:", result);
-    console.log("[COLLAB-DEBUG] 📊 Final message isSaved status:", testMessage.isSaved);
-    
+    console.log(
+      "[COLLAB-DEBUG] 📊 Final message isSaved status:",
+      testMessage.isSaved
+    );
+
     return {
       success: true,
       result,
       finalMessageStatus: testMessage.isSaved,
-      messageId: testMessage.message_id
+      messageId: testMessage.message_id,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -4623,53 +4990,69 @@ window.testMessageUploadFlow = async function() {
 };
 
 // Global helper function to test complete leaderId flow
-window.testLeaderIdFlow = function() {
+window.testLeaderIdFlow = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING COMPLETE LEADER ID FLOW ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Check localStorage userId
     const localStorageUserId = localStorage.getItem("userId");
     console.log("[COLLAB-DEBUG] 📋 localStorage userId:", localStorageUserId);
-    
+
     // Check window.userId
     const windowUserId = window.userId;
     console.log("[COLLAB-DEBUG] 📋 window.userId:", windowUserId);
-    
+
     // Check collaboration leaderId
     const collaborationLeaderId = window.collaboration?.leaderId;
-    console.log("[COLLAB-DEBUG] 📋 collaboration.leaderId:", collaborationLeaderId);
-    
+    console.log(
+      "[COLLAB-DEBUG] 📋 collaboration.leaderId:",
+      collaborationLeaderId
+    );
+
     // Check localStorage collaborationLeaderId
-    const localStorageCollaborationLeaderId = localStorage.getItem("collaborationLeaderId");
-    console.log("[COLLAB-DEBUG] 📋 localStorage collaborationLeaderId:", localStorageCollaborationLeaderId);
-    
+    const localStorageCollaborationLeaderId = localStorage.getItem(
+      "collaborationLeaderId"
+    );
+    console.log(
+      "[COLLAB-DEBUG] 📋 localStorage collaborationLeaderId:",
+      localStorageCollaborationLeaderId
+    );
+
     // Check shared sync map leaderId
     const sharedSyncMap = window.collaboration?.getSharedSyncMap();
-    const sharedMapLeaderId = sharedSyncMap ? sharedSyncMap.get('leaderId') : null;
-    console.log("[COLLAB-DEBUG] 📋 shared sync map leaderId:", sharedMapLeaderId);
-    
+    const sharedMapLeaderId = sharedSyncMap
+      ? sharedSyncMap.get("leaderId")
+      : null;
+    console.log(
+      "[COLLAB-DEBUG] 📋 shared sync map leaderId:",
+      sharedMapLeaderId
+    );
+
     // Check sync manager userId
     const syncManagerUserId = window.syncManager?.userId;
     console.log("[COLLAB-DEBUG] 📋 syncManager.userId:", syncManagerUserId);
-    
+
     // Determine the actual leader's userId
     const actualLeaderUserId = localStorageUserId || windowUserId;
-    console.log("[COLLAB-DEBUG] 📋 Actual leader userId (from localStorage):", actualLeaderUserId);
-    
+    console.log(
+      "[COLLAB-DEBUG] 📋 Actual leader userId (from localStorage):",
+      actualLeaderUserId
+    );
+
     // Check if everything is consistent
     const isConsistent = {
       localStorageUserId: !!localStorageUserId,
@@ -4677,45 +5060,60 @@ window.testLeaderIdFlow = function() {
       collaborationLeaderId: !!collaborationLeaderId,
       localStorageCollaborationLeaderId: !!localStorageCollaborationLeaderId,
       sharedMapLeaderId: !!sharedMapLeaderId,
-      syncManagerUserId: !!syncManagerUserId
+      syncManagerUserId: !!syncManagerUserId,
     };
-    
+
     console.log("[COLLAB-DEBUG] 📊 Consistency check:", isConsistent);
-    
+
     // Check if leaderId is properly passed to collaborator
     if (isLeader) {
-      console.log("[COLLAB-DEBUG] 🔍 This is the leader - checking if userId is stored properly");
-      
+      console.log(
+        "[COLLAB-DEBUG] 🔍 This is the leader - checking if userId is stored properly"
+      );
+
       if (!actualLeaderUserId) {
-        console.error("[COLLAB-DEBUG] ❌ Leader has no userId in localStorage or window");
+        console.error(
+          "[COLLAB-DEBUG] ❌ Leader has no userId in localStorage or window"
+        );
         return { error: "Leader has no userId" };
       }
-      
+
       if (sharedMapLeaderId !== actualLeaderUserId) {
-        console.warn("[COLLAB-DEBUG] ⚠️ Shared map leaderId doesn't match actual userId");
-        console.log("[COLLAB-DEBUG] 🔧 Attempting to fix by storing in shared map...");
+        console.warn(
+          "[COLLAB-DEBUG] ⚠️ Shared map leaderId doesn't match actual userId"
+        );
+        console.log(
+          "[COLLAB-DEBUG] 🔧 Attempting to fix by storing in shared map..."
+        );
         if (sharedSyncMap) {
-          sharedSyncMap.set('leaderId', actualLeaderUserId);
+          sharedSyncMap.set("leaderId", actualLeaderUserId);
           console.log("[COLLAB-DEBUG] ✅ Fixed shared map leaderId");
         }
       }
-      
     } else {
-      console.log("[COLLAB-DEBUG] 🔍 This is a collaborator - checking if leaderId is received properly");
-      
+      console.log(
+        "[COLLAB-DEBUG] 🔍 This is a collaborator - checking if leaderId is received properly"
+      );
+
       if (!sharedMapLeaderId) {
-        console.error("[COLLAB-DEBUG] ❌ Collaborator has no leaderId in shared map");
+        console.error(
+          "[COLLAB-DEBUG] ❌ Collaborator has no leaderId in shared map"
+        );
         return { error: "No leaderId in shared map" };
       }
-      
+
       if (!localStorageCollaborationLeaderId) {
-        console.warn("[COLLAB-DEBUG] ⚠️ Collaborator has no leaderId in localStorage");
-        console.log("[COLLAB-DEBUG] 🔧 Attempting to fix by storing in localStorage...");
+        console.warn(
+          "[COLLAB-DEBUG] ⚠️ Collaborator has no leaderId in localStorage"
+        );
+        console.log(
+          "[COLLAB-DEBUG] 🔧 Attempting to fix by storing in localStorage..."
+        );
         localStorage.setItem("collaborationLeaderId", sharedMapLeaderId);
         console.log("[COLLAB-DEBUG] ✅ Fixed localStorage leaderId");
       }
     }
-    
+
     return {
       success: true,
       isLeader,
@@ -4726,9 +5124,8 @@ window.testLeaderIdFlow = function() {
       localStorageCollaborationLeaderId,
       sharedMapLeaderId,
       syncManagerUserId,
-      isConsistent
+      isConsistent,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -4736,86 +5133,104 @@ window.testLeaderIdFlow = function() {
 };
 
 // Global helper function to test userId attribution for collaborators
-window.testCollaboratorUserIdAttribution = async function() {
-  console.log("[COLLAB-DEBUG] 🧪 === TESTING COLLABORATOR USER ID ATTRIBUTION ===");
-  
+window.testCollaboratorUserIdAttribution = async function () {
+  console.log(
+    "[COLLAB-DEBUG] 🧪 === TESTING COLLABORATOR USER ID ATTRIBUTION ==="
+  );
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     if (isLeader) {
-      console.log("[COLLAB-DEBUG] 🔍 This is the leader - testing leader userId");
-      
+      console.log(
+        "[COLLAB-DEBUG] 🔍 This is the leader - testing leader userId"
+      );
+
       const leaderUserId = localStorage.getItem("userId") || window.userId;
       console.log("[COLLAB-DEBUG] 📋 Leader userId:", leaderUserId);
-      
+
       return {
         success: true,
         isLeader: true,
         userId: leaderUserId,
-        message: "Leader uses their own userId"
+        message: "Leader uses their own userId",
       };
     } else {
-      console.log("[COLLAB-DEBUG] 🔍 This is a collaborator - testing userId attribution");
-      
-      const collaborationLeaderId = localStorage.getItem("collaborationLeaderId");
+      console.log(
+        "[COLLAB-DEBUG] 🔍 This is a collaborator - testing userId attribution"
+      );
+
+      const collaborationLeaderId = localStorage.getItem(
+        "collaborationLeaderId"
+      );
       const syncManagerUserId = window.syncManager?.userId;
-      
-      console.log("[COLLAB-DEBUG] 📋 collaborationLeaderId:", collaborationLeaderId);
+
+      console.log(
+        "[COLLAB-DEBUG] 📋 collaborationLeaderId:",
+        collaborationLeaderId
+      );
       console.log("[COLLAB-DEBUG] 📋 syncManager.userId:", syncManagerUserId);
-      
+
       // Test creating a message to see what userId will be used
       const testMessage = {
         role: "user",
         content: "Test message for userId attribution",
         timestamp: new Date().toLocaleTimeString(),
-        message_id: `test_attribution_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-        isSaved: false
+        message_id: `test_attribution_${Date.now()}_${Math.random()
+          .toString(36)
+          .slice(2, 8)}`,
+        isSaved: false,
       };
-      
+
       const chatId = window.context?.getActiveChatId();
       console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
       console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
-      
+
       if (!chatId) {
         console.error("[COLLAB-DEBUG] ❌ No active chat ID");
         return { error: "No active chat ID" };
       }
-      
+
       // Simulate what the upload function would do
       const isCollaborating = window.collaboration?.isCollaborating || false;
       const isLeader = window.collaboration?.isLeader || false;
-      
+
       let userIdToUse;
       if (isCollaborating) {
-        userIdToUse = isLeader ? window.syncManager?.userId : (localStorage.getItem("collaborationLeaderId") || window.syncManager?.userId);
+        userIdToUse = isLeader
+          ? window.syncManager?.userId
+          : localStorage.getItem("collaborationLeaderId") ||
+            window.syncManager?.userId;
       } else {
         userIdToUse = window.syncManager?.userId;
       }
-      
-      console.log("[COLLAB-DEBUG] 📊 Simulated userId that would be used:", userIdToUse);
-      
+
+      console.log(
+        "[COLLAB-DEBUG] 📊 Simulated userId that would be used:",
+        userIdToUse
+      );
+
       return {
         success: true,
         isLeader: false,
         collaborationLeaderId,
         syncManagerUserId,
         simulatedUserId: userIdToUse,
-        message: "Collaborator uses leader's userId for data attribution"
+        message: "Collaborator uses leader's userId for data attribution",
       };
     }
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -4823,85 +5238,105 @@ window.testCollaboratorUserIdAttribution = async function() {
 };
 
 // Global helper function to test complete message flow with database save
-window.testCompleteMessageFlow = async function() {
+window.testCompleteMessageFlow = async function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING COMPLETE MESSAGE FLOW ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Check userId attribution
     const collaborationLeaderId = localStorage.getItem("collaborationLeaderId");
     const syncManagerUserId = window.syncManager?.userId;
-    
+
     console.log("[COLLAB-DEBUG] 📋 UserId status:", {
       collaborationLeaderId,
       syncManagerUserId,
-      isLeader
+      isLeader,
     });
-    
+
     // Create a test message
     const testMessage = {
       role: "user",
       content: "Test complete message flow",
       timestamp: new Date().toLocaleTimeString(),
-      message_id: `complete_test_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
-      isSaved: false
+      message_id: `complete_test_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
+      isSaved: false,
     };
-    
+
     const chatId = window.context?.getActiveChatId();
     console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
     console.log("[COLLAB-DEBUG] 📋 Chat ID:", chatId);
-    
+
     if (!chatId) {
       console.error("[COLLAB-DEBUG] ❌ No active chat ID");
       return { error: "No active chat ID" };
     }
-    
+
     // Step 1: Save message to database first
     console.log("[COLLAB-DEBUG] 🚀 Step 1: Saving message to database...");
     const saveResult = await window.memory.saveMessage(chatId, testMessage);
     console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
-    console.log("[COLLAB-DEBUG] 📊 Message isSaved after save:", testMessage.isSaved);
-    
+    console.log(
+      "[COLLAB-DEBUG] 📊 Message isSaved after save:",
+      testMessage.isSaved
+    );
+
     // Step 2: Push to collaboration
     console.log("[COLLAB-DEBUG] 🚀 Step 2: Pushing to collaboration...");
     if (window.collaboration?.pushMessageToCollab) {
       window.collaboration.pushMessageToCollab(testMessage);
     }
-    
+
     // Step 3: Check if message appears in shared array
     setTimeout(() => {
       console.log("[COLLAB-DEBUG] 🚀 Step 3: Checking shared array...");
-      const sharedMessages = window.collaboration?.sharedMessages?.toArray() || [];
-      const messageInSharedArray = sharedMessages.find(msg => msg.message_id === testMessage.message_id);
-      console.log("[COLLAB-DEBUG] 📊 Message in shared array:", messageInSharedArray);
-      
+      const sharedMessages =
+        window.collaboration?.sharedMessages?.toArray() || [];
+      const messageInSharedArray = sharedMessages.find(
+        (msg) => msg.message_id === testMessage.message_id
+      );
+      console.log(
+        "[COLLAB-DEBUG] 📊 Message in shared array:",
+        messageInSharedArray
+      );
+
       if (messageInSharedArray) {
-        console.log("[COLLAB-DEBUG] 📊 Message userId in shared array:", messageInSharedArray.userId);
-        console.log("[COLLAB-DEBUG] 📊 Message isSaved in shared array:", messageInSharedArray.isSaved);
+        console.log(
+          "[COLLAB-DEBUG] 📊 Message userId in shared array:",
+          messageInSharedArray.userId
+        );
+        console.log(
+          "[COLLAB-DEBUG] 📊 Message isSaved in shared array:",
+          messageInSharedArray.isSaved
+        );
       }
     }, 500);
-    
+
     // Step 4: Check database sync queue
     setTimeout(() => {
       console.log("[COLLAB-DEBUG] 🚀 Step 4: Checking database sync queue...");
       const syncQueue = window.collaboration?.databaseSyncQueue || [];
-      console.log("[COLLAB-DEBUG] 📊 Database sync queue length:", syncQueue.length);
+      console.log(
+        "[COLLAB-DEBUG] 📊 Database sync queue length:",
+        syncQueue.length
+      );
       console.log("[COLLAB-DEBUG] 📊 Database sync queue:", syncQueue);
     }, 1000);
-    
+
     return {
       success: true,
       isLeader,
@@ -4909,9 +5344,8 @@ window.testCompleteMessageFlow = async function() {
       syncManagerUserId,
       saveResult,
       finalMessageStatus: testMessage.isSaved,
-      messageId: testMessage.message_id
+      messageId: testMessage.message_id,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -4919,74 +5353,110 @@ window.testCompleteMessageFlow = async function() {
 };
 
 // Global helper function to test userId consistency across leader and collaborator
-window.testUserIdConsistency = function() {
+window.testUserIdConsistency = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING USER ID CONSISTENCY ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Check userId sources
     const localStorageUserId = localStorage.getItem("userId");
     const collaborationLeaderId = localStorage.getItem("collaborationLeaderId");
     const syncManagerUserId = window.syncManager?.userId;
     const collaborationUserId = window.collaboration?.userId;
-    
+
     console.log("[COLLAB-DEBUG] 📋 UserId sources:", {
       localStorageUserId,
       collaborationLeaderId,
       syncManagerUserId,
       collaborationUserId,
-      isLeader
+      isLeader,
     });
-    
+
     // Check messages in local storage
-    const messagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const messagesByChat = JSON.parse(
+      localStorage.getItem("messagesByChat") || "{}"
+    );
     const allMessages = Object.values(messagesByChat).flat();
-    
-    console.log("[COLLAB-DEBUG] 📊 Total messages in local storage:", allMessages.length);
-    
+
+    console.log(
+      "[COLLAB-DEBUG] 📊 Total messages in local storage:",
+      allMessages.length
+    );
+
     // Check messages without userId
-    const messagesWithoutUserId = allMessages.filter(msg => !msg.userId);
-    const messagesWithUserId = allMessages.filter(msg => msg.userId);
-    
-    console.log("[COLLAB-DEBUG] 📊 Messages without userId:", messagesWithoutUserId.length);
-    console.log("[COLLAB-DEBUG] 📊 Messages with userId:", messagesWithUserId.length);
-    
+    const messagesWithoutUserId = allMessages.filter((msg) => !msg.userId);
+    const messagesWithUserId = allMessages.filter((msg) => msg.userId);
+
+    console.log(
+      "[COLLAB-DEBUG] 📊 Messages without userId:",
+      messagesWithoutUserId.length
+    );
+    console.log(
+      "[COLLAB-DEBUG] 📊 Messages with userId:",
+      messagesWithUserId.length
+    );
+
     if (messagesWithoutUserId.length > 0) {
-      console.log("[COLLAB-DEBUG] ⚠️ Messages missing userId:", messagesWithoutUserId.slice(0, 3));
+      console.log(
+        "[COLLAB-DEBUG] ⚠️ Messages missing userId:",
+        messagesWithoutUserId.slice(0, 3)
+      );
     }
-    
+
     // Check userId values
-    const userIdValues = [...new Set(messagesWithUserId.map(msg => msg.userId))];
-    console.log("[COLLAB-DEBUG] 📊 Unique userId values in messages:", userIdValues);
-    
+    const userIdValues = [
+      ...new Set(messagesWithUserId.map((msg) => msg.userId)),
+    ];
+    console.log(
+      "[COLLAB-DEBUG] 📊 Unique userId values in messages:",
+      userIdValues
+    );
+
     // Check shared array messages
-    const sharedMessages = window.collaboration?.sharedMessages?.toArray() || [];
-    const sharedMessagesWithUserId = sharedMessages.filter(msg => msg.userId);
-    const sharedMessagesWithoutUserId = sharedMessages.filter(msg => !msg.userId);
-    
-    console.log("[COLLAB-DEBUG] 📊 Shared array messages with userId:", sharedMessagesWithUserId.length);
-    console.log("[COLLAB-DEBUG] 📊 Shared array messages without userId:", sharedMessagesWithoutUserId.length);
-    
+    const sharedMessages =
+      window.collaboration?.sharedMessages?.toArray() || [];
+    const sharedMessagesWithUserId = sharedMessages.filter((msg) => msg.userId);
+    const sharedMessagesWithoutUserId = sharedMessages.filter(
+      (msg) => !msg.userId
+    );
+
+    console.log(
+      "[COLLAB-DEBUG] 📊 Shared array messages with userId:",
+      sharedMessagesWithUserId.length
+    );
+    console.log(
+      "[COLLAB-DEBUG] 📊 Shared array messages without userId:",
+      sharedMessagesWithoutUserId.length
+    );
+
     if (sharedMessagesWithoutUserId.length > 0) {
-      console.log("[COLLAB-DEBUG] ⚠️ Shared array messages missing userId:", sharedMessagesWithoutUserId.slice(0, 3));
+      console.log(
+        "[COLLAB-DEBUG] ⚠️ Shared array messages missing userId:",
+        sharedMessagesWithoutUserId.slice(0, 3)
+      );
     }
-    
-    const sharedUserIdValues = [...new Set(sharedMessagesWithUserId.map(msg => msg.userId))];
-    console.log("[COLLAB-DEBUG] 📊 Unique userId values in shared array:", sharedUserIdValues);
-    
+
+    const sharedUserIdValues = [
+      ...new Set(sharedMessagesWithUserId.map((msg) => msg.userId)),
+    ];
+    console.log(
+      "[COLLAB-DEBUG] 📊 Unique userId values in shared array:",
+      sharedUserIdValues
+    );
+
     return {
       success: true,
       isLeader,
@@ -4996,9 +5466,8 @@ window.testUserIdConsistency = function() {
       sharedMessagesWithoutUserId: sharedMessagesWithoutUserId.length,
       sharedMessagesWithUserId: sharedMessagesWithUserId.length,
       localUserIdValues: userIdValues,
-      sharedUserIdValues: sharedUserIdValues
+      sharedUserIdValues: sharedUserIdValues,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -5006,93 +5475,107 @@ window.testUserIdConsistency = function() {
 };
 
 // Global helper function to test isSaved status preservation
-window.testIsSavedPreservation = function() {
+window.testIsSavedPreservation = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING IS_SAVED PRESERVATION ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Check messages in local storage
-    const messagesByChat = JSON.parse(localStorage.getItem("messagesByChat") || "{}");
+    const messagesByChat = JSON.parse(
+      localStorage.getItem("messagesByChat") || "{}"
+    );
     const allMessages = Object.values(messagesByChat).flat();
-    
-    console.log("[COLLAB-DEBUG] 📊 Total messages in local storage:", allMessages.length);
-    
+
+    console.log(
+      "[COLLAB-DEBUG] 📊 Total messages in local storage:",
+      allMessages.length
+    );
+
     // Check isSaved status distribution
-    const savedMessages = allMessages.filter(msg => msg.isSaved === true);
-    const unsavedMessages = allMessages.filter(msg => msg.isSaved === false);
-    const undefinedSavedMessages = allMessages.filter(msg => msg.isSaved === undefined);
-    
+    const savedMessages = allMessages.filter((msg) => msg.isSaved === true);
+    const unsavedMessages = allMessages.filter((msg) => msg.isSaved === false);
+    const undefinedSavedMessages = allMessages.filter(
+      (msg) => msg.isSaved === undefined
+    );
+
     console.log("[COLLAB-DEBUG] 📊 isSaved status distribution:", {
       saved: savedMessages.length,
       unsaved: unsavedMessages.length,
-      undefined: undefinedSavedMessages.length
+      undefined: undefinedSavedMessages.length,
     });
-    
+
     // Check by role
-    const leaderMessages = allMessages.filter(msg => msg.role !== "collab");
-    const collabMessages = allMessages.filter(msg => msg.role === "collab");
-    
-    const leaderSaved = leaderMessages.filter(msg => msg.isSaved === true);
-    const leaderUnsaved = leaderMessages.filter(msg => msg.isSaved === false);
-    const collabSaved = collabMessages.filter(msg => msg.isSaved === true);
-    const collabUnsaved = collabMessages.filter(msg => msg.isSaved === false);
-    
+    const leaderMessages = allMessages.filter((msg) => msg.role !== "collab");
+    const collabMessages = allMessages.filter((msg) => msg.role === "collab");
+
+    const leaderSaved = leaderMessages.filter((msg) => msg.isSaved === true);
+    const leaderUnsaved = leaderMessages.filter((msg) => msg.isSaved === false);
+    const collabSaved = collabMessages.filter((msg) => msg.isSaved === true);
+    const collabUnsaved = collabMessages.filter((msg) => msg.isSaved === false);
+
     console.log("[COLLAB-DEBUG] 📊 isSaved by role:", {
       leader: {
         total: leaderMessages.length,
         saved: leaderSaved.length,
-        unsaved: leaderUnsaved.length
+        unsaved: leaderUnsaved.length,
       },
       collab: {
         total: collabMessages.length,
         saved: collabSaved.length,
-        unsaved: collabUnsaved.length
-      }
+        unsaved: collabUnsaved.length,
+      },
     });
-    
+
     // Show sample messages
     if (leaderMessages.length > 0) {
-      console.log("[COLLAB-DEBUG] 📋 Sample leader messages:", leaderMessages.slice(0, 2).map(msg => ({
-        role: msg.role,
-        content: msg.content.substring(0, 50) + "...",
-        isSaved: msg.isSaved,
-        userId: msg.userId
-      })));
+      console.log(
+        "[COLLAB-DEBUG] 📋 Sample leader messages:",
+        leaderMessages.slice(0, 2).map((msg) => ({
+          role: msg.role,
+          content: msg.content.substring(0, 50) + "...",
+          isSaved: msg.isSaved,
+          userId: msg.userId,
+        }))
+      );
     }
-    
+
     if (collabMessages.length > 0) {
-      console.log("[COLLAB-DEBUG] 📋 Sample collab messages:", collabMessages.slice(0, 2).map(msg => ({
-        role: msg.role,
-        content: msg.content.substring(0, 50) + "...",
-        isSaved: msg.isSaved,
-        userId: msg.userId
-      })));
+      console.log(
+        "[COLLAB-DEBUG] 📋 Sample collab messages:",
+        collabMessages.slice(0, 2).map((msg) => ({
+          role: msg.role,
+          content: msg.content.substring(0, 50) + "...",
+          isSaved: msg.isSaved,
+          userId: msg.userId,
+        }))
+      );
     }
-    
+
     // Check shared array messages
-    const sharedMessages = window.collaboration?.sharedMessages?.toArray() || [];
-    const sharedSaved = sharedMessages.filter(msg => msg.isSaved === true);
-    const sharedUnsaved = sharedMessages.filter(msg => msg.isSaved === false);
-    
+    const sharedMessages =
+      window.collaboration?.sharedMessages?.toArray() || [];
+    const sharedSaved = sharedMessages.filter((msg) => msg.isSaved === true);
+    const sharedUnsaved = sharedMessages.filter((msg) => msg.isSaved === false);
+
     console.log("[COLLAB-DEBUG] 📊 Shared array isSaved status:", {
       total: sharedMessages.length,
       saved: sharedSaved.length,
-      unsaved: sharedUnsaved.length
+      unsaved: sharedUnsaved.length,
     });
-    
+
     return {
       success: true,
       isLeader,
@@ -5100,27 +5583,26 @@ window.testIsSavedPreservation = function() {
         total: allMessages.length,
         saved: savedMessages.length,
         unsaved: unsavedMessages.length,
-        undefined: undefinedSavedMessages.length
+        undefined: undefinedSavedMessages.length,
       },
       byRole: {
         leader: {
           total: leaderMessages.length,
           saved: leaderSaved.length,
-          unsaved: leaderUnsaved.length
+          unsaved: leaderUnsaved.length,
         },
         collab: {
           total: collabMessages.length,
           saved: collabSaved.length,
-          unsaved: collabUnsaved.length
-        }
+          unsaved: collabUnsaved.length,
+        },
       },
       sharedArray: {
         total: sharedMessages.length,
         saved: sharedSaved.length,
-        unsaved: sharedUnsaved.length
-      }
+        unsaved: sharedUnsaved.length,
+      },
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -5128,19 +5610,19 @@ window.testIsSavedPreservation = function() {
 };
 
 // Global helper function to test view behavior
-window.testViewBehavior = function() {
+window.testViewBehavior = function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING VIEW BEHAVIOR ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     // Get current view state
     const currentView = window.context?.getActiveView();
     let storedView = null;
@@ -5152,62 +5634,93 @@ window.testViewBehavior = function() {
     } catch (error) {
       console.warn("[COLLAB-DEBUG] ⚠️ Error parsing stored view:", error);
     }
-    
+
     console.log("[COLLAB-DEBUG] 📋 Current view state:", {
       currentView: currentView ? currentView.type : null,
       storedView: storedView ? storedView.type : null,
-      storedViewRaw: localStorage.getItem("activeView")
+      storedViewRaw: localStorage.getItem("activeView"),
     });
-    
+
     // Test view setting
     console.log("[COLLAB-DEBUG] 🧪 Testing view setting...");
-    
+
     if (isLeader) {
       console.log("[COLLAB-DEBUG] 👑 Leader: Should start on memory view");
       if (currentView && currentView.type === "memory") {
         console.log("[COLLAB-DEBUG] ✅ Leader is correctly on memory view");
       } else {
-        console.log("[COLLAB-DEBUG] ⚠️ Leader is not on memory view:", currentView?.type);
+        console.log(
+          "[COLLAB-DEBUG] ⚠️ Leader is not on memory view:",
+          currentView?.type
+        );
       }
     } else if (isCollaborating) {
-      console.log("[COLLAB-DEBUG] 👥 Collaborator: Should start on artifacts view if no stored view");
+      console.log(
+        "[COLLAB-DEBUG] 👥 Collaborator: Should start on artifacts view if no stored view"
+      );
       if (storedView) {
-        console.log("[COLLAB-DEBUG] 📋 Collaborator has stored view:", storedView.type);
+        console.log(
+          "[COLLAB-DEBUG] 📋 Collaborator has stored view:",
+          storedView.type
+        );
         if (currentView && currentView.type === storedView.type) {
-          console.log("[COLLAB-DEBUG] ✅ Collaborator correctly restored stored view");
+          console.log(
+            "[COLLAB-DEBUG] ✅ Collaborator correctly restored stored view"
+          );
         } else {
           console.log("[COLLAB-DEBUG] ⚠️ Collaborator view mismatch:", {
             current: currentView?.type,
-            stored: storedView.type
+            stored: storedView.type,
           });
         }
       } else {
-        console.log("[COLLAB-DEBUG] 📋 Collaborator has no stored view - should default to artifacts");
+        console.log(
+          "[COLLAB-DEBUG] 📋 Collaborator has no stored view - should default to artifacts"
+        );
         if (currentView && currentView.type === "artifacts") {
-          console.log("[COLLAB-DEBUG] ✅ Collaborator correctly defaulted to artifacts view");
+          console.log(
+            "[COLLAB-DEBUG] ✅ Collaborator correctly defaulted to artifacts view"
+          );
         } else {
-          console.log("[COLLAB-DEBUG] ⚠️ Collaborator not on artifacts view:", currentView?.type);
+          console.log(
+            "[COLLAB-DEBUG] ⚠️ Collaborator not on artifacts view:",
+            currentView?.type
+          );
         }
       }
     } else {
-      console.log("[COLLAB-DEBUG] 👤 Regular user: Should start on memory view");
+      console.log(
+        "[COLLAB-DEBUG] 👤 Regular user: Should start on memory view"
+      );
       if (currentView && currentView.type === "memory") {
-        console.log("[COLLAB-DEBUG] ✅ Regular user is correctly on memory view");
+        console.log(
+          "[COLLAB-DEBUG] ✅ Regular user is correctly on memory view"
+        );
       } else {
-        console.log("[COLLAB-DEBUG] ⚠️ Regular user is not on memory view:", currentView?.type);
+        console.log(
+          "[COLLAB-DEBUG] ⚠️ Regular user is not on memory view:",
+          currentView?.type
+        );
       }
     }
-    
+
     return {
       success: true,
       isCollaborating,
       isLeader,
       currentView: currentView?.type,
       storedView: storedView?.type,
-      localStorageView: localStorageView ? JSON.parse(localStorageView).type : null,
-      expectedBehavior: isLeader ? "memory" : (isCollaborating ? (storedView ? storedView.type : "artifacts") : "memory")
+      localStorageView: localStorageView
+        ? JSON.parse(localStorageView).type
+        : null,
+      expectedBehavior: isLeader
+        ? "memory"
+        : isCollaborating
+        ? storedView
+          ? storedView.type
+          : "artifacts"
+        : "memory",
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };
@@ -5215,43 +5728,47 @@ window.testViewBehavior = function() {
 };
 
 // Global helper function to test isSaved flag transmission
-window.testIsSavedTransmission = async function() {
+window.testIsSavedTransmission = async function () {
   console.log("[COLLAB-DEBUG] 🧪 === TESTING ISSAVED FLAG TRANSMISSION ===");
-  
+
   try {
     const isCollaborating = window.collaboration?.isCollaborating;
     const isLeader = window.collaboration?.isLeader;
-    
+
     console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
       isCollaborating,
       isLeader,
-      hasCollaboration: !!window.collaboration
+      hasCollaboration: !!window.collaboration,
     });
-    
+
     if (!isCollaborating) {
       console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
       return { error: "Not in collaboration mode" };
     }
-    
+
     // Create a test message with explicit isSaved flag
     const testMessage = {
       role: "user",
       content: "Test message for isSaved flag transmission",
       timestamp: new Date().toLocaleTimeString(),
-      message_id: `test_issaved_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      message_id: `test_issaved_${Date.now()}_${Math.random()
+        .toString(36)
+        .slice(2, 8)}`,
       isSaved: false, // Explicitly set to false
-      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId"),
-      chatId: window.context?.getActiveChatId()
+      userId: isLeader
+        ? localStorage.getItem("userId")
+        : localStorage.getItem("collaborationLeaderId"),
+      chatId: window.context?.getActiveChatId(),
     };
-    
+
     console.log("[COLLAB-DEBUG] 📋 Test message created:", {
       role: testMessage.role,
       content: testMessage.content,
       message_id: testMessage.message_id,
       isSaved: testMessage.isSaved,
-      userId: testMessage.userId
+      userId: testMessage.userId,
     });
-    
+
     // Push the message to collaboration
     if (window.collaboration?.pushMessageToCollab) {
       console.log("[COLLAB-DEBUG] 🚀 Pushing test message to collaboration...");
@@ -5261,51 +5778,55 @@ window.testIsSavedTransmission = async function() {
       console.error("[COLLAB-DEBUG] ❌ pushMessageToCollab not available");
       return { error: "pushMessageToCollab not available" };
     }
-    
+
     // Wait a moment for the message to be processed
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
     // Check if the message was received and has the isSaved flag
     const messagesByChat = window.context?.getMessagesByChat() || {};
     const activeChatId = window.context?.getActiveChatId();
     const messagesInChat = messagesByChat[activeChatId] || [];
-    const receivedMessage = messagesInChat.find(m => m.message_id === testMessage.message_id);
-    
+    const receivedMessage = messagesInChat.find(
+      (m) => m.message_id === testMessage.message_id
+    );
+
     console.log("[COLLAB-DEBUG] 📊 Message reception check:", {
       activeChatId,
       totalMessagesInChat: messagesInChat.length,
       messageFound: !!receivedMessage,
       receivedMessageIsSaved: receivedMessage?.isSaved,
-      expectedIsSaved: testMessage.isSaved
+      expectedIsSaved: testMessage.isSaved,
     });
-    
+
     if (receivedMessage) {
       console.log("[COLLAB-DEBUG] 📋 Received message details:", {
         role: receivedMessage.role,
         content: receivedMessage.content,
         message_id: receivedMessage.message_id,
         isSaved: receivedMessage.isSaved,
-        userId: receivedMessage.userId
+        userId: receivedMessage.userId,
       });
     }
-    
+
     return {
       success: true,
       isLeader,
       testMessage: {
         role: testMessage.role,
         message_id: testMessage.message_id,
-        isSaved: testMessage.isSaved
+        isSaved: testMessage.isSaved,
       },
-      receivedMessage: receivedMessage ? {
-        role: receivedMessage.role,
-        message_id: receivedMessage.message_id,
-        isSaved: receivedMessage.isSaved,
-        userId: receivedMessage.userId
-      } : null,
-      isSavedTransmitted: receivedMessage && receivedMessage.isSaved === testMessage.isSaved
+      receivedMessage: receivedMessage
+        ? {
+            role: receivedMessage.role,
+            message_id: receivedMessage.message_id,
+            isSaved: receivedMessage.isSaved,
+            userId: receivedMessage.userId,
+          }
+        : null,
+      isSavedTransmitted:
+        receivedMessage && receivedMessage.isSaved === testMessage.isSaved,
     };
-    
   } catch (error) {
     console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
     return { error: error.message };

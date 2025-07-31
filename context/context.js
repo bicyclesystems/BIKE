@@ -24,6 +24,13 @@ let userSession = null;
 // =================== Core State Management ===================
 
 function setState(partial) {
+  // Debug logging for message state changes
+  if (partial.messagesByChat) {
+    console.log("[test12] 🔄 === SETSTATE MESSAGES CHANGED ===");
+    console.log("[test12] 📋 Partial state:", partial);
+    console.log("[test12] 📋 Stack trace:", new Error().stack);
+  }
+  
   Object.assign(AppState, partial);
 }
 

@@ -297,9 +297,10 @@ async function saveArtifacts() {
     );
   }
 
-  // Skip dispatching data change event for debounced saves to prevent infinite loops
-  // The individual saveArtifact() function already handles database uploads directly
-  console.log('[MEMORY] ⚠️ Skipping data change event dispatch - artifacts are uploaded directly by saveArtifact()');
+  // Notify sync system that artifacts have changed
+  console.log('[MEMORY] 🔄 Dispatching data change event for artifacts...');
+  dispatchDataChange("artifacts", AppState.artifacts);
+  console.log('[MEMORY] ✅ Data change event dispatched');
 }
 
 async function loadArtifacts() {
@@ -328,23 +329,42 @@ async function loadArtifacts() {
 
 // =================== Individual Item Persistence ===================
 async function saveChat(chat) {
+  console.log("[COLLAB-DEBUG] 💾 === MEMORY SAVE CHAT START ===");
+  console.log("[COLLAB-DEBUG] 📋 Chat:", chat);
 
   try {
     // Step 1: Save to database first
+    console.log("[COLLAB-DEBUG] 🔍 Checking sync manager availability...");
+    console.log("[COLLAB-DEBUG] 📊 Sync manager available:", !!window.syncManager);
+    console.log("[COLLAB-DEBUG] 📊 Upload chat function available:", !!window.syncManager?.uploadChat);
+    
     if (window.syncManager?.uploadChat) {
+      console.log("[COLLAB-DEBUG] 📤 === SYNC MANAGER UPLOAD ATTEMPT ===");
+      console.log("[COLLAB-DEBUG] 📋 Calling uploadChat with:", chat);
       await window.syncManager.uploadChat(chat);
+      console.log("[COLLAB-DEBUG] ✅ Chat uploaded to database successfully");
     } else {
       console.warn("[COLLAB-DEBUG] ⚠️ No sync manager available - skipping database save");
+      console.log("[COLLAB-DEBUG] 🔍 Debug info:", {
+        hasSyncManager: !!window.syncManager,
+        hasUploadChat: !!window.syncManager?.uploadChat,
+        syncManagerKeys: window.syncManager ? Object.keys(window.syncManager) : 'N/A'
+      });
     }
 
     // Step 2: Save to local state
+    console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE SAVE ===");
+    console.log("[COLLAB-DEBUG] 📊 Current AppState.chats count:", AppState.chats.length);
+    
   const chats = [...AppState.chats];
   const existingIndex = chats.findIndex((c) => c.id === chat.id);
 
   if (existingIndex >= 0) {
     chats[existingIndex] = chat;
+      console.log("[COLLAB-DEBUG] 📝 Updated existing chat in local state");
   } else {
     chats.push(chat);
+      console.log("[COLLAB-DEBUG] 📝 Added new chat to local state");
   }
 
   setState({ chats });
@@ -352,8 +372,14 @@ async function saveChat(chat) {
 
     // Sync chat to collaboration (like messages do)
     if (window.collaboration && window.collaboration.pushChatToCollab) {
+      console.log("[COLLAB-DEBUG] 📤 Pushing chat to collaboration from saveChat...");
       window.collaboration.pushChatToCollab(chat);
+      console.log("[COLLAB-DEBUG] ✅ Chat pushed to collaboration from saveChat");
+    } else {
+      console.log("[COLLAB-DEBUG] ⚠️ Collaboration sync not available for chat in saveChat");
     }
+
+    console.log("[COLLAB-DEBUG] ✅ Chat saved successfully (DB + Local)");
     return { success: true, chat };
 
   } catch (error) {
@@ -362,6 +388,7 @@ async function saveChat(chat) {
     console.error("[COLLAB-DEBUG] Stack trace:", error.stack);
     
     // Even if database fails, still save locally for offline functionality
+    console.log("[COLLAB-DEBUG] 🔄 Fallback: Saving chat to local state only...");
     const chats = [...AppState.chats];
     const existingIndex = chats.findIndex((c) => c.id === chat.id);
 
@@ -375,19 +402,25 @@ async function saveChat(chat) {
     debouncedSaveChats();
 
     // Schedule retry after 5 seconds
+    console.log("[COLLAB-DEBUG] ⏰ Scheduling database retry in 5 seconds...");
     setTimeout(async () => {
+      console.log("[COLLAB-DEBUG] 🔄 === RETRYING DATABASE SAVE ===");
       try {
         if (window.syncManager?.uploadChat) {
+          console.log("[COLLAB-DEBUG] 📤 Retry: Uploading chat to database...");
           await window.syncManager.uploadChat(chat);
+          console.log("[COLLAB-DEBUG] ✅ Chat uploaded to database on retry");
         } else {
           console.warn("[COLLAB-DEBUG] ⚠️ Retry: No sync manager available");
         }
       } catch (retryError) {
         console.error("[COLLAB-DEBUG] ❌ Retry failed:", retryError);
+        // Could schedule another retry here if needed
       }
     }, 5000);
 
     // Notify sync system for retry
+    console.log("[COLLAB-DEBUG] 📡 Dispatching data change event for retry...");
   dispatchDataChange("chat", chat);
     
     return { success: false, error: error.message, savedLocally: true };
@@ -572,6 +605,10 @@ async function handleChatNotFoundErrorForArtifact(artifact) {
 }
 
 async function saveMessage(chatId, message) {
+  console.log("[test12] 💾 === MEMORY SAVE MESSAGE START ===");
+  console.log("[test12] 📋 Chat ID:", chatId);
+  console.log("[test12] 📋 Message:", message);
+  console.log("[test12] 📋 Stack trace:", new Error().stack);
 
   try {
     // Step 1: Save to database first
@@ -646,13 +683,22 @@ async function saveMessage(chatId, message) {
       console.log("[COLLAB-DEBUG] 📝 Created new chat array for chatId:", chatId);
     }
 
+    console.log("[test12] 📊 Messages in chat before save:", messagesByChat[chatId].length);
+    console.log("[test12] 📋 Existing messages in chat:", messagesByChat[chatId].map(m => ({ role: m.role, message_id: m.message_id, content: m.content?.substring(0, 20) + '...' })));
+    
     // Check for duplicates using message_id
     const existingMessage = messagesByChat[chatId].find(m => m.message_id === message.message_id);
     if (existingMessage) {
+      console.log("[test12] ⚠️ Message already exists, skipping save:", message.message_id);
+      console.log("[test12] 📋 Existing message details:", { role: existingMessage.role, message_id: existingMessage.message_id, content: existingMessage.content?.substring(0, 20) + '...' });
       return { success: true, chatId, message, skipped: true };
   }
 
   messagesByChat[chatId].push(message);
+    console.log("[test12] 📊 Messages in chat after save:", messagesByChat[chatId].length);
+    console.log("[test12] 📋 Message ID being added:", message.message_id);
+    console.log("[test12] 📋 All messages in chat:", messagesByChat[chatId].map(m => ({ role: m.role, message_id: m.message_id, content: m.content?.substring(0, 20) + '...' })));
+    console.log("[test12] 📋 Stack trace for local state add:", new Error().stack);
     
   setState({ messagesByChat });
     debouncedSaveMessages(); // Save to localStorage
@@ -804,12 +850,16 @@ function deleteChat(chatId) {
 }
 
 async function saveArtifact(artifact) {
+  console.log("[COLLAB-DATA] 💾 Saving artifact - Database First approach...");
+  console.log("[COLLAB-DATA] 📋 Artifact:", artifact);
 
   try {
     // Step 1: Save to database first
     if (window.syncManager?.uploadArtifact) {
+      console.log("[COLLAB-DATA] 📤 Uploading artifact to database...");
       try {
         await window.syncManager.uploadArtifact(artifact);
+        console.log("[COLLAB-DATA] ✅ Artifact uploaded to database successfully");
       } catch (error) {
         console.error("[COLLAB-DATA] ❌ Database upload error:", error);
         
@@ -823,6 +873,7 @@ async function saveArtifact(artifact) {
           error.message.includes("is not present in table") ||
           error.status === 404
         )) {
+          console.log("[COLLAB-DATA] 🔍 Chat not found in database, attempting to save chat first...");
           await handleChatNotFoundErrorForArtifact(artifact);
         }
       }
@@ -831,13 +882,16 @@ async function saveArtifact(artifact) {
     }
 
     // Step 2: Save to local state
+    console.log("[COLLAB-DATA] 💾 Saving artifact to local state...");
   const artifacts = [...AppState.artifacts];
   const existingIndex = artifacts.findIndex((a) => a.id === artifact.id);
 
   if (existingIndex >= 0) {
     artifacts[existingIndex] = artifact;
+      console.log("[COLLAB-DATA] 📝 Updated existing artifact in local state");
   } else {
     artifacts.push(artifact);
+      console.log("[COLLAB-DATA] 📝 Added new artifact to local state");
   }
 
   setState({ artifacts });
@@ -848,12 +902,14 @@ async function saveArtifact(artifact) {
       console.warn("[COLLAB-DATA] ⚠️ IndexedDB artifact save failed:", error);
     });
 
+    console.log("[COLLAB-DATA] ✅ Artifact saved successfully (DB + Local)");
     return { success: true, artifact };
 
   } catch (error) {
     console.error("[COLLAB-DATA] ❌ Error saving artifact:", error);
     
     // Even if database fails, still save locally for offline functionality
+    console.log("[COLLAB-DATA] 🔄 Fallback: Saving artifact to local state only...");
   const artifacts = [...AppState.artifacts];
   const existingIndex = artifacts.findIndex((a) => a.id === artifact.id);
 
@@ -872,11 +928,15 @@ async function saveArtifact(artifact) {
   });
 
     // Schedule retry after 5 seconds
+    console.log("[COLLAB-DATA] ⏰ Scheduling database retry in 5 seconds...");
     setTimeout(async () => {
+      console.log("[COLLAB-DATA] 🔄 === RETRYING DATABASE SAVE ===");
       try {
         if (window.syncManager?.uploadArtifact) {
+          console.log("[COLLAB-DATA] 📤 Retry: Uploading artifact to database...");
           try {
             await window.syncManager.uploadArtifact(artifact);
+            console.log("[COLLAB-DATA] ✅ Artifact uploaded to database on retry");
           } catch (retryError) {
             console.error("[COLLAB-DATA] ❌ Retry failed:", retryError);
             
@@ -890,6 +950,7 @@ async function saveArtifact(artifact) {
               retryError.message.includes("is not present in table") ||
               retryError.status === 404
             )) {
+              console.log("[COLLAB-DATA] 🔍 Chat not found in database during retry, attempting to save chat first...");
               await handleChatNotFoundErrorForArtifact(artifact);
             }
           }
@@ -898,6 +959,7 @@ async function saveArtifact(artifact) {
         }
       } catch (retryError) {
         console.error("[COLLAB-DATA] ❌ Retry failed:", retryError);
+        // Could schedule another retry here if needed
       }
     }, 5000);
 
@@ -1077,4 +1139,473 @@ window.memory = {
 
   // Event system for sync communication
   events: memoryEvents,
+};
+
+// Global helper function to test database-first approach with retry
+window.testDatabaseFirstWithRetry = async function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING DATABASE FIRST WITH RETRY ===");
+  
+  try {
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isLeader = window.collaboration?.isLeader;
+    
+    console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
+      isCollaborating,
+      isLeader,
+      hasCollaboration: !!window.collaboration
+    });
+    
+    if (!isCollaborating) {
+      console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
+      return { error: "Not in collaboration mode" };
+    }
+    
+    // Check sync manager availability
+    const hasSyncManager = !!window.syncManager;
+    const hasUploadChat = !!window.syncManager?.uploadChat;
+    const hasUploadMessage = !!window.syncManager?.uploadMessage;
+    const hasUploadArtifact = !!window.syncManager?.uploadArtifact;
+    
+    console.log("[COLLAB-DEBUG] 📋 Sync manager status:", {
+      hasSyncManager,
+      hasUploadChat,
+      hasUploadMessage,
+      hasUploadArtifact
+    });
+    
+    // Test chat creation
+    console.log("[COLLAB-DEBUG] 🚀 Testing chat creation...");
+    const testChat = {
+      id: `test_chat_${Date.now()}`,
+      title: "Test Database First Chat",
+      description: "Testing database-first approach with retry",
+      timestamp: new Date().toISOString(),
+      role: isLeader ? "leader" : "collab",
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test chat:", testChat);
+    
+    // Test chat save
+    const chatSaveResult = await window.memory.saveChat(testChat);
+    console.log("[COLLAB-DEBUG] 📊 Chat save result:", chatSaveResult);
+    
+    // Test message creation
+    console.log("[COLLAB-DEBUG] 🚀 Testing message creation...");
+    const testMessage = {
+      role: "user",
+      content: "Test database-first message with retry",
+      timestamp: new Date().toLocaleTimeString(),
+      message_id: `test_msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      isSaved: false,
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
+    
+    // Test message save
+    const messageSaveResult = await window.memory.saveMessage(testChat.id, testMessage);
+    console.log("[COLLAB-DEBUG] 📊 Message save result:", messageSaveResult);
+    
+    // Test artifact creation
+    console.log("[COLLAB-DEBUG] 🚀 Testing artifact creation...");
+    const testArtifact = {
+      id: `test_artifact_${Date.now()}`,
+      chatId: testChat.id,
+      title: "Test Database First Artifact",
+      type: "text",
+      versions: [{
+        content: "Test artifact content for database-first approach",
+        timestamp: new Date().toISOString()
+      }],
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test artifact:", testArtifact);
+    
+    // Test artifact save
+    const artifactSaveResult = await window.memory.saveArtifact(testArtifact);
+    console.log("[COLLAB-DEBUG] 📊 Artifact save result:", artifactSaveResult);
+    
+    // Check if items are in local state
+    const chats = window.context?.getChats() || [];
+    const messagesByChat = window.context?.getMessagesByChat() || {};
+    const artifacts = window.context?.getArtifacts() || [];
+    
+    const chatInLocal = chats.find(c => c.id === testChat.id);
+    const messageInLocal = messagesByChat[testChat.id]?.find(m => m.message_id === testMessage.message_id);
+    const artifactInLocal = artifacts.find(a => a.id === testArtifact.id);
+    
+    console.log("[COLLAB-DEBUG] 📊 Local state check:", {
+      chatInLocal: !!chatInLocal,
+      messageInLocal: !!messageInLocal,
+      artifactInLocal: !!artifactInLocal
+    });
+    
+    return {
+      success: true,
+      isLeader,
+      syncManagerStatus: {
+        hasSyncManager,
+        hasUploadChat,
+        hasUploadMessage,
+        hasUploadArtifact
+      },
+      saveResults: {
+        chat: chatSaveResult,
+        message: messageSaveResult,
+        artifact: artifactSaveResult
+      },
+      localState: {
+        chatInLocal: !!chatInLocal,
+        messageInLocal: !!messageInLocal,
+        artifactInLocal: !!artifactInLocal
+      },
+      testData: {
+        chatId: testChat.id,
+        messageId: testMessage.message_id,
+        artifactId: testArtifact.id
+      }
+    };
+    
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
+    return { error: error.message };
+  }
+};
+
+// Global helper function to test specific chat not found scenario
+window.testSpecificChatNotFound = async function(chatId = null) {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING SPECIFIC CHAT NOT FOUND ===");
+  
+  try {
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isLeader = window.collaboration?.isLeader;
+    
+    console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
+      isCollaborating,
+      isLeader,
+      hasCollaboration: !!window.collaboration
+    });
+    
+    if (!isCollaborating) {
+      console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
+      return { error: "Not in collaboration mode" };
+    }
+    
+    // Use provided chatId or find one that exists locally but not in DB
+    const targetChatId = chatId || "1753908783637"; // The specific chat ID from your error
+    
+    console.log("[COLLAB-DEBUG] 🎯 Target chat ID:", targetChatId);
+    
+    // Check if chat exists in localStorage
+    let chats = [];
+    try {
+      const chatsJson = localStorage.getItem("chats");
+      chats = chatsJson ? JSON.parse(chatsJson) : [];
+      console.log("[COLLAB-DEBUG] 📊 Total chats in localStorage:", chats.length);
+    } catch (error) {
+      console.error("[COLLAB-DEBUG] ❌ Error parsing chats:", error);
+    }
+    
+    const chat = chats.find(c => c.id === targetChatId);
+    console.log("[COLLAB-DEBUG] 📋 Chat found in localStorage:", !!chat);
+    
+    if (chat) {
+      console.log("[COLLAB-DEBUG] 📋 Chat details:", {
+        id: chat.id,
+        title: chat.title,
+        timestamp: chat.timestamp
+      });
+    }
+    
+    // Check if chat exists in context state
+    const contextChats = window.context?.getChats() || [];
+    const contextChat = contextChats.find(c => c.id === targetChatId);
+    console.log("[COLLAB-DEBUG] 📋 Chat found in context state:", !!contextChat);
+    
+    // Create a test message for this chat
+    const testMessage = {
+      role: "user",
+      content: "Test message for specific chat not found scenario",
+      timestamp: new Date().toLocaleTimeString(),
+      message_id: `test_specific_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      isSaved: false,
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
+    
+    // Try to save the message (this should trigger the chat not found error handling)
+    console.log("[COLLAB-DEBUG] 🚀 Attempting to save message...");
+    const saveResult = await window.memory.saveMessage(targetChatId, testMessage);
+    console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
+    
+    // Check if message was added to local state
+    const messagesByChat = window.context?.getMessagesByChat() || {};
+    const messagesInChat = messagesByChat[targetChatId] || [];
+    const messageInLocal = messagesInChat.find(m => m.message_id === testMessage.message_id);
+    
+    console.log("[COLLAB-DEBUG] 📊 Message in local state:", !!messageInLocal);
+    
+    return {
+      success: true,
+      targetChatId,
+      chatInLocalStorage: !!chat,
+      chatInContextState: !!contextChat,
+      messageSaveResult: saveResult,
+      messageInLocalState: !!messageInLocal,
+      availableChatIds: chats.map(c => c.id)
+    };
+    
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
+    return { error: error.message };
+  }
+};
+
+// Global helper function to test dummy chat creation scenario
+window.testDummyChatCreation = async function(chatId = null) {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING DUMMY CHAT CREATION ===");
+  
+  try {
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isLeader = window.collaboration?.isLeader;
+    
+    console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
+      isCollaborating,
+      isLeader,
+      hasCollaboration: !!window.collaboration
+    });
+    
+    if (!isCollaborating) {
+      console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
+      return { error: "Not in collaboration mode" };
+    }
+    
+    // Use provided chatId or create a completely new one that doesn't exist
+    const targetChatId = chatId || `dummy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    
+    console.log("[COLLAB-DEBUG] 🎯 Target chat ID (should not exist):", targetChatId);
+    
+    // Check if chat exists in localStorage
+    let chats = [];
+    try {
+      const chatsJson = localStorage.getItem("chats");
+      chats = chatsJson ? JSON.parse(chatsJson) : [];
+      console.log("[COLLAB-DEBUG] 📊 Total chats in localStorage:", chats.length);
+    } catch (error) {
+      console.error("[COLLAB-DEBUG] ❌ Error parsing chats:", error);
+    }
+    
+    const existingChat = chats.find(c => c.id === targetChatId);
+    console.log("[COLLAB-DEBUG] 📋 Chat already exists in localStorage:", !!existingChat);
+    
+    if (existingChat) {
+      console.log("[COLLAB-DEBUG] ⚠️ Chat already exists, using a different ID");
+      const newTargetChatId = `dummy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+      console.log("[COLLAB-DEBUG] 🎯 New target chat ID:", newTargetChatId);
+      return await window.testDummyChatCreation(newTargetChatId);
+    }
+    
+    // Create a test message for this non-existent chat
+    const testMessage = {
+      role: "user",
+      content: "Test message for dummy chat creation scenario",
+      timestamp: new Date().toLocaleTimeString(),
+      message_id: `test_dummy_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      isSaved: false,
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
+    
+    // Try to save the message (this should trigger the dummy chat creation)
+    console.log("[COLLAB-DEBUG] 🚀 Attempting to save message to non-existent chat...");
+    const saveResult = await window.memory.saveMessage(targetChatId, testMessage);
+    console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
+    
+    // Check if chat was created in localStorage
+    let updatedChats = [];
+    try {
+      const updatedChatsJson = localStorage.getItem("chats");
+      updatedChats = updatedChatsJson ? JSON.parse(updatedChatsJson) : [];
+    } catch (error) {
+      console.error("[COLLAB-DEBUG] ❌ Error parsing updated chats:", error);
+    }
+    
+    const createdChat = updatedChats.find(c => c.id === targetChatId);
+    console.log("[COLLAB-DEBUG] 📊 Chat created in localStorage:", !!createdChat);
+    
+    if (createdChat) {
+      console.log("[COLLAB-DEBUG] 📋 Created chat details:", {
+        id: createdChat.id,
+        title: createdChat.title,
+        description: createdChat.description,
+        timestamp: createdChat.timestamp
+      });
+    }
+    
+    // Check if message was added to local state
+    const messagesByChat = window.context?.getMessagesByChat() || {};
+    const messagesInChat = messagesByChat[targetChatId] || [];
+    const messageInLocal = messagesInChat.find(m => m.message_id === testMessage.message_id);
+    
+    console.log("[COLLAB-DEBUG] 📊 Message in local state:", !!messageInLocal);
+    
+    return {
+      success: true,
+      targetChatId,
+      chatCreated: !!createdChat,
+      messageSaveResult: saveResult,
+      messageInLocalState: !!messageInLocal,
+      originalChatCount: chats.length,
+      updatedChatCount: updatedChats.length,
+      createdChatDetails: createdChat ? {
+        id: createdChat.id,
+        title: createdChat.title,
+        description: createdChat.description
+      } : null
+    };
+    
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
+    return { error: error.message };
+  }
+};
+
+// Global helper function to test chat not found error handling
+window.testChatNotFoundErrorHandling = async function() {
+  console.log("[COLLAB-DEBUG] 🧪 === TESTING CHAT NOT FOUND ERROR HANDLING ===");
+  
+  try {
+    const isCollaborating = window.collaboration?.isCollaborating;
+    const isLeader = window.collaboration?.isLeader;
+    
+    console.log("[COLLAB-DEBUG] 📋 Collaboration status:", {
+      isCollaborating,
+      isLeader,
+      hasCollaboration: !!window.collaboration
+    });
+    
+    if (!isCollaborating) {
+      console.error("[COLLAB-DEBUG] ❌ Not in collaboration mode");
+      return { error: "Not in collaboration mode" };
+    }
+    
+    // Check sync manager availability
+    const hasSyncManager = !!window.syncManager;
+    const hasUploadChat = !!window.syncManager?.uploadChat;
+    const hasUploadMessage = !!window.syncManager?.uploadMessage;
+    const hasUploadArtifact = !!window.syncManager?.uploadArtifact;
+    
+    console.log("[COLLAB-DEBUG] 📋 Sync manager status:", {
+      hasSyncManager,
+      hasUploadChat,
+      hasUploadMessage,
+      hasUploadArtifact
+    });
+    
+    // Create a test chat that doesn't exist in database
+    console.log("[COLLAB-DEBUG] 🚀 Creating test chat...");
+    const testChatId = `test_chat_not_found_${Date.now()}`;
+    const testChat = {
+      id: testChatId,
+      title: "Test Chat Not Found",
+      description: "Testing chat not found error handling",
+      timestamp: new Date().toISOString(),
+      role: isLeader ? "leader" : "collab",
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test chat:", testChat);
+    
+    // Add chat to local state only (not to database)
+    const chats = [...(window.context?.getChats() || [])];
+    chats.push(testChat);
+    window.context?.setState({ chats });
+    
+    console.log("[COLLAB-DEBUG] ✅ Chat added to local state only");
+    
+    // Test message creation with non-existent chat in database
+    console.log("[COLLAB-DEBUG] 🚀 Testing message creation with non-existent chat...");
+    const testMessage = {
+      role: "user",
+      content: "Test message for chat not found error handling",
+      timestamp: new Date().toLocaleTimeString(),
+      message_id: `test_msg_not_found_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      isSaved: false,
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test message:", testMessage);
+    
+    // Test message save (should trigger chat not found error handling)
+    const messageSaveResult = await window.memory.saveMessage(testChatId, testMessage);
+    console.log("[COLLAB-DEBUG] 📊 Message save result:", messageSaveResult);
+    
+    // Test artifact creation with non-existent chat in database
+    console.log("[COLLAB-DEBUG] 🚀 Testing artifact creation with non-existent chat...");
+    const testArtifact = {
+      id: `test_artifact_not_found_${Date.now()}`,
+      chatId: testChatId,
+      title: "Test Artifact Not Found",
+      type: "text",
+      versions: [{
+        content: "Test artifact content for chat not found error handling",
+        timestamp: new Date().toISOString()
+      }],
+      userId: isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId")
+    };
+    
+    console.log("[COLLAB-DEBUG] 📋 Test artifact:", testArtifact);
+    
+    // Test artifact save (should trigger chat not found error handling)
+    const artifactSaveResult = await window.memory.saveArtifact(testArtifact);
+    console.log("[COLLAB-DEBUG] 📊 Artifact save result:", artifactSaveResult);
+    
+    // Check if items are in local state
+    const finalChats = window.context?.getChats() || [];
+    const finalMessagesByChat = window.context?.getMessagesByChat() || {};
+    const finalArtifacts = window.context?.getArtifacts() || [];
+    
+    const chatInLocal = finalChats.find(c => c.id === testChatId);
+    const messageInLocal = finalMessagesByChat[testChatId]?.find(m => m.message_id === testMessage.message_id);
+    const artifactInLocal = finalArtifacts.find(a => a.id === testArtifact.id);
+    
+    console.log("[COLLAB-DEBUG] 📊 Final local state check:", {
+      chatInLocal: !!chatInLocal,
+      messageInLocal: !!messageInLocal,
+      artifactInLocal: !!artifactInLocal
+    });
+    
+    return {
+      success: true,
+      isLeader,
+      syncManagerStatus: {
+        hasSyncManager,
+        hasUploadChat,
+        hasUploadMessage,
+        hasUploadArtifact
+      },
+      saveResults: {
+        message: messageSaveResult,
+        artifact: artifactSaveResult
+      },
+      localState: {
+        chatInLocal: !!chatInLocal,
+        messageInLocal: !!messageInLocal,
+        artifactInLocal: !!artifactInLocal
+      },
+      testData: {
+        chatId: testChatId,
+        messageId: testMessage.message_id,
+        artifactId: testArtifact.id
+      }
+    };
+    
+  } catch (error) {
+    console.error("[COLLAB-DEBUG] ❌ Test failed:", error);
+    return { error: error.message };
+  }
 };

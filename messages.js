@@ -944,8 +944,18 @@ function removeMessagesUI() {
 // =================== MESSAGE MANAGEMENT ===================
 
 async function addMessage(role, content, options = {}) {
+  console.log("[test12] 🚀 === MESSAGE FLOW START ===");
+  console.log("[test12] 📋 Role:", role);
+  console.log("[test12] 📋 Content:", content);
+  console.log("[test12] 📋 Options:", options);
+  console.log("[test12] 📋 Stack trace:", new Error().stack);
   
-  
+  // Add immediate debugging for AI responses
+  if (role === 'assistant') {
+    console.log("[COLLAB-DEBUG] 🤖 === AI RESPONSE DETECTED ===");
+    console.log("[COLLAB-DEBUG] 📋 AI Content:", content);
+    console.log("[COLLAB-DEBUG] 📋 Content length:", content?.length || 0);
+  }
 
   const {
     artifactIds = null,
@@ -967,9 +977,18 @@ async function addMessage(role, content, options = {}) {
   const message_id = `${userId.slice(-4)}_${timePart}_${randPart}`;
   const message = { role, content, timestamp, message_id, isSaved: false, userId };
 
+  console.log("[COLLAB-DEBUG] 🆔 Generated message ID:", message_id);
+  console.log("[COLLAB-DEBUG] 👤 User ID:", userId);
+
   // Only add extra fields if NOT in collaboration mode
   const isCollaborating =
     window.collaboration && window.collaboration.isCollaborating;
+  
+  console.log("[COLLAB-DEBUG] 🤝 Collaboration status:", {
+    isCollaborating,
+    collaborationModule: !!window.collaboration,
+    collaborationActive: window.collaboration?.isCollaborating
+  });
 
   if (!isCollaborating) {
     if (artifactIds !== null) {
@@ -978,50 +997,85 @@ async function addMessage(role, content, options = {}) {
     if (structuredData) {
       message.structuredData = structuredData;
     }
+    console.log("[COLLAB-DEBUG] 📝 Regular mode - added extra fields");
+  } else {
+    console.log("[COLLAB-DEBUG] 📝 Collaboration mode - skipping extra fields");
   }
 
   try {
     // Step 1: Ensure there's an active chat
     let chatId = window.context.getActiveChatId();
     if (!chatId) {
+      console.log("[COLLAB-DEBUG] ⚠️ No active chat found, creating one...");
       if (window.actions && window.actions.executeAction) {
         await window.actions.executeAction("chat.create", {});
         chatId = window.context.getActiveChatId();
+        console.log("[COLLAB-DEBUG] ✅ Created new chat with ID:", chatId);
       } else {
         console.warn("[COLLAB-DEBUG] ⚠️ Cannot create chat - actions module not available");
       }
     }
     
+    console.log("[COLLAB-DEBUG] 💬 Chat ID for database save:", chatId);
+    console.log("[COLLAB-DEBUG] 🧠 Memory module available:", !!window.memory);
+    console.log("[COLLAB-DEBUG] 💾 Save message function available:", !!window.memory?.saveMessage);
+    
     if (chatId && window.memory?.saveMessage) {
+      console.log("[COLLAB-DEBUG] 📤 === DATABASE SAVE ATTEMPT ===");
+      console.log("[COLLAB-DEBUG] 📋 Message to save:", message);
       const saveResult = await window.memory.saveMessage(chatId, message);
       
-      if (!saveResult.success) {
+      console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
+      
+      if (saveResult.success) {
+        console.log("[COLLAB-DEBUG] ✅ Message saved to database successfully");
+      } else {
         console.warn("[COLLAB-DEBUG] ⚠️ Database save failed, but continuing:", saveResult.error);
       }
     } else {
       console.warn("[COLLAB-DEBUG] ⚠️ No chat ID or memory module - skipping database save");
+      console.log("[COLLAB-DEBUG] 🔍 Debug info:", {
+        chatId,
+        hasMemory: !!window.memory,
+        hasSaveMessage: !!window.memory?.saveMessage
+      });
     }
 
     // Step 2: Add to local state
+    console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE UPDATE ===");
+    console.log("[COLLAB-DEBUG] 📋 Current messages count:", messages.length);
     // Note: memory.saveMessage() already adds the message to local state via setState
     // So we don't need to call setActiveMessages here - it would cause duplication
-    window.context.setActiveMessageIndex(messages.length - 1);
+  window.context.setActiveMessageIndex(messages.length - 1);
+    console.log("[COLLAB-DEBUG] ✅ Message index updated (message already added by memory.saveMessage)");
 
-    // --- COLLABORATION SYNC ---
-    if (window.collaboration && window.collaboration.pushMessageToCollab) {
-      if (chatId && !message.chatId) message.chatId = chatId;
-      window.collaboration.pushMessageToCollab(message);
+  // --- COLLABORATION SYNC ---
+    console.log("[COLLAB-DEBUG] 🤝 === COLLABORATION SYNC ===");
+  if (window.collaboration && window.collaboration.pushMessageToCollab) {
+      console.log("[COLLAB-DEBUG] 📤 Pushing message to collaboration...");
+    if (chatId && !message.chatId) message.chatId = chatId;
+    window.collaboration.pushMessageToCollab(message);
+      console.log("[COLLAB-DEBUG] ✅ Message pushed to collaboration");
+    } else {
+      console.log("[COLLAB-DEBUG] ⚠️ Collaboration sync not available");
     }
 
     // Step 3: Update UI
+    console.log("[COLLAB-DEBUG] 🎨 === UI UPDATE ===");
     if (window.messages && window.messages.updateMessagesDisplay) {
       window.messages.updateMessagesDisplay();
+      console.log("[COLLAB-DEBUG] ✅ Messages display updated");
       
       // Ensure messages are visible by showing the container
       if (window.messages && window.messages.show) {
         window.messages.show();
+        console.log("[COLLAB-DEBUG] ✅ Messages container shown");
       }
+    } else {
+      console.log("[COLLAB-DEBUG] ⚠️ Messages display update not available");
     }
+
+    console.log("[COLLAB-DEBUG] 🎉 === MESSAGE FLOW COMPLETE ===");
     return message;
 
   } catch (error) {
@@ -1034,7 +1088,7 @@ async function addMessage(role, content, options = {}) {
     // Use memory system to add message properly to avoid duplication
     if (window.memory && window.memory.saveMessage) {
       window.memory.saveMessage(chatId, message);
-    } else {
+  } else {
       // Direct fallback only if memory system is not available
       messages.push(message);
       window.context.setActiveMessages(messages);
@@ -1070,10 +1124,7 @@ function updateMessagesDisplay() {
   // Get messages from the correct source - chat-specific messages
   const activeChatId = window.context.getActiveChatId();
   const messages = window.context.getMessagesByChat()[activeChatId] || [];
-  console.log("[MESSAGES-UPDATE] 📋 Active chat ID:", activeChatId);
-  console.log("[MESSAGES-UPDATE] 📋 Total messages:", messages.length);
-  console.log("[MESSAGES-UPDATE] 📋 Messages:", messages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
-  
+
   if (messages.length === 0) {
     console.log("[MESSAGES-UPDATE] ⚠️ No messages to display");
     container.innerHTML = "";
@@ -1231,5 +1282,72 @@ window.messages = {
     }
   },
   
-
+  // Debug function to check message display status
+  debugMessageDisplay: () => {
+    console.log("[MESSAGES-DEBUG] === MESSAGE DISPLAY DEBUG ===");
+    const container = document.getElementById("messages");
+    console.log("[MESSAGES-DEBUG] Container exists:", !!container);
+    if (container) {
+      console.log("[MESSAGES-DEBUG] Container display:", container.style.display);
+      console.log("[MESSAGES-DEBUG] Container visibility:", container.style.visibility);
+      console.log("[MESSAGES-DEBUG] Container hidden class:", container.classList.contains("hidden"));
+      console.log("[MESSAGES-DEBUG] Container innerHTML length:", container.innerHTML.length);
+      console.log("[MESSAGES-DEBUG] Container z-index:", container.style.zIndex);
+    }
+    
+    const messages = window.context?.getMessages() || [];
+    console.log("[MESSAGES-DEBUG] Total messages in context:", messages.length);
+    console.log("[MESSAGES-DEBUG] Active message index:", window.context?.getActiveMessageIndex());
+    console.log("[MESSAGES-DEBUG] Show all messages:", window.context?.getShowAllMessages());
+    
+    return {
+      containerExists: !!container,
+      containerDisplay: container?.style.display,
+      containerVisibility: container?.style.visibility,
+      containerHidden: container?.classList.contains("hidden"),
+      containerContentLength: container?.innerHTML.length || 0,
+      totalMessages: messages.length,
+      activeIndex: window.context?.getActiveMessageIndex(),
+      showAll: window.context?.getShowAllMessages()
+    };
+  },
+  
+  // Test function to add a simple message
+  testAddMessage: async () => {
+    console.log("[MESSAGES-TEST] === TESTING MESSAGE ADDITION ===");
+    if (window.messages && window.messages.addMessage) {
+      console.log("[MESSAGES-TEST] Adding test message...");
+      await window.messages.addMessage('assistant', 'This is a test message from the debug function. If you can see this, the message display is working!');
+      console.log("[MESSAGES-TEST] Test message added");
+      return true;
+    } else {
+      console.error("[MESSAGES-TEST] addMessage function not available");
+      return false;
+    }
+  },
+  
+  // Force show messages container
+  forceShowMessages: () => {
+    console.log("[MESSAGES-FORCE] === FORCING MESSAGES TO SHOW ===");
+    const container = document.getElementById("messages");
+    if (container) {
+      container.classList.remove("hidden");
+      container.style.display = "block";
+      container.style.visibility = "visible";
+      container.style.opacity = "1";
+      container.style.position = "fixed";
+      container.style.top = "50%";
+      container.style.left = "50%";
+      container.style.transform = "translate(-50%, -50%)";
+      container.style.zIndex = "99999";
+      container.style.background = "white";
+      container.style.padding = "20px";
+      container.style.border = "2px solid red";
+      console.log("[MESSAGES-FORCE] Container forced to show");
+      return true;
+    } else {
+      console.error("[MESSAGES-FORCE] Container not found");
+      return false;
+    }
+  }
 };
