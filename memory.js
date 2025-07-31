@@ -23,7 +23,7 @@ function debouncedSaveChats() {
     clearTimeout(saveTimeouts.chats);
   }
   saveTimeouts.chats = setTimeout(() => {
-    localStorage.setItem(CHATS_KEY, JSON.stringify(AppState.chats));
+    localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
     saveTimeouts.chats = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -34,7 +34,7 @@ function debouncedSaveMessages() {
     clearTimeout(saveTimeouts.messages);
   }
   saveTimeouts.messages = setTimeout(() => {
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppState.messagesByChat));
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
     saveTimeouts.messages = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -45,7 +45,7 @@ function debouncedSaveArtifacts() {
     clearTimeout(saveTimeouts.artifacts);
   }
   saveTimeouts.artifacts = setTimeout(() => {
-    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppState.artifacts));
+    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
     saveTimeouts.artifacts = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -105,9 +105,9 @@ function flushAllPendingSaves() {
   });
   
   // Immediate saves of all data
-  localStorage.setItem(CHATS_KEY, JSON.stringify(AppState.chats));
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppState.messagesByChat));
-  localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppState.artifacts));
+  localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
+  localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
   localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(userPreferences));
   
   // Note: activeView and activeChatId are saved when they change, 
@@ -189,7 +189,7 @@ async function saveArtifactsToIndexedDB() {
     });
 
     // Add all current artifacts
-    for (const artifact of AppState.artifacts) {
+    for (const artifact of AppContext.artifacts) {
       await new Promise((resolve, reject) => {
         const addRequest = store.add(artifact);
         addRequest.onsuccess = () => resolve();
@@ -230,9 +230,9 @@ async function loadArtifactsFromIndexedDB() {
 function saveAll(immediate = false) {
   if (immediate) {
     // Immediate saves for critical operations (like page unload)
-    localStorage.setItem(CHATS_KEY, JSON.stringify(AppState.chats));
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppState.messagesByChat));
-    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppState.artifacts));
+    localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
+    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
   
   } else {
     // Use debounced saves for better performance
@@ -249,14 +249,14 @@ function saveAll(immediate = false) {
 
   // Notify sync system that data has changed
   dispatchDataChange('all', {
-    chats: AppState.chats,
-    messagesByChat: AppState.messagesByChat,
-    artifacts: AppState.artifacts
+    chats: AppContext.chats,
+    messagesByChat: AppContext.messagesByChat,
+    artifacts: AppContext.artifacts
   });
 }
 
 function loadAll() {
-  setState({
+  setContext({
     chats: JSON.parse(localStorage.getItem(CHATS_KEY) || '[]'),
     messagesByChat: JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'),
     artifacts: JSON.parse(localStorage.getItem(ARTIFACTS_KEY) || '[]')
@@ -275,7 +275,7 @@ async function saveArtifacts() {
   }
 
   // Notify sync system that artifacts have changed
-  dispatchDataChange('artifacts', AppState.artifacts);
+  dispatchDataChange('artifacts', AppContext.artifacts);
 }
 
 async function loadArtifacts() {
@@ -298,13 +298,13 @@ async function loadArtifacts() {
   }
   
   if (artifacts) {
-    setState({ artifacts });
+    setContext({ artifacts });
   }
 }
 
 // =================== Individual Item Persistence ===================
 function saveChat(chat) {
-  const chats = [...AppState.chats];
+  const chats = [...AppContext.chats];
   const existingIndex = chats.findIndex(c => c.id === chat.id);
   
   if (existingIndex >= 0) {
@@ -313,7 +313,7 @@ function saveChat(chat) {
     chats.push(chat);
   }
   
-  setState({ chats });
+  setContext({ chats });
   debouncedSaveChats(); // Use debounced save instead of immediate save
   
   // Notify sync system
@@ -321,13 +321,13 @@ function saveChat(chat) {
 }
 
 function saveMessage(chatId, message) {
-  const messagesByChat = { ...AppState.messagesByChat };
+  const messagesByChat = { ...AppContext.messagesByChat };
   if (!messagesByChat[chatId]) {
     messagesByChat[chatId] = [];
   }
   
   messagesByChat[chatId].push(message);
-  setState({ messagesByChat });
+  setContext({ messagesByChat });
   debouncedSaveMessages(); // Use debounced save instead of immediate save
   
   // Notify sync system
@@ -339,17 +339,17 @@ function deleteChat(chatId) {
   
   try {
     // 1. Remove chat from chats array
-    const updatedChats = AppState.chats.filter(c => c.id !== chatId);
+    const updatedChats = AppContext.chats.filter(c => c.id !== chatId);
     
     // 2. Remove messages for this chat
-    const updatedMessagesByChat = { ...AppState.messagesByChat };
+    const updatedMessagesByChat = { ...AppContext.messagesByChat };
     delete updatedMessagesByChat[chatId];
     
     // 3. Remove artifacts for this chat
-    const updatedArtifacts = AppState.artifacts.filter(a => a.chatId !== chatId);
+    const updatedArtifacts = AppContext.artifacts.filter(a => a.chatId !== chatId);
     
     // 4. Update state
-    setState({
+    setContext({
       chats: updatedChats,
       messagesByChat: updatedMessagesByChat,
       artifacts: updatedArtifacts
@@ -392,7 +392,7 @@ function deleteChat(chatId) {
 }
 
 function saveArtifact(artifact) {
-  const artifacts = [...AppState.artifacts];
+  const artifacts = [...AppContext.artifacts];
   const existingIndex = artifacts.findIndex(a => a.id === artifact.id);
   
   if (existingIndex >= 0) {
@@ -401,7 +401,7 @@ function saveArtifact(artifact) {
     artifacts.push(artifact);
   }
   
-  setState({ artifacts });
+  setContext({ artifacts });
   debouncedSaveArtifacts(); // Use debounced save instead of immediate save
   
   // Also save to IndexedDB asynchronously
@@ -518,8 +518,8 @@ function getStorageStatus() {
   return {
     indexedDBAvailable: !!indexedDB_instance,
     indexedDBName: DB_NAME,
-    localStorageSize: JSON.stringify(AppState.artifacts).length,
-    artifactCount: AppState.artifacts.length,
+    localStorageSize: JSON.stringify(AppContext.artifacts).length,
+    artifactCount: AppContext.artifacts.length,
     lastOperation: new Date().toISOString()
   };
 }
@@ -528,9 +528,9 @@ function getStorageStatus() {
 function getContextData() {
   return {
     userPreferences: userPreferences,
-    chats: AppState.chats,
-    artifacts: AppState.artifacts,
-    messagesByChat: AppState.messagesByChat,
+    chats: AppContext.chats,
+    artifacts: AppContext.artifacts,
+    messagesByChat: AppContext.messagesByChat,
     storageStatus: getStorageStatus()
   };
 }

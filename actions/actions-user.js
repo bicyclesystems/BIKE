@@ -9,20 +9,22 @@ const USER_ACTIONS = {
     description: 'Update user onboarding preferences (name, role, usage context, AI traits array) with advanced trait management',
     category: window.actions?.ACTION_CATEGORIES?.USER || 'user',
     requiredParams: [],
-    optionalParams: ['name', 'role', 'usingFor', 'aiTraits', 'traitAction'],
+    optionalParams: ['name', 'role', 'usingFor', 'collaboration', 'aiTraits', 'traitAction'],
     availableData: () => ({
       currentPreferences: window.context?.getUserPreferences() || {},
       validUsageOptions: ['school', 'personal', 'work'],
+      validCollaborationOptions: ['solo', 'with_others'],
       supportedTraits: ['casual', 'professional', 'detailed', 'creative', 'technical', 'friendly', 'concise', 'analytical', 'empathetic', 'precise'],
       traitActions: ['add', 'remove', 'replace'] // Available trait management actions
     }),
     handler: (params) => {
-      const { name, role, usingFor, aiTraits, traitAction } = params;
+      const { name, role, usingFor, collaboration, aiTraits, traitAction } = params;
       const updates = {};
       
       if (name !== undefined) updates.name = name;
       if (role !== undefined) updates.role = role;
       if (usingFor !== undefined) updates.usingFor = usingFor;
+      if (collaboration !== undefined) updates.collaboration = collaboration;
       
       // Enhanced aiTraits handling with action support
       if (aiTraits !== undefined) {

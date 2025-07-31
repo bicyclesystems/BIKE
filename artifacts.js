@@ -63,7 +63,7 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
   }
   
   const currentArtifacts = window.context?.getArtifacts() || [];
-  window.context?.setState({ artifacts: [...currentArtifacts, artifact] });
+  window.context?.setContext({ artifacts: [...currentArtifacts, artifact] });
   window.memory?.saveArtifacts();
   
   if (shouldSetActive) {
@@ -89,7 +89,7 @@ function updateArtifact(id, content) {
   if (!artifact) return null;
   artifact.versions.push({ content, timestamp: new Date().toISOString() });
   artifact.updatedAt = new Date().toISOString();
-  window.context?.setState({
+  window.context?.setContext({
     artifacts: artifacts,
     activeVersionIdxByArtifact: { 
       ...window.context.getActiveVersionIndex ? {} : {}, 
@@ -211,7 +211,7 @@ function deleteArtifactVersion(artifactId, versionIdx) {
     newActiveIdx = Math.max(0, currentActiveIdx - 1);
   }
   
-  window.context?.setState({ artifacts: artifacts });
+  window.context?.setContext({ artifacts: artifacts });
   window.context?.setActiveVersionIndex(artifactId, newActiveIdx);
   
   window.memory?.saveArtifacts();
@@ -232,7 +232,7 @@ function deleteArtifactVersion(artifactId, versionIdx) {
 // Utility function to get favicon URL from a website URL
 function getFaviconUrl(url) {
   try {
-    // Use the global domain extraction utility from messages.js
+    // Use the global domain extraction utility from chat.js
     const domain = window.utils.getDomainFromUrl(url);
     
     // Use Google's favicon service as primary, with fallback to domain/favicon.ico

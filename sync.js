@@ -356,7 +356,7 @@ class SupabaseSync {
         localChats.push(chat);
       }
 
-      window.context?.setState({ chats: localChats });
+      window.context?.setContext({ chats: localChats });
       if (window.memory?.saveAll) {
         window.memory.saveAll();
       }
@@ -419,7 +419,7 @@ class SupabaseSync {
     const messagesByChat = { ...window.context?.getMessagesByChat() };
     delete messagesByChat[chatId];
 
-    window.context?.setState({ chats: localChats, messagesByChat });
+    window.context?.setContext({ chats: localChats, messagesByChat });
     if (window.memory?.saveAll) {
       window.memory.saveAll();
     }
@@ -436,7 +436,7 @@ class SupabaseSync {
     const localArtifacts = (window.context?.getArtifacts() || []).filter(
       (a) => a.id !== artifactId
     );
-    window.context?.setState({ artifacts: localArtifacts });
+    window.context?.setContext({ artifacts: localArtifacts });
     if (window.memory?.saveArtifacts) {
       window.memory.saveArtifacts();
     }
@@ -617,7 +617,7 @@ class SupabaseSync {
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
     );
 
-    window.context?.setState({ chats: finalChats });
+    window.context?.setContext({ chats: finalChats });
 
     // Ensure there's an active chat set
     const currentActiveChatId = window.context?.getActiveChatId();
@@ -694,7 +694,7 @@ class SupabaseSync {
       });
     }
 
-    window.context?.setState({ messagesByChat: mergedMessagesByChat });
+    window.context?.setContext({ messagesByChat: mergedMessagesByChat });
 
     // Upload local-only messages
     for (const [chatId, messages] of Object.entries(localMessagesByChat)) {
@@ -753,7 +753,7 @@ class SupabaseSync {
     });
 
     const finalArtifacts = Array.from(mergedArtifacts.values());
-    window.context?.setState({ artifacts: finalArtifacts });
+    window.context?.setContext({ artifacts: finalArtifacts });
 
     // Upload local-only artifacts to server
     const serverArtifactIds = new Set(serverArtifacts.map((a) => a.id));

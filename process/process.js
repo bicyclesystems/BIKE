@@ -66,7 +66,7 @@ async function processContext(input = null, isContextualGuidance = false) {
   
   // Build system message using system module
   const systemMessage = window.systemModule ? 
-    window.systemModule.buildSystemMessage(contextData, isContextualGuidance) :
+    await window.systemModule.buildSystemMessage(contextData, isContextualGuidance) :
     'You are a helpful assistant. Respond with JSON format.';
   
   const messages = [
@@ -81,7 +81,7 @@ async function processContext(input = null, isContextualGuidance = false) {
   if (isContextualGuidance) {
     messages.push({ 
       role: "user", 
-      content: "Please provide contextual guidance based on the current app state. What should I do next or what options do I have right now?" 
+      content: "Please provide contextual guidance based on the current app context. What should I do next or what options do I have right now?" 
     });
   } else if (input && input.trim()) {
     // Only add user input if provided and not in contextual mode

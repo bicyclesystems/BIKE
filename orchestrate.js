@@ -131,7 +131,7 @@ async function orchestrateAIResponse(response, utilities) {
         artifact.metadata.generationMethod = 'specialized';
       }
       
-      window.context?.setState({ artifacts: window.context.getArtifacts().map(a => a.id === artifact.id ? artifact : a) });
+      window.context?.setContext({ artifacts: window.context.getArtifacts().map(a => a.id === artifact.id ? artifact : a) });
       saveArtifacts();
       
       artifactIds[title] = artifact.id;

@@ -5,26 +5,52 @@
 // =================== PROMPT ENGINEERING ===================
 // Modular system prompt sections for better maintenance and customization
 
+// Load README content for system identity
+async function loadReadmeContent() {
+  try {
+    const response = await fetch('./README.md');
+    if (response.ok) {
+      return await response.text();
+    }
+  } catch (error) {
+    console.warn('[SYSTEM] Could not load README.md:', error);
+  }
+  return null;
+}
+
+// Cache README content
+let cachedReadmeContent = null;
+
+async function getReadmeContent() {
+  if (cachedReadmeContent === null) {
+    cachedReadmeContent = await loadReadmeContent();
+  }
+  return cachedReadmeContent;
+}
+
 const SYSTEM_SECTIONS = {
   IDENTITY: `You are a helpful assistant that creates artifacts for users. When you create something, respond with structured JSON.`,
+
+  README: '', // This will be populated with README content
 
   WELCOME: `WELCOME (STEP 1): If NO user session exists (isLoggedIn: false or currentUser: null):
 - Provide warm welcome introducing yourself and app capabilities
 - Ask for their email to get started`,
 
   AUTHENTICATION: `AUTHENTICATION (STEP 2): Check context for user authentication status:
-- When user provides email: Execute "auth.login" action with the email
+- When user provides email: Execute "user.login" action with the email
 - During authentication, extract name from email and save with "user.updatePreferences":
   • Take part before @ symbol, replace dots/underscores/hyphens with spaces, capitalize each word
   • Example: "john.doe@example.com" becomes "John Doe"
-- After successful auth.login: Inform user magic link was sent
-- If auth.login fails: Ask for valid email and retry
+- After successful user.login: Inform user magic link was sent
+- If user.login fails: Ask for valid email and retry
 - If user already authenticated: Skip email collection and proceed`,
 
-  USER_SETUP: `USER DATA (STEP 3): ONLY if context shows empty user preferences (no name, role, usingFor, or aiTraits), ask for missing info before proceeding. If any preferences exist, proceed normally. Ask one at a time:
+  USER_SETUP: `USER DATA (STEP 3): ONLY if context shows empty user preferences (no name, role, usingFor, aiTraits, or collaboration), ask for missing info before proceeding. If any preferences exist, proceed normally. Ask one at a time:
 - name: "What's your name?"
 - role: "What's your role or what do you do?"  
 - usingFor: "What are you using this app for? (school, work, personal)"
+- collaboration: "How do you want to use BIKE? (solo / with others)" - If user chooses "with others", suggest: "You can invite teammates from the settings menu."
 - aiTraits: "How would you like me to communicate? (e.g., casual, professional, detailed, creative)"
 
 MEMORY VIEW: If any preferences show NOT_SET, set "recommendedView": "memory" to help users set preferences.`,
@@ -97,11 +123,26 @@ Key behaviors:
 
 // =================== SYSTEM INSTRUCTIONS BUILDER ===================
 
-function createStructuredSystemPrompt(contextInfo = '', userResponseStyle = '', isContextualGuidance = false) {
+async function createStructuredSystemPrompt(contextInfo = '', userResponseStyle = '', isContextualGuidance = false) {
+  // Load README content for system identity
+  const readmeContent = await getReadmeContent();
+  if (readmeContent) {
+    SYSTEM_SECTIONS.README = `SYSTEM DOCUMENTATION:
+
+${readmeContent}
+
+This documentation describes exactly what you are and how you work. Use this knowledge to better understand your capabilities and guide user interactions appropriately.`;
+  }
+
   let sections = [SYSTEM_SECTIONS.IDENTITY];
 
+  // Always include README if available
+  if (SYSTEM_SECTIONS.README) {
+    sections.push(SYSTEM_SECTIONS.README);
+  }
+
   if (isContextualGuidance) {
-    sections.unshift(SYSTEM_SECTIONS.CONTEXTUAL_GUIDANCE);
+    sections.push(SYSTEM_SECTIONS.CONTEXTUAL_GUIDANCE);
   } else {
     sections.push(
       SYSTEM_SECTIONS.WELCOME,
@@ -133,7 +174,7 @@ You MUST follow this response style in ALL messages. This is the user's explicit
 
 // =================== CONTEXT BUILDING ===================
 
-function buildSystemMessage(contextData = null, isContextualGuidance = false) {
+async function buildSystemMessage(contextData = null, isContextualGuidance = false) {
   let contextInfo = '';
   let userResponseStyle = '';
   
@@ -143,7 +184,8 @@ function buildSystemMessage(contextData = null, isContextualGuidance = false) {
     parts.push('Context: Bike app with memory, views, artifacts, and actions');
     
     if (contextData.availableViews && contextData.availableViews.length > 0) {
-      parts.push(`Available views: ${contextData.availableViews.join(', ')}`);
+      const viewNames = contextData.availableViews.map(view => view.title || view.name || view.id);
+      parts.push(`Available views: ${viewNames.join(', ')}`);
     }
     
     if (contextData.authStatus) {
@@ -166,6 +208,7 @@ function buildSystemMessage(contextData = null, isContextualGuidance = false) {
       parts.push(`User: ${prefs.name || 'NOT_SET'}`);
       parts.push(`Role: ${prefs.role || 'NOT_SET'}`);
       parts.push(`Using for: ${prefs.usingFor || 'NOT_SET'}`);
+      parts.push(`Collaboration: ${prefs.collaboration || 'NOT_SET'}`);
       
       const traitsDisplay = prefs.aiTraits 
         ? (Array.isArray(prefs.aiTraits) ? prefs.aiTraits.join(', ') : prefs.aiTraits)
@@ -183,6 +226,7 @@ function buildSystemMessage(contextData = null, isContextualGuidance = false) {
       parts.push(`User: NOT_SET`);
       parts.push(`Role: NOT_SET`);
       parts.push(`Using for: NOT_SET`);
+      parts.push(`Collaboration: NOT_SET`);
       parts.push(`AI traits: NOT_SET`);
     }
     
@@ -225,7 +269,7 @@ function buildSystemMessage(contextData = null, isContextualGuidance = false) {
     contextInfo = parts.join('. ');
   }
   
-  return createStructuredSystemPrompt(contextInfo, userResponseStyle, isContextualGuidance);
+  return await createStructuredSystemPrompt(contextInfo, userResponseStyle, isContextualGuidance);
 }
 
 // =================== SYSTEM VIEWER UTILITIES ===================
@@ -234,10 +278,24 @@ function getSystemSections() {
   return SYSTEM_SECTIONS;
 }
 
+// =================== INITIALIZATION ===================
+
+// Pre-load README content when the module loads for better performance
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    await getReadmeContent();
+    console.log('[SYSTEM] README content pre-loaded successfully');
+  } catch (error) {
+    console.warn('[SYSTEM] Failed to pre-load README content:', error);
+  }
+});
+
 // =================== PUBLIC API ===================
 
 window.systemModule = {
   buildSystemMessage,
   getSystemSections,
+  getReadmeContent,
+  loadReadmeContent,
   SYSTEM_SECTIONS
 }; 

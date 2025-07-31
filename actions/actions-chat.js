@@ -1,6 +1,6 @@
 // =================== Chat Actions ===================
 // Actions related to chat/conversation management
-// These actions correspond to operations handled by messages.js
+// These actions correspond to operations handled by chat.js
 
 const CHAT_ACTIONS = {
   'chat.create': {
@@ -19,7 +19,7 @@ const CHAT_ACTIONS = {
       const { timestamp, title, description, endTime } = params;
       
       // Create new chat logic moved from context
-      window.context?.setState({
+      window.context?.setContext({
         activeVersionIdxByArtifact: {},
         messages: [],
         activeMessageIndex: -1,
@@ -39,7 +39,7 @@ const CHAT_ACTIONS = {
       const currentChats = window.context?.getChats() || [];
       const currentMessagesByChat = window.context?.getMessagesByChat() || {};
       
-      window.context?.setState({
+      window.context?.setContext({
         chats: [...currentChats, chat],
         messagesByChat: { ...currentMessagesByChat, [id]: [] }
       });
@@ -95,7 +95,7 @@ const CHAT_ACTIONS = {
       }
       
       // Reset app state for chat
-      window.context?.setState({
+      window.context?.setContext({
         activeVersionIdxByArtifact: {},
         messages: [],
         activeMessageIndex: -1,
@@ -111,18 +111,18 @@ const CHAT_ACTIONS = {
           const artifacts = window.context?.getArtifacts() || [];
           const artifact = artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === chatId);
           if (artifact) {
-            window.context?.setState({ activeView: restoredView });
+            window.context?.setContext({ activeView: restoredView });
           } else {
-            window.context?.setState({ activeView: null });
+            window.context?.setContext({ activeView: null });
           }
         } else if (restoredView.type !== 'artifact') {
           // System views (calendar, etc.) are always valid
-          window.context?.setState({ activeView: restoredView });
+          window.context?.setContext({ activeView: restoredView });
         } else {
-          window.context?.setState({ activeView: null });
+          window.context?.setContext({ activeView: null });
         }
       } else {
-        window.context?.setState({ activeView: null });
+        window.context?.setContext({ activeView: null });
       }
       
       window.context?.clearUI();
@@ -300,7 +300,7 @@ const CHAT_ACTIONS = {
         };
         
         // Update state
-        window.context?.setState({ chats: updatedChats });
+        window.context?.setContext({ chats: updatedChats });
         
         // Persist changes
         window.memory?.saveAll();
@@ -427,7 +427,7 @@ const CHAT_ACTIONS = {
         };
         
         // Update state
-        window.context?.setState({ chats: updatedChats });
+        window.context?.setContext({ chats: updatedChats });
         
         // Persist changes
         window.memory?.saveAll();
@@ -655,7 +655,7 @@ const CHAT_ACTIONS = {
         window.actions?.clearActionHistory?.(chatId);
         
         // 5. Update state
-        window.context?.setState({
+        window.context?.setContext({
           chats: updatedChats,
           messagesByChat: updatedMessagesByChat,
           artifacts: updatedArtifacts
@@ -700,7 +700,7 @@ const CHAT_ACTIONS = {
           await window.actions.executeAction('chat.switch', { chatId: newActiveChatId });
         } else {
           // If no chat to switch to, make sure view is updated
-          window.context?.setState({ activeView: null });
+          window.context?.setContext({ activeView: null });
           if (window.views?.renderCurrentView) {
             window.views.renderCurrentView();
           }
@@ -734,6 +734,29 @@ const CHAT_ACTIONS = {
           `Failed to delete chat: ${error.message}`
         );
       }
+    }
+  },
+
+  'chat.share': {
+    id: 'chat.share',
+    name: 'Share Chat',
+    description: 'Share chat link (coming soon)',
+    category: window.actions?.ACTION_CATEGORIES?.CHAT || 'chat',
+    requiredParams: [],
+    optionalParams: [],
+    availableData: () => ({}),
+    handler: async () => {
+      return window.actions.createStandardizedResult(
+        'chat.share',
+        'Share Chat',
+        true,
+        { 
+          action: 'Coming soon',
+          type: 'chat'
+        },
+        null,
+        'Chat sharing coming soon!'
+      );
     }
   }
 };

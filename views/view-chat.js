@@ -32,6 +32,22 @@ function getEffectiveEndTime(chat, activeChatId) {
   return null; // No end time available
 }
 
+// Helper function to extract name from email (copied from view-memory.js)
+function getNameFromEmail(email) {
+  if (!email) return "there";
+  // Extract the part before @ and capitalize first letter
+  const namePart = email.split("@")[0];
+  // Replace dots, underscores, numbers with spaces and capitalize
+  const cleanName = namePart.replace(/[._\d]/g, " ").trim();
+  // Capitalize first letter of each word
+  return (
+    cleanName
+      .split(" ")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(" ") || "there"
+  );
+}
+
 function renderChatView() {
   const activeChatId = window.context?.getActiveChatId();
   const chats = window.context?.getChats() || [];
@@ -60,6 +76,48 @@ function renderChatView() {
     }
   }
 
+  // Get artifacts for this chat
+  const artifacts = window.context?.getCurrentChatArtifacts() || [];
+
+  // Get user information for profiles
+  const session = window.user?.getActiveSession();
+  const email = session?.user?.email || "";
+  const contextData = window.memory?.getContextData() || {};
+  const userPreferences = contextData.userPreferences || {};
+  const userName = userPreferences.name || getNameFromEmail(email);
+  const userInitial = userName.charAt(0).toUpperCase();
+
+  // Helper function to get type emoji
+  function getTypeEmoji(type) {
+    switch (type) {
+      case 'html': return '🌐';
+      case 'image': return '🖼️';
+      case 'link': return '🔗';
+      case 'files': return '📁';
+      case 'markdown': return '📝';
+      default: return '📄';
+    }
+  }
+
+  // Generate artifacts list HTML
+  let artifactsHtml = '';
+  if (artifacts.length > 0) {
+    artifactsHtml = `
+      <div class="column align-start gap-s">
+        <h4 class="opacity-half">Artifacts (${artifacts.length})</h4>
+        <div class="column align-start gap-xs">
+          ${artifacts.map(artifact => `
+            <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')">
+              <span>${getTypeEmoji(artifact.type)}</span>
+              <span>${artifact.title}</span>
+              <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="column align-start justify-center padding-xl">
       <div class="column align-start">
@@ -70,11 +128,20 @@ function renderChatView() {
               <h3 class="${currentChat?.description ? 'opacity-full' : 'opacity-half'}">
                 ${currentChat?.description || 'No description'}
               </h3>
+              <div class="row align-center gap-m">
+                <div class="circle background-secondary row align-center justify-center" style="width: 48px; height: 48px;">
+                  <span class="text-l">${userInitial}</span>
+                </div>
+                <div class="circle border row align-center justify-center cursor-pointer" style="width: 48px; height: 48px;" onclick="">
+                  <span class="text-l">+</span>
+                </div>
+              </div>
               ${timelineInfo ? `
                 <h3>
                   ${timelineInfo}
                 </h3>
               ` : ''}
+              ${artifactsHtml}
             ` : `
               <h1>No active chat</h1>
             `}

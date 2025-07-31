@@ -335,10 +335,21 @@ function highlightViewContent() {
   const viewElement = document.getElementById('view');
   if (!viewElement) return;
   
-  // Find text elements and apply highlighting with proper trait preservation
-  const textElements = viewElement.querySelectorAll('h1, h2, h3, h4, h5, h6, .text-xs, .text-s, .text-m, .text-l, .text-xl');
-  textElements.forEach(element => {
+  // Find all elements with text content
+  const allElements = viewElement.querySelectorAll('*');
+  
+  allElements.forEach(element => {
+    // Skip if element has no text content or is already being processed
     if (!element.innerText?.trim() || element.dataset.highlighting === 'true') return;
+    
+    // Only highlight "leaf" text elements to avoid layout issues
+    // Skip if this element has child elements that also contain text
+    const hasTextChildren = Array.from(element.children).some(child => 
+      child.innerText?.trim()
+    );
+    
+    // If element has text children, let the children handle their own highlighting
+    if (hasTextChildren) return;
     
     // Preserve trait tags 
     const traitTags = element.querySelectorAll('[data-no-highlight="true"]');

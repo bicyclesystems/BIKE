@@ -12,10 +12,8 @@ function renderSystemView() {
     `;
   }
 
-  // Get system sections and current prompt
+  // Get system sections
   const sections = window.systemModule.getSystemSections();
-  const contextData = window.context ? window.context.getContext() : null;
-  const currentPrompt = window.systemModule.buildSystemMessage(contextData);
   const sectionCount = Object.keys(sections).length;
 
   // Helper function to create styled data badges

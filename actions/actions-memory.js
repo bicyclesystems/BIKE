@@ -107,7 +107,7 @@ const MEMORY_ACTIONS = {
         }
         
         // Reset app state - for account deletion, this should clear everything
-        if (window.context?.setState) {
+        if (window.context?.setContext) {
           window.context.setState({
             chats: [],
             messagesByChat: {},

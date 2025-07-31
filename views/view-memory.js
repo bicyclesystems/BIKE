@@ -130,7 +130,7 @@ function renderMemoryView() {
   const aiTraits = userPreferences.aiTraits || [];
   const traitsText =
     aiTraits.length > 0
-      ? ` You like your AI to sound ${aiTraits
+      ? ` You like to sound ${aiTraits
           .map((trait, index) => {
             const tag = `<span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${escapeHtml(
               trait
@@ -160,27 +160,23 @@ function renderMemoryView() {
     hasNoMemory
       ? " A moment of pure possibility. An invitation to discover. A celebration of the present moment before memory begins."
       : ""
-  } You're logged in as ${createDataBadge(
-    email || "guest user"
-  )}${signupTimeText}${
-    userPreferences.role
-      ? ` with the role of ${createDataBadge(userPreferences.role)}`
-      : ""
+  } ${
+    !isLoggedOut
+      ? `You're logged in as ${createDataBadge(email)}${signupTimeText}`
+      : `Let's ride? Say your ${createDataBadge("email")}.`
   }${
-    userPreferences.usingFor
-      ? ` using this for ${createDataBadge(userPreferences.usingFor)}`
+    !isLoggedOut
+      ? `${
+          userPreferences.role
+            ? ` with the role of ${createDataBadge(userPreferences.role)}`
+            : ""
+        }${
+          userPreferences.usingFor
+            ? ` using this for ${createDataBadge(userPreferences.usingFor)}`
+            : ""
+        }.${traitsText}`
       : ""
-  }.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chat${
-    totalChats === 1 ? "" : "s"
-  } containing ${createDataBadge(totalMessages)} total message${
-    totalMessages === 1 ? "" : "s"
-  }. You've created ${createDataBadge(totalArtifacts)} artifact${
-    totalArtifacts === 1 ? "" : "s"
-  }. You've connected ${createDataBadge(
-    "0"
-  )} services. You have ${createDataBadge(totalActions)} available action${
-    totalActions === 1 ? "" : "s"
-  }.
+  }
         </h1>
       </div>
     </div>
