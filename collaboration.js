@@ -1165,49 +1165,72 @@ const collaboration = {
       const currentMessages = this.sharedMessages.toArray();
       if (currentMessages.length === 0) return;
 
-      let messagesByChat = {};
-      currentMessages.forEach((msg) => {
-        const chatId = msg.chatId;
-        if (!chatId) return;
+      console.log("[COLLAB] 🔄 Syncing messages from shared array:", currentMessages.length);
 
-        if (!messagesByChat[chatId]) {
-          messagesByChat[chatId] = [];
-        }
+      // Use the memory system to add messages properly
+      if (window.memory && window.memory.saveMessage) {
+        currentMessages.forEach((msg) => {
+          const chatId = msg.chatId;
+          if (!chatId) return;
 
-        // Avoid duplicates
-        const exists = messagesByChat[chatId].some(
-          (m) => m.message_id === msg.message_id
+          // Check if message already exists to avoid duplicates
+          const existingMessages = window.context?.getMessagesByChat()[chatId] || [];
+          const exists = existingMessages.some(
+            (m) => m.message_id === msg.message_id
+          );
+          
+          if (!exists) {
+            console.log("[COLLAB] 💾 Adding message via memory system:", msg.message_id);
+            window.memory.saveMessage(chatId, msg);
+          } else {
+            console.log("[COLLAB] ⚠️ Message already exists, skipping:", msg.message_id);
+          }
+        });
+      } else {
+        // Fallback to direct localStorage manipulation only if memory system is not available
+        console.warn("[COLLAB] ⚠️ Memory system not available, using direct localStorage");
+        
+        let messagesByChat = {};
+        currentMessages.forEach((msg) => {
+          const chatId = msg.chatId;
+          if (!chatId) return;
+
+          if (!messagesByChat[chatId]) {
+            messagesByChat[chatId] = [];
+          }
+
+          // Avoid duplicates
+          const exists = messagesByChat[chatId].some(
+            (m) => m.message_id === msg.message_id
+          );
+          if (!exists) {
+            messagesByChat[chatId].push(msg);
+          }
+        });
+
+        // Merge with existing local messages
+        const existingMessages = JSON.parse(
+          localStorage.getItem("messagesByChat") || "{}"
         );
-        if (!exists) {
-          // Preserve the original isSaved status from the message
-          // Don't modify isSaved - let it be exactly as it was sent
-          messagesByChat[chatId].push(msg);
-        }
-      });
+        Object.entries(messagesByChat).forEach(([chatId, newMsgs]) => {
+          if (!existingMessages[chatId]) {
+            existingMessages[chatId] = newMsgs;
+          } else {
+            // Add new messages that don't exist locally
+            newMsgs.forEach((newMsg) => {
+              const exists = existingMessages[chatId].some(
+                (m) => m.message_id === newMsg.message_id
+              );
+              if (!exists) {
+                existingMessages[chatId].push(newMsg);
+              }
+            });
+          }
+        });
 
-      // Merge with existing local messages
-      const existingMessages = JSON.parse(
-        localStorage.getItem("messagesByChat") || "{}"
-      );
-      Object.entries(messagesByChat).forEach(([chatId, newMsgs]) => {
-        if (!existingMessages[chatId]) {
-          existingMessages[chatId] = newMsgs;
-        } else {
-          // Add new messages that don't exist locally
-          newMsgs.forEach((newMsg) => {
-            const exists = existingMessages[chatId].some(
-              (m) => m.message_id === newMsg.message_id
-            );
-            if (!exists) {
-              // Preserve the original isSaved status from the message
-              // Don't modify isSaved - let it be exactly as it was sent
-              existingMessages[chatId].push(newMsg);
-            }
-          });
-        }
-      });
-
-      localStorage.setItem("messagesByChat", JSON.stringify(existingMessages));
+        localStorage.setItem("messagesByChat", JSON.stringify(existingMessages));
+      }
+      
       console.log("[COLLAB] 🔄 Messages synced");
     } catch (e) {
       console.warn("[COLLAB] ⚠️ Error syncing messages from shared array:", e);
@@ -1414,6 +1437,7 @@ const collaboration = {
 
     // On local message add (example: call this when sending a message)
     this.pushMessageToCollab = (msgObj) => {
+      
       // Determine correct chatId based on role
       let chatId;
       if (this.isLeader) {
@@ -1432,7 +1456,7 @@ const collaboration = {
           window.context?.getActiveChatId() ||
           localStorage.getItem("activeChatId");
 
-        console.log(`[COLLAB] 🎯 Collab using shared chatId: ${chatId}`);
+
       }
 
       // Create a clean message structure with only essential fields
@@ -1617,19 +1641,6 @@ const collaboration = {
         }
 
         newMessages.forEach((newMsg, msgIndex) => {
-          console.log("[COLLAB-DEBUG] 📨 === SHARED MESSAGES OBSERVER DEBUG ===");
-          console.log("[COLLAB-DEBUG] 📋 Received message:", {
-            role: newMsg.role,
-            content: newMsg.content?.substring(0, 50) + "...",
-            message_id: newMsg.message_id,
-            isSaved: newMsg.isSaved,
-            userId: newMsg.userId,
-            chatId: newMsg.chatId
-          });
-          console.log("[COLLAB-DEBUG] 📋 Current user:", {
-            isLeader: this.isLeader,
-            isCollaborating: this.isCollaborating
-          });
           
           // Skip processing our own messages (prevent self-echo)
           if (newMsg.role === "collab" && !this.isLeader) {
@@ -1674,15 +1685,6 @@ const collaboration = {
             // Preserve the original isSaved status from the message
             // Don't modify isSaved - let it be exactly as it was sent
             
-            // Add message to the correct chatId array
-            messagesByChat[chatId].push(newMsg);
-
-            // Save to localStorage
-            localStorage.setItem(
-              "messagesByChat",
-              JSON.stringify(messagesByChat)
-            );
-
             console.log(
               `[COLLAB] 📨 ${this.isLeader ? "Leader" : "Collab"} ← "${
                 newMsg.content
@@ -1694,14 +1696,23 @@ const collaboration = {
               this.lastSentMessage = null;
             }
 
-            // Don't queue database sync for messages received from collaboration
-            // Preserve their original isSaved status as-is
+            // Use the memory system to add the message properly
+            // This prevents duplication by using the centralized message management
+            if (window.memory && window.memory.saveMessage) {
+              console.log("[COLLAB] 💾 Using memory system to add received message");
+              window.memory.saveMessage(chatId, newMsg);
+            } else {
+              // Fallback to direct localStorage manipulation only if memory system is not available
+              console.warn("[COLLAB] ⚠️ Memory system not available, using direct localStorage");
+              messagesByChat[chatId].push(newMsg);
+              localStorage.setItem(
+                "messagesByChat",
+                JSON.stringify(messagesByChat)
+              );
+            }
 
             // Update UI/state with proper timing
             setTimeout(() => {
-              if (window.memory && window.memory.loadAll) {
-                window.memory.loadAll();
-              }
               if (window.views && window.views.renderCurrentView) {
                 window.views.renderCurrentView(false);
               }

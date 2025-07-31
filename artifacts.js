@@ -50,7 +50,7 @@ function isFileData(string) {
 
 // =================== Core Artifact Functions ===================
 
-function createArtifactBase(
+async function createArtifactBase(
   content,
   messageId,
   type = null,
@@ -80,9 +80,11 @@ function createArtifactBase(
   //  Generate slug
   const slug = Math.random().toString(36).substring(2, 10);
   const localUrl = `https://say.bike/artifact/${id}?slug=${slug}&chatId=${activeChatId}`;
-  // Determine if this is a collaboration artifact
-  const isCollaborating = window.collaboration?.isCollaborating || false;
-  const isLeader = window.collaboration?.isLeader || false;
+  // Check if we're in collaboration mode
+  const isCollaborating = window.collaboration?.isCollaborating;
+  const isLeader = window.collaboration?.isLeader;
+  const collaborationId = isCollaborating ? window.collaboration?.collaborationId : null;
+  const participantId = isCollaborating ? window.collaboration?.participantId : null;
   
   const artifact = {
     id,
@@ -103,6 +105,14 @@ function createArtifactBase(
     messageId,
     chatId: activeChatId,
     isSaved: false, // Will be set to true after successful database save
+    // Collaboration fields
+    collaboration_id: collaborationId,
+    participant_id: participantId,
+    is_collaboration_artifact: isCollaborating,
+    // User ID - for leader use their ID, for collaborator use leader's ID
+    userId: isCollaborating 
+      ? (isLeader ? localStorage.getItem("userId") : localStorage.getItem("collaborationLeaderId"))
+      : localStorage.getItem("userId")
   };
 
   if (!artifact.chatId) {
@@ -119,12 +129,25 @@ function createArtifactBase(
     chatId: artifact.chatId
   });
   
-  // Save to memory (this triggers sync)
-  if (window.memory?.saveArtifacts) {
-    console.log('[ARTIFACTS] 💾 Saving artifact to memory...');
-    window.memory.saveArtifacts();
+  // Save to database first, then to memory
+  if (window.memory?.saveArtifact) {
+    console.log('[ARTIFACTS] 💾 Saving artifact to database first...');
+    try {
+      const saveResult = await window.memory.saveArtifact(artifact);
+      if (saveResult && saveResult.success) {
+        artifact.isSaved = true;
+        console.log('[ARTIFACTS] ✅ Artifact saved to database successfully, isSaved set to true');
+      } else {
+        artifact.isSaved = false;
+        console.warn('[ARTIFACTS] ⚠️ Database save failed, isSaved remains false');
+      }
+    } catch (error) {
+      artifact.isSaved = false;
+      console.error('[ARTIFACTS] ❌ Error saving artifact to database:', error);
+    }
   } else {
     console.warn('[ARTIFACTS] ⚠️ Memory module not available for saving');
+    artifact.isSaved = false;
   }
 
   // --- COLLABORATION SYNC ---
@@ -141,7 +164,7 @@ function createArtifactBase(
   return artifact;
 }
 
-function createArtifact(content, messageId, type = null) {
+async function createArtifact(content, messageId, type = null) {
   // Check collaboration permissions
   if (window.collaboration?.isCollaborating && !window.collaboration?.isLeader) {
     if (!window.collaboration.canPerformAction('createArtifact')) {
@@ -153,12 +176,12 @@ function createArtifact(content, messageId, type = null) {
       return null;
     }
   }
-  return createArtifactBase(content, messageId, type, true);
+  return await createArtifactBase(content, messageId, type, true);
 }
 
 // Create artifact without auto-opening it (used for file uploads)
-function createArtifactSilent(content, messageId, type = null) {
-  return createArtifactBase(content, messageId, type, false);
+async function createArtifactSilent(content, messageId, type = null) {
+  return await createArtifactBase(content, messageId, type, false);
 }
 
 async function updateArtifact(id, content) {
@@ -2147,7 +2170,7 @@ class FileUploadManager {
       // Create the artifact silently (don't auto-open)
       const currentMessageId =
         window.context?.getCurrentMessageId?.() || "upload-" + Date.now();
-      createArtifactSilent(formattedContent, currentMessageId, artifactType);
+      await createArtifactSilent(formattedContent, currentMessageId, artifactType);
       
       
       

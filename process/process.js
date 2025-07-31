@@ -125,9 +125,6 @@ async function processContext(input = null, isContextualGuidance = false) {
 function process(input = null) {
   (async () => {
     try {
-      console.log("[COLLAB-DEBUG] 🔄 === PROCESS FUNCTION START ===");
-      console.log("[COLLAB-DEBUG] 📋 Input parameter:", input);
-      
       let cleanText = null;
       let originalText = null;
       let isContextualGuidance = false;
@@ -137,43 +134,26 @@ function process(input = null) {
         // Direct input provided - normal processing mode
         cleanText = input;
         originalText = input;
-        console.log("[COLLAB-DEBUG] 📝 Direct input mode - using provided input");
       } else if (window.inputModule) {
         // Try to get processed input from input module
-        console.log("[COLLAB-DEBUG] 🔍 Getting input from input module...");
         const processedInput = window.inputModule.getProcessedInput();
-        console.log("[COLLAB-DEBUG] 📋 Processed input result:", processedInput);
         
         if (processedInput) {
           cleanText = processedInput.cleanText;
           originalText = processedInput.originalText;
-          console.log("[COLLAB-DEBUG] 📝 Input module mode - extracted text");
         }
       }
       
       // If no input found anywhere, switch to contextual guidance mode
       if (!cleanText) {
         isContextualGuidance = true;
-        console.log('[COLLAB-DEBUG] 📝 No input found - switching to contextual guidance mode');
       }
       
       // Add user message only if we have input to display (not in contextual guidance mode)
       if (cleanText && !isContextualGuidance && window.messages && window.messages.addMessage) {
         const displayText = typeof originalText !== 'undefined' && originalText !== null ? originalText : cleanText;
-        console.log("[COLLAB-DEBUG] 💬 === CALLING ADD MESSAGE ===");
-        console.log("[COLLAB-DEBUG] 📋 Display text:", displayText);
-        console.log("[COLLAB-DEBUG] 📋 Messages module available:", !!window.messages);
-        console.log("[COLLAB-DEBUG] 📋 Add message function available:", !!window.messages.addMessage);
         
         await window.messages.addMessage('user', displayText);
-        console.log("[COLLAB-DEBUG] ✅ Add message call completed");
-      } else {
-        console.log("[COLLAB-DEBUG] ⚠️ Skipping add message call:", {
-          hasCleanText: !!cleanText,
-          isContextualGuidance,
-          hasMessagesModule: !!window.messages,
-          hasAddMessageFunction: !!window.messages?.addMessage
-        });
       }
       
       // Show loading indicator when processing
@@ -196,12 +176,8 @@ function process(input = null) {
       if (!input && !isContextualGuidance && window.inputModule && window.inputModule.clear) {
         window.inputModule.clear();
       }
-      
-      console.log("[COLLAB-DEBUG] ✅ === PROCESS FUNCTION COMPLETE ===");
     } catch (error) {
-      console.error('[COLLAB-DEBUG] ❌ === PROCESS FUNCTION ERROR ===');
-      console.error('[COLLAB-DEBUG] Error in process():', error);
-      console.error('[COLLAB-DEBUG] Error stack:', error.stack);
+      console.error('[COLLAB-DEBUG] ❌ Error in process():', error);
       
       // Hide loading on error
       if (window.messages && window.messages.hideLoadingIndicator) {

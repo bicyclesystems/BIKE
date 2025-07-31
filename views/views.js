@@ -277,28 +277,7 @@ function simpleBlurTransition(container, newHtml) {
   }, 400);
 }
 
-// =================== Debug Functions ===================
 
-function debugViewState() {
-  console.log("[VIEWS-DEBUG] Current view state:");
-  console.log("  - Active view:", window.context?.getActiveView());
-  console.log("  - Collaboration active:", localStorage.getItem("collaborationActive"));
-  console.log("  - Is collaborating:", window.collaboration?.isCollaborating);
-  console.log("  - Is leader:", window.collaboration?.isLeader);
-  console.log("  - Current hash:", location.hash);
-  console.log("  - View element exists:", !!document.getElementById("view"));
-}
-
-function forceClearCollaborationState() {
-  console.log("[VIEWS-DEBUG] Force clearing collaboration state");
-  localStorage.removeItem("collaborationActive");
-  localStorage.removeItem("collaborationPermissions");
-  console.log("[VIEWS-DEBUG] Collaboration state cleared");
-}
-
-// Make debug functions globally available
-window.debugViewState = debugViewState;
-window.forceClearCollaborationState = forceClearCollaborationState;
 
 // =================== View UI Management ===================
 

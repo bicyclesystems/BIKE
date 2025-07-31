@@ -32,7 +32,8 @@ const MessagesState = {
   },
 
   get hasMessages() {
-    const messages = window.context?.getMessages();
+    const activeChatId = window.context?.getActiveChatId();
+    const messages = window.context?.getMessagesByChat()[activeChatId] || [];
     return messages && messages.length > 0;
   },
 
@@ -543,6 +544,10 @@ function renderMessage(message, processedContent, isUser, returnHtml) {
   const messagesContainer = window.context?.getMessagesContainer();
   if (messagesContainer) {
     messagesContainer.innerHTML = html;
+    // Ensure the container is visible after updating content
+    messagesContainer.classList.remove("hidden");
+    messagesContainer.style.display = "block";
+    messagesContainer.style.visibility = "visible";
   }
 }
 
@@ -836,7 +841,8 @@ function hideMessagesWithEffect() {
 
 function handleInputNavigation(direction) {
   const currentIndex = window.context.getActiveMessageIndex();
-  const messages = window.context.getMessages();
+  const activeChatId = window.context.getActiveChatId();
+  const messages = window.context.getMessagesByChat()[activeChatId] || [];
 
   if (direction === "up" && currentIndex > 0) {
     window.context.setActiveMessageIndex(currentIndex - 1);
@@ -876,6 +882,8 @@ function renderMessagesUI() {
     );
     messagesContainer.id = "messages";
     messagesContainer.style.zIndex = "10000";
+    messagesContainer.style.display = "block";
+    messagesContainer.style.visibility = "visible";
     document.body.appendChild(messagesContainer);
 
     messagesContainer.addEventListener("click", function (e) {
@@ -884,6 +892,9 @@ function renderMessagesUI() {
   }
 
   window.context.setMessagesContainer(document.getElementById("messages"));
+
+  // Initialize hover functionality
+  setupHoverFunctionality();
 
   // Add document click listener
   if (!window.messagesDocumentClickHandler) {
@@ -933,10 +944,8 @@ function removeMessagesUI() {
 // =================== MESSAGE MANAGEMENT ===================
 
 async function addMessage(role, content, options = {}) {
-  console.log("[COLLAB-DEBUG] 🚀 === MESSAGE FLOW START ===");
-  console.log("[COLLAB-DEBUG] 📋 Role:", role);
-  console.log("[COLLAB-DEBUG] 📋 Content:", content);
-  console.log("[COLLAB-DEBUG] 📋 Options:", options);
+  
+  
 
   const {
     artifactIds = null,
@@ -958,18 +967,9 @@ async function addMessage(role, content, options = {}) {
   const message_id = `${userId.slice(-4)}_${timePart}_${randPart}`;
   const message = { role, content, timestamp, message_id, isSaved: false, userId };
 
-  console.log("[COLLAB-DEBUG] 🆔 Generated message ID:", message_id);
-  console.log("[COLLAB-DEBUG] 👤 User ID:", userId);
-
   // Only add extra fields if NOT in collaboration mode
   const isCollaborating =
     window.collaboration && window.collaboration.isCollaborating;
-  
-  console.log("[COLLAB-DEBUG] 🤝 Collaboration status:", {
-    isCollaborating,
-    collaborationModule: !!window.collaboration,
-    collaborationActive: window.collaboration?.isCollaborating
-  });
 
   if (!isCollaborating) {
     if (artifactIds !== null) {
@@ -978,68 +978,50 @@ async function addMessage(role, content, options = {}) {
     if (structuredData) {
       message.structuredData = structuredData;
     }
-    console.log("[COLLAB-DEBUG] 📝 Regular mode - added extra fields");
-  } else {
-    console.log("[COLLAB-DEBUG] 📝 Collaboration mode - skipping extra fields");
   }
 
   try {
-    // Step 1: Save to database first
-    const chatId = window.context.getActiveChatId();
-    console.log("[COLLAB-DEBUG] 💬 Chat ID for database save:", chatId);
-    console.log("[COLLAB-DEBUG] 🧠 Memory module available:", !!window.memory);
-    console.log("[COLLAB-DEBUG] 💾 Save message function available:", !!window.memory?.saveMessage);
+    // Step 1: Ensure there's an active chat
+    let chatId = window.context.getActiveChatId();
+    if (!chatId) {
+      if (window.actions && window.actions.executeAction) {
+        await window.actions.executeAction("chat.create", {});
+        chatId = window.context.getActiveChatId();
+      } else {
+        console.warn("[COLLAB-DEBUG] ⚠️ Cannot create chat - actions module not available");
+      }
+    }
     
     if (chatId && window.memory?.saveMessage) {
-      console.log("[COLLAB-DEBUG] 📤 === DATABASE SAVE ATTEMPT ===");
-      console.log("[COLLAB-DEBUG] 📋 Message to save:", message);
       const saveResult = await window.memory.saveMessage(chatId, message);
       
-      console.log("[COLLAB-DEBUG] 📊 Save result:", saveResult);
-      
-      if (saveResult.success) {
-        console.log("[COLLAB-DEBUG] ✅ Message saved to database successfully");
-      } else {
+      if (!saveResult.success) {
         console.warn("[COLLAB-DEBUG] ⚠️ Database save failed, but continuing:", saveResult.error);
       }
     } else {
       console.warn("[COLLAB-DEBUG] ⚠️ No chat ID or memory module - skipping database save");
-      console.log("[COLLAB-DEBUG] 🔍 Debug info:", {
-        chatId,
-        hasMemory: !!window.memory,
-        hasSaveMessage: !!window.memory?.saveMessage
-      });
     }
 
     // Step 2: Add to local state
-    console.log("[COLLAB-DEBUG] 💾 === LOCAL STATE UPDATE ===");
-    console.log("[COLLAB-DEBUG] 📋 Current messages count:", messages.length);
-    messages.push(message);
-    window.context.setActiveMessages(messages);
+    // Note: memory.saveMessage() already adds the message to local state via setState
+    // So we don't need to call setActiveMessages here - it would cause duplication
     window.context.setActiveMessageIndex(messages.length - 1);
-    console.log("[COLLAB-DEBUG] ✅ Message added to local state");
 
     // --- COLLABORATION SYNC ---
-    console.log("[COLLAB-DEBUG] 🤝 === COLLABORATION SYNC ===");
     if (window.collaboration && window.collaboration.pushMessageToCollab) {
-      console.log("[COLLAB-DEBUG] 📤 Pushing message to collaboration...");
       if (chatId && !message.chatId) message.chatId = chatId;
       window.collaboration.pushMessageToCollab(message);
-      console.log("[COLLAB-DEBUG] ✅ Message pushed to collaboration");
-    } else {
-      console.log("[COLLAB-DEBUG] ⚠️ Collaboration sync not available");
     }
 
     // Step 3: Update UI
-    console.log("[COLLAB-DEBUG] 🎨 === UI UPDATE ===");
     if (window.messages && window.messages.updateMessagesDisplay) {
       window.messages.updateMessagesDisplay();
-      console.log("[COLLAB-DEBUG] ✅ Messages display updated");
-    } else {
-      console.log("[COLLAB-DEBUG] ⚠️ Messages display update not available");
+      
+      // Ensure messages are visible by showing the container
+      if (window.messages && window.messages.show) {
+        window.messages.show();
+      }
     }
-
-    console.log("[COLLAB-DEBUG] 🎉 === MESSAGE FLOW COMPLETE ===");
     return message;
 
   } catch (error) {
@@ -1049,9 +1031,15 @@ async function addMessage(role, content, options = {}) {
     
     // Fallback: still add to local state even if database save failed
     console.log("[COLLAB-DEBUG] 🔄 Fallback: Adding to local state only...");
-    messages.push(message);
-    window.context.setActiveMessages(messages);
-    window.context.setActiveMessageIndex(messages.length - 1);
+    // Use memory system to add message properly to avoid duplication
+    if (window.memory && window.memory.saveMessage) {
+      window.memory.saveMessage(chatId, message);
+    } else {
+      // Direct fallback only if memory system is not available
+      messages.push(message);
+      window.context.setActiveMessages(messages);
+      window.context.setActiveMessageIndex(messages.length - 1);
+    }
     
     if (window.messages && window.messages.updateMessagesDisplay) {
       window.messages.updateMessagesDisplay();
@@ -1062,18 +1050,36 @@ async function addMessage(role, content, options = {}) {
 }
 
 function updateMessagesDisplay() {
+  console.log("[MESSAGES-UPDATE] === UPDATE MESSAGES DISPLAY CALLED ===");
   const container = dom.getContainer();
-  if (!container) return;
+  if (!container) {
+    console.error("[MESSAGES-UPDATE] ❌ Container not found!");
+    return;
+  }
+  console.log("[MESSAGES-UPDATE] ✅ Container found");
 
   const viewElement = window.context.getViewElement();
   if (!viewElement)
     window.context.setViewElement(document.getElementById("view"));
 
+  // Ensure container is visible
   container.classList.remove("hidden");
+  container.style.display = "block";
+  container.style.visibility = "visible";
 
-  const messages = window.context.getMessages();
+  // Get messages from the correct source - chat-specific messages
+  const activeChatId = window.context.getActiveChatId();
+  const messages = window.context.getMessagesByChat()[activeChatId] || [];
+  console.log("[MESSAGES-UPDATE] 📋 Active chat ID:", activeChatId);
+  console.log("[MESSAGES-UPDATE] 📋 Total messages:", messages.length);
+  console.log("[MESSAGES-UPDATE] 📋 Messages:", messages.map(m => ({ role: m.role, content: m.content?.substring(0, 50) + '...' })));
+  
   if (messages.length === 0) {
+    console.log("[MESSAGES-UPDATE] ⚠️ No messages to display");
     container.innerHTML = "";
+    // Hide container when no messages
+    container.classList.add("hidden");
+    container.style.display = "none";
     if (window.views?.renderCurrentView) {
       window.views.renderCurrentView();
     }
@@ -1089,15 +1095,18 @@ function updateMessagesDisplay() {
   window.context.setActiveMessageIndex(currentIndex);
 
   if (window.context.getShowAllMessages()) {
+    console.log("[MESSAGES-UPDATE] 🎨 Rendering in ALL MESSAGES mode");
     renderAllMessagesMode();
   } else {
+    console.log("[MESSAGES-UPDATE] 🎨 Rendering in SINGLE MESSAGE mode");
     renderSingleMessageMode();
   }
 }
 
 function renderAllMessagesMode() {
   const container = dom.getContainer();
-  const messages = window.context.getMessages();
+  const activeChatId = window.context.getActiveChatId();
+  const messages = window.context.getMessagesByChat()[activeChatId] || [];
 
   container.className = "column box-m transition gap-xs";
 
@@ -1123,6 +1132,9 @@ function renderAllMessagesMode() {
     messages.map(processMessage).join("") + '<div class="padding-xl"></div>';
 
   container.innerHTML = messagesHtml;
+  container.classList.remove("hidden");
+  container.style.display = "block";
+  container.style.visibility = "visible";
   setupMessageEventHandlers(true);
   setupMessageBubbleHoverEffects();
 
@@ -1139,7 +1151,8 @@ function renderAllMessagesMode() {
 
 function renderSingleMessageMode() {
   const container = dom.getContainer();
-  const messages = window.context.getMessages();
+  const activeChatId = window.context.getActiveChatId();
+  const messages = window.context.getMessagesByChat()[activeChatId] || [];
   const activeIndex = window.context.getActiveMessageIndex();
 
   container.className = "column align-center justify-center box-s transition";
@@ -1177,6 +1190,9 @@ function renderSingleMessageMode() {
 
   html = addMessageAttributes(html, indexToDisplay, false);
   container.innerHTML = html;
+  // Hide by default in single message mode - will be shown on hover
+  container.classList.add("hidden");
+  container.style.display = "none";
 
   setupMessageEventHandlers(false);
   window.inputModule.unblurViews();
@@ -1196,4 +1212,24 @@ window.messages = {
   // Loading states
   showLoadingIndicator,
   hideLoadingIndicator,
+  
+  // Visibility control
+  show: () => {
+    const container = dom.getContainer();
+    if (container) {
+      container.classList.remove("hidden");
+      container.style.display = "block";
+      container.style.visibility = "visible";
+    }
+  },
+  
+  hide: () => {
+    const container = dom.getContainer();
+    if (container) {
+      container.classList.add("hidden");
+      container.style.display = "none";
+    }
+  },
+  
+
 };
