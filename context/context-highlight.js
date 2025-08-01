@@ -343,13 +343,21 @@ function highlightViewContent() {
     if (!element.innerText?.trim() || element.dataset.highlighting === 'true') return;
     
     // Only highlight "leaf" text elements to avoid layout issues
-    // Skip if this element has child elements that also contain text
+    // Skip if this element has child elements that also contain text,
+    // UNLESS all children are marked with data-no-highlight="true"
     const hasTextChildren = Array.from(element.children).some(child => 
       child.innerText?.trim()
     );
     
-    // If element has text children, let the children handle their own highlighting
-    if (hasTextChildren) return;
+    // If element has text children, check if they're all no-highlight elements
+    if (hasTextChildren) {
+      const allChildrenAreNoHighlight = Array.from(element.children).every(child => 
+        !child.innerText?.trim() || child.getAttribute('data-no-highlight') === 'true'
+      );
+      
+      // If not all children are no-highlight, let the children handle their own highlighting
+      if (!allChildrenAreNoHighlight) return;
+    }
     
     // Preserve trait tags 
     const traitTags = element.querySelectorAll('[data-no-highlight="true"]');

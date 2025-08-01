@@ -43,7 +43,13 @@ function renderActionsView() {
 function refreshActionsView() {
   if (window.context?.getActiveView()?.type === 'actions') {
     window.views?.renderCurrentView();
-    applyContextHighlighting();
+    
+    // Apply context highlighting
+    setTimeout(() => {
+      if (window.contextHighlight && window.contextHighlight.highlightViewContent) {
+        window.contextHighlight.highlightViewContent();
+      }
+    }, 50);
   }
 }
 

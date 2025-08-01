@@ -150,7 +150,7 @@ function renderMemoryView() {
       content
     )}</span>`;
 
-  return `
+  const html = `
     <div class="column gap-l padding-l view">
       <div class="background-primary padding-l radius-l">
         <h1>
@@ -162,11 +162,7 @@ function renderMemoryView() {
       : ""
   } ${
     !isLoggedOut
-      ? `You're logged in as ${createDataBadge(email)}${signupTimeText}`
-      : `Let's ride? Say your ${createDataBadge("email")}.`
-  }${
-    !isLoggedOut
-      ? `${
+      ? `You're logged in as ${createDataBadge(email)}${signupTimeText}${
           userPreferences.role
             ? ` with the role of ${createDataBadge(userPreferences.role)}`
             : ""
@@ -174,13 +170,17 @@ function renderMemoryView() {
           userPreferences.usingFor
             ? ` using this for ${createDataBadge(userPreferences.usingFor)}`
             : ""
-        }.${traitsText}`
-      : ""
+        }.${traitsText} Your calendar shows ${createDataBadge(totalChats)} chats containing ${createDataBadge(totalMessages)} total messages. You've created ${createDataBadge(totalArtifacts)} artifacts. You've connected ${createDataBadge(
+    "0"
+  )} services. You have ${createDataBadge(totalActions)} available actions.`
+      : `Let's ride? Say your ${createDataBadge("email")}.`
   }
         </h1>
       </div>
     </div>
   `;
+  
+  return html;
 }
 
 function refreshMemoryView() {

@@ -432,7 +432,7 @@ function addMessageAttributes(html, messageIndex, isShowAllMode) {
   const opacityClass = isShowAllMode
     ? messageIndex === window.context?.getActiveMessageIndex()
       ? ""
-      : "opacity-s"
+      : "opacity-xs"
     : "";
 
   if (
@@ -772,12 +772,19 @@ function showMessagesWithEffect() {
     hoverTimeout = null;
   }, 1000);
 
+  // Show container and add dramatic slow transition
   messagesContainer.classList.remove("hidden");
-  messagesContainer.classList.add("opacity-xl", "blur-l");
+  messagesContainer.classList.add("transition-slow");
   updateMessagesDisplay();
 
+  // Start completely invisible and heavily blurred using rene classes
+  messagesContainer.classList.add("opacity-xl", "blur-xl");
+
+  // Force reflow then transition to visible and sharp
   requestAnimationFrame(() => {
-    MessagesVisibility.show();
+    setTimeout(() => {
+      messagesContainer.classList.remove("opacity-xl", "blur-xl");
+    }, 50);
   });
 }
 
@@ -794,13 +801,20 @@ function hideMessagesWithEffect() {
     hoverTimeout = null;
   }, 1000);
 
-  MessagesVisibility.fadeOut();
+  // Ensure slow transition is active
+  messagesContainer.classList.add("transition-slow");
 
+  // Transition to invisible and heavily blurred (reverse of show)
+  messagesContainer.classList.add("opacity-xl", "blur-xl");
+
+  // Hide after transition completes
   setTimeout(() => {
     if (messagesContainer && !MessagesState.isThinking) {
-      MessagesVisibility.hide();
+      messagesContainer.classList.add("hidden");
+      // Clean up rene classes
+      messagesContainer.classList.remove("opacity-xl", "blur-xl");
     }
-  }, 300);
+  }, 600); // Match transition-slow duration
 }
 
 function handleInputNavigation(direction) {
@@ -990,6 +1004,11 @@ function renderAllMessagesMode() {
   const messages = window.context.getMessages();
 
   container.className = "column box-m transition gap-xs";
+  
+  // Store current scroll position before rendering
+  const currentScrollTop = container.scrollTop;
+  const wasAtBottom = container.scrollHeight > 0 && 
+    (container.scrollTop + container.clientHeight >= container.scrollHeight - 10);
 
   // Generic message processor
   const processMessage = (message, idx) => {
@@ -1002,7 +1021,7 @@ function renderAllMessagesMode() {
     html = addMessageAttributes(html, idx, true);
 
     if (idx > 0) {
-      const wrapperClasses = isUser ? "gap-xs row justify-end" : "gap-xs row";
+      const wrapperClasses = isUser ? "gap-xs column align-end" : "gap-xs column align-start";
       html = html.replace(/^<div/, `<div class="${wrapperClasses}"`);
     }
 
@@ -1019,10 +1038,18 @@ function renderAllMessagesMode() {
   window.inputModule.blurViews();
 
   requestAnimationFrame(() => {
-    if (container && container.scrollHeight > container.clientHeight) {
-      container.scrollTop = container.scrollHeight;
+    // Only auto-scroll to bottom if:
+    // 1. User was already at the bottom before re-render, OR
+    // 2. This is the first time showing all messages (no previous scroll position)
+    if (wasAtBottom || currentScrollTop === 0) {
+      if (container && container.scrollHeight > container.clientHeight) {
+        container.scrollTop = container.scrollHeight;
+      } else {
+        window.scrollTo(0, document.body.scrollHeight);
+      }
     } else {
-      window.scrollTo(0, document.body.scrollHeight);
+      // Preserve the user's scroll position
+      container.scrollTop = currentScrollTop;
     }
   });
 }

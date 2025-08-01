@@ -197,7 +197,7 @@ async function logout() {
 
     // Clear all application state
     if (window.context?.setContext) {
-      window.context.setState({
+      window.context.setContext({
         chats: [],
         messagesByChat: {},
         artifacts: [],
@@ -375,7 +375,7 @@ function handleUnauthenticatedState() {
 
   // Clear all application state
   if (window.context?.setContext) {
-    window.context.setState({
+    window.context.setContext({
       chats: [],
       messagesByChat: {},
       artifacts: [],

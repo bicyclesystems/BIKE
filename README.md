@@ -4,6 +4,8 @@ Bike is a minimal computing environment where conversation drives creation.
 
 It's not an app. It's not a tool. It's a loop. Chat is the engine. Artifacts are the result.
 
+It's a thinking machine. A "bicycle" for the mind.
+
 **Example**: Say "Create a todo list for my project." Bike generates a structured artifact and displays it. Later, say "Add deployment tasks" and it updates seamlessly.
 
 Messages create artifacts. Artifacts are memory. Views are display. Chat drives everything.
@@ -46,7 +48,7 @@ Core components:
 * **Process** — AI communication. Handles API calls, message flow, and response coordination.
 * **Orchestrate** — response coordinator. Orchestrates AI responses into system changes and operations.
 * **Actions** — system commands: create artifacts, switch views, manage chats.
-* **Messages** — chat interface (always available)
+* **Chat** — chat interface (always available)
 * **Artifacts** — persistent content units created/modified by messages.
 * **View** — current display renderer. Shows artifacts fullscreen with transitions.
 * **Memory** — data persistence for artifacts, chats, preferences, and state.
