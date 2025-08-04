@@ -16,12 +16,23 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+      <script src="views/nohost/filer.min.js"></script>
+  <script src="views/nohost/nohost-manager.js"></script>
+  <script src="views/nohost/nohost-debug.js"></script>
   <script src="config.js"></script>
   <script src="memory.js"></script>
   <script src="sync.js"></script>
   <script src="actions/actions.js"></script>
-  <script src="views/view-artifact.js"></script>
-  <script src="views/view-artifacts.js"></script>
+      <!-- Modular artifact renderers -->
+    <script src="views/view-artifact/view-artifact-image.js"></script>
+    <script src="views/view-artifact/view-artifact-html.js"></script>
+    <script src="views/view-artifact/view-artifact-md.js"></script>
+    <script src="views/view-artifact/view-artifact-link.js"></script>
+    <script src="views/view-artifact/view-artifact-files.js"></script>
+    <script src="views/view-artifact/view-artifact-text.js"></script>
+    <!-- Main artifact view coordinator -->
+    <script src="views/view-artifact.js"></script>
+    <script src="views/view-artifacts.js"></script>
   <script src="views/view-calendar.js"></script>
   <script src="views/view-memory.js"></script>
   <script src="views/view-services.js"></script>
@@ -46,6 +57,7 @@
   <script src="orchestrate.js"></script>
       <script src="chat.js"></script>
   <script src="theme.js"></script>
+  <script src="template/template.js"></script>
   <script>
     // Fast initialization - defer heavy operations
     document.addEventListener('DOMContentLoaded', async function () {

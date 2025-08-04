@@ -56,7 +56,7 @@ const VIEWS_REGISTRY = {
         .map(a => ({ id: a.id, title: a.title, type: a.type, createdAt: a.createdAt })),
       currentlyViewing: window.context?.getActiveView()?.type === 'artifact' ? window.context.getActiveView().data.artifactId : null
     }),
-    render: (data) => window.artifactView.renderArtifactView(data)
+    render: async (data) => await window.artifactView.renderArtifactView(data)
   },
   
   'memory': {
@@ -151,7 +151,7 @@ function validateViewParams(viewId, params = {}) {
 // State for managing transitions
 let isTransitioning = false;
 
-function renderCurrentView(withTransition = true) {
+async function renderCurrentView(withTransition = true) {
   const viewElement = window.context?.getViewElement();
   if (!viewElement) {
     // Ensure view element exists before setting it
@@ -181,7 +181,9 @@ function renderCurrentView(withTransition = true) {
     const view = Object.values(VIEWS_REGISTRY).find(v => v.type === type);
     
     if (view && view.render) {
-      newHtml = view.render(data);
+      // Handle both sync and async renders
+      const result = view.render(data);
+      newHtml = result instanceof Promise ? await result : result;
     } else {
       newHtml = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
     }

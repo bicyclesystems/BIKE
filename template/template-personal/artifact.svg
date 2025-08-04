@@ -1,0 +1,45 @@
+<svg width="400" height="300" viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="card" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ff6b6b;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#4ecdc4;stop-opacity:0.8" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="400" height="300" fill="url(#bg)" rx="20"/>
+  
+  <!-- Main card -->
+  <rect x="50" y="50" width="300" height="200" fill="url(#card)" rx="15" opacity="0.9"/>
+  
+  <!-- Title -->
+  <text x="200" y="90" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="24" font-weight="bold">
+    ✨ Sample Template
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="200" y="120" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="16" opacity="0.9">
+    Personal Project Artifact
+  </text>
+  
+  <!-- Decorative elements -->
+  <circle cx="100" cy="160" r="8" fill="white" opacity="0.6"/>
+  <circle cx="150" cy="180" r="6" fill="white" opacity="0.5"/>
+  <circle cx="250" cy="160" r="10" fill="white" opacity="0.4"/>
+  <circle cx="300" cy="180" r="7" fill="white" opacity="0.6"/>
+  
+  <!-- Bottom text -->
+  <text x="200" y="210" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" opacity="0.8">
+    Created with BIKE Template System
+  </text>
+  
+  <!-- Version info -->
+  <text x="200" y="230" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="12" opacity="0.6">
+    v1.0 - Ready to customize
+  </text>
+</svg>

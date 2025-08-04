@@ -132,7 +132,7 @@ function renderMemoryView() {
     aiTraits.length > 0
       ? ` You like to sound ${aiTraits
           .map((trait, index) => {
-            const tag = `<span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${escapeHtml(
+            const tag = `<span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${window.utils.escapeHtml(
               trait
             )}</span>`;
             if (aiTraits.length === 1) return tag;
@@ -146,7 +146,7 @@ function renderMemoryView() {
 
   // Helper function to create styled data badges
   const createDataBadge = (content) =>
-    `<span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${escapeHtml(
+    `<span class="background-secondary padding-xs radius-s gap-xs" data-no-highlight="true" style="margin: 0; display: inline-block; vertical-align: baseline;">${window.utils.escapeHtml(
       content
     )}</span>`;
 
@@ -200,15 +200,7 @@ function getAvailableActionsCount() {
   return Object.keys(window.actions.ACTIONS_REGISTRY).length;
 }
 
-function escapeHtml(text) {
-  if (window.utils?.escapeHtml) {
-    return window.utils.escapeHtml(text);
-  }
-  // Fallback implementation
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
-}
+// escapeHtml function removed - using window.utils.escapeHtml directly
 
 // =================== Initialization ===================
 

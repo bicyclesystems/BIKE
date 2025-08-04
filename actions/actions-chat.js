@@ -99,31 +99,26 @@ const CHAT_ACTIONS = {
         activeVersionIdxByArtifact: {},
         messages: [],
         activeMessageIndex: -1,
-        activeView: null
+        activeView: { type: 'chat', data: {} }
       });
       
       window.context?.setActiveChat(chatId);
       
       const restoredView = window.memory?.loadActiveView();
       if (restoredView) {
-        // Validate the restored view
+        // Only restore artifact views that are valid for this chat
         if (restoredView.type === 'artifact' && restoredView.data.artifactId) {
           const artifacts = window.context?.getArtifacts() || [];
           const artifact = artifacts.find(a => a.id === restoredView.data.artifactId && a.chatId === chatId);
           if (artifact) {
             window.context?.setContext({ activeView: restoredView });
-          } else {
-            window.context?.setContext({ activeView: null });
           }
-        } else if (restoredView.type !== 'artifact') {
-          // System views (calendar, etc.) are always valid
-          window.context?.setContext({ activeView: restoredView });
-        } else {
-          window.context?.setContext({ activeView: null });
+          // If artifact is not found, keep the default chat view we set above
         }
-      } else {
-        window.context?.setContext({ activeView: null });
+        // Don't restore system views like memory or calendar - stay in chat view
+        // If restored view is invalid, keep the default chat view we set above
       }
+      // If no restored view, keep the default chat view we set above
       
       window.context?.clearUI();
       window.context?.loadChat();

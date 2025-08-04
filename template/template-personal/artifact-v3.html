@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Animated Todo App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            backdrop-filter: blur(10px);
+            animation: fadeIn 0.6s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(30px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: bounce 0.8s ease-out;
+        }
+        
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-15px); }
+            60% { transform: translateY(-8px); }
+        }
+        
+        .input-container {
+            display: flex;
+            margin-bottom: 30px;
+            gap: 10px;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+            transition: all 0.3s ease;
+        }
+        
+        input[type="text"]:focus {
+            outline: none;
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(240, 147, 251, 0.4);
+        }
+        
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-3px) scale(1.05);
+            box-shadow: 0 10px 25px rgba(79, 172, 254, 0.4);
+        }
+        
+        .todo-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #fa709a 0%, #fee140 100%);
+            border-radius: 12px;
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            animation: slideIn 0.5s ease-out;
+            animation-fill-mode: both;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateX(-30px) scale(0.8); }
+            to { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        
+        .todo-item:hover {
+            transform: translateX(8px) scale(1.02);
+            box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        .todo-item.completed {
+            background: linear-gradient(45deg, #a8edea 0%, #fed6e3 100%);
+            opacity: 0.8;
+            animation: completePulse 0.6s ease-out;
+        }
+        
+        @keyframes completePulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .todo-item input[type="checkbox"] {
+            margin-right: 15px;
+            transform: scale(1.4);
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+        
+        .todo-item input[type="checkbox"]:hover {
+            transform: scale(1.6);
+        }
+        
+        .todo-text {
+            flex: 1;
+            color: #333;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            opacity: 0.7;
+            transform: scale(0.95);
+        }
+        
+        .delete-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a5a);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+        }
+        
+        .delete-btn:hover {
+            background: linear-gradient(45deg, #ee5a5a, #dc4444);
+            transform: scale(1.1) rotate(5deg);
+            opacity: 1;
+        }
+        
+        .todo-item:nth-child(1) { animation-delay: 0.1s; }
+        .todo-item:nth-child(2) { animation-delay: 0.2s; }
+        .todo-item:nth-child(3) { animation-delay: 0.3s; }
+        .todo-item:nth-child(4) { animation-delay: 0.4s; }
+        .todo-item:nth-child(5) { animation-delay: 0.5s; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 Animated Todos</h1>
+        <div class="input-container">
+            <input type="text" id="todoInput" placeholder="What magical task awaits?">
+            <button onclick="addTodo()">Add Magic</button>
+        </div>
+        <div id="todoList"></div>
+    </div>
+
+    <script>
+        let todos = [
+            { id: 1, text: "Add smooth animations", completed: true },
+            { id: 2, text: "Create bouncing effects", completed: true },
+            { id: 3, text: "Implement hover animations", completed: true },
+            { id: 4, text: "Add staggered delays", completed: false },
+            { id: 5, text: "Perfect the magic", completed: false }
+        ];
+        let nextId = 6;
+
+        function renderTodos() {
+            const todoList = document.getElementById('todoList');
+            todoList.innerHTML = '';
+            
+            todos.forEach((todo, index) => {
+                const todoItem = document.createElement('div');
+                todoItem.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                todoItem.style.animationDelay = `${index * 0.1}s`;
+                
+                todoItem.innerHTML = `
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} 
+                           onchange="toggleTodo(${todo.id})">
+                    <span class="todo-text">${todo.text}</span>
+                    <button class="delete-btn" onclick="deleteTodo(${todo.id})">✨</button>
+                `;
+                
+                todoList.appendChild(todoItem);
+            });
+        }
+
+        function addTodo() {
+            const input = document.getElementById('todoInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                todos.push({
+                    id: nextId++,
+                    text: text,
+                    completed: false
+                });
+                input.value = '';
+                renderTodos();
+            }
+        }
+
+        function toggleTodo(id) {
+            const todo = todos.find(t => t.id === id);
+            if (todo) {
+                todo.completed = !todo.completed;
+                renderTodos();
+            }
+        }
+
+        function deleteTodo(id) {
+            todos = todos.filter(t => t.id !== id);
+            renderTodos();
+        }
+
+        // Add enter key support
+        document.getElementById('todoInput').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                addTodo();
+            }
+        });
+
+        renderTodos();
+    </script>
+</body>
+</html>

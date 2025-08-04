@@ -39,12 +39,28 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
   
   if (!type) {
     const trimmedContent = content.trim();
+    // Auto-detect artifact type from content - keep it simple
     if (/^<!DOCTYPE html>|<html[\s>]/i.test(trimmedContent)) type = 'html';
-    else if (content.startsWith('[[image:')) type = 'image';
+    else if (trimmedContent.startsWith('<svg')) type = 'image'; // SVG images  
+    else if (content.startsWith('[[image:')) type = 'image'; // External images
     else if (content.startsWith('```')) type = 'markdown';
     else if (isValidUrl(trimmedContent)) type = 'link';
     else if (trimmedContent.startsWith('{') && isFileData(trimmedContent)) type = 'files';
+    // Content-based detection
+    else if (/^\s*[.#]?[\w-]+\s*\{/.test(trimmedContent) || /^\s*@(import|media|keyframes)/.test(trimmedContent)) type = 'css';
+    else if (/^\s*(function|const|let|var|class|import|export)/.test(trimmedContent) || trimmedContent.includes('=>')) type = 'javascript';
+    else if ((trimmedContent.startsWith('{') || trimmedContent.startsWith('[')) && isValidJSON(trimmedContent)) type = 'json';
+    else if (/^---\s*$|^[a-zA-Z_][a-zA-Z0-9_]*:\s*.+$/m.test(trimmedContent)) type = 'yaml';
     else type = 'text';
+  }
+
+  function isValidJSON(str) {
+    try {
+      JSON.parse(str);
+      return true;
+    } catch {
+      return false;
+    }
   }
   
   const artifact = {
@@ -55,7 +71,8 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
     messageId,
-    chatId: activeChatId
+    chatId: activeChatId,
+    parentId: null // For grouping functionality
   };
   
   if (!artifact.chatId) {
@@ -65,6 +82,18 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
   const currentArtifacts = window.context?.getArtifacts() || [];
   window.context?.setContext({ artifacts: [...currentArtifacts, artifact] });
   window.memory?.saveArtifacts();
+  
+  // Sync to nohost when artifact is created
+  if (window.noHostManager && window.noHostManager.isAvailable()) {
+    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
+      console.warn('[Artifacts] Failed to sync to nohost:', err)
+    ).finally(() => {
+      // Refresh debug window
+      if (window.noHostDebugger) {
+        window.noHostDebugger.refresh();
+      }
+    });
+  }
   
   if (shouldSetActive) {
     window.context?.setActiveArtifactId(id);
@@ -98,6 +127,22 @@ function updateArtifact(id, content) {
   });
   window.context?.setActiveVersionIndex(id, artifact.versions.length - 1);
   window.memory?.saveArtifacts();
+  
+  // Sync to nohost when artifact is updated
+  if (window.noHostManager && window.noHostManager.isAvailable()) {
+    const chatId = window.context?.getActiveChatId();
+    if (chatId) {
+      window.noHostManager.syncChatArtifacts(chatId).catch(err => 
+        console.warn('[Artifacts] Failed to sync to nohost:', err)
+      ).finally(() => {
+        // Refresh debug window
+        if (window.noHostDebugger) {
+          window.noHostDebugger.refresh();
+        }
+      });
+    }
+  }
+  
   return artifact;
 }
 
@@ -225,6 +270,119 @@ function deleteArtifactVersion(artifactId, versionIdx) {
   }
   
   return true;
+}
+
+// =================== Group Management ===================
+
+function createGroup(name, parentId = null) {
+  const activeChatId = window.context?.getActiveChatId();
+  if (!activeChatId) return null;
+  
+  const currentMessageId = window.context?.getCurrentMessageId?.() || 'group-' + Date.now();
+  
+  // Create a group artifact (no content needed for groups)
+  const group = {
+    id: Date.now().toString(),
+    title: name,
+    type: 'group',
+    versions: [{ content: '', timestamp: new Date().toISOString() }],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    messageId: currentMessageId,
+    chatId: activeChatId,
+    parentId: parentId
+  };
+  
+  const currentArtifacts = window.context?.getArtifacts() || [];
+  window.context?.setContext({ artifacts: [...currentArtifacts, group] });
+  window.memory?.saveArtifacts();
+  
+  // Sync to nohost when group is created
+  if (window.noHostManager && window.noHostManager.isAvailable()) {
+    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
+      console.warn('[Artifacts] Failed to sync group to nohost:', err)
+    );
+  }
+  
+  return group;
+}
+
+function moveArtifact(artifactId, targetGroupId) {
+  const artifacts = (window.context?.getArtifacts() || []).slice();
+  const activeChatId = window.context?.getActiveChatId();
+  
+  const artifact = artifacts.find(a => a.id === artifactId && a.chatId === activeChatId);
+  const targetGroup = artifacts.find(a => a.id === targetGroupId && a.chatId === activeChatId);
+  
+  if (!artifact) return false;
+  
+  // Validate target is a group (or null for root)
+  if (targetGroupId && (!targetGroup || targetGroup.type !== 'group')) {
+    return false;
+  }
+  
+  // Prevent moving a group into itself or its descendants
+  if (artifact.type === 'group' && targetGroupId) {
+    if (isDescendantOf(targetGroupId, artifactId, artifacts)) {
+      return false;
+    }
+  }
+  
+  // Update parent relationship
+  artifact.parentId = targetGroupId;
+  artifact.updatedAt = new Date().toISOString();
+  
+  window.context?.setContext({ artifacts });
+  window.memory?.saveArtifacts();
+  
+  // Sync to nohost
+  if (window.noHostManager && window.noHostManager.isAvailable()) {
+    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
+      console.warn('[Artifacts] Failed to sync move to nohost:', err)
+    );
+  }
+  
+  return true;
+}
+
+function deleteGroup(groupId) {
+  const artifacts = (window.context?.getArtifacts() || []).slice();
+  const activeChatId = window.context?.getActiveChatId();
+  
+  const group = artifacts.find(a => a.id === groupId && a.chatId === activeChatId);
+  if (!group || group.type !== 'group') return false;
+  
+  // Move all children to root level (parentId = null)
+  artifacts.forEach(artifact => {
+    if (artifact.parentId === groupId) {
+      artifact.parentId = null;
+      artifact.updatedAt = new Date().toISOString();
+    }
+  });
+  
+  // Remove the group itself
+  const updatedArtifacts = artifacts.filter(a => a.id !== groupId);
+  
+  window.context?.setContext({ artifacts: updatedArtifacts });
+  window.memory?.saveArtifacts();
+  
+  // Sync to nohost
+  if (window.noHostManager && window.noHostManager.isAvailable()) {
+    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
+      console.warn('[Artifacts] Failed to sync group deletion to nohost:', err)
+    );
+  }
+  
+  return true;
+}
+
+function isDescendantOf(potentialDescendantId, ancestorId, artifacts) {
+  const descendant = artifacts.find(a => a.id === potentialDescendantId);
+  if (!descendant || !descendant.parentId) return false;
+  
+  if (descendant.parentId === ancestorId) return true;
+  
+  return isDescendantOf(descendant.parentId, ancestorId, artifacts);
 }
 
 // =================== Artifact Utils ===================
@@ -1641,38 +1799,7 @@ function formatFileDataForAI(fileData, purpose = 'analysis') {
   return formatted;
 }
 
-function generateArtifactsSummary(artifacts) {
-  const summary = {
-    types: {},
-    fileCategories: {},
-    totalFiles: 0,
-    hasStructuredData: false,
-    complexFiles: 0
-  };
-  
-  artifacts.forEach(artifact => {
-    // Count by type
-    summary.types[artifact.type] = (summary.types[artifact.type] || 0) + 1;
-    
-    // For file artifacts, gather more details
-    if (artifact.type === 'files' && artifact.fileData) {
-      summary.totalFiles++;
-      
-      const category = artifact.metadata.category || 'unknown';
-      summary.fileCategories[category] = (summary.fileCategories[category] || 0) + 1;
-      
-      if (artifact.metadata.hasStructuredData) {
-        summary.hasStructuredData = true;
-      }
-      
-      if (artifact.metadata.complexity !== 'simple') {
-        summary.complexFiles++;
-      }
-    }
-  });
-  
-  return summary;
-}
+
 
 // =================== Module Exports ===================
 // Export functions for global access
@@ -1691,6 +1818,12 @@ window.artifactsModule = {
   getFileIcon,
   setupArtifactClickHandlers,
   getFaviconUrl,
+  
+  // Group management functions
+  createGroup,
+  moveArtifact,
+  deleteGroup,
+  isDescendantOf,
   
   // Organization functions
   findBestMatchingArtifact,
@@ -1712,7 +1845,6 @@ window.artifactsModule = {
   
   // AI formatting functions
   formatFileDataForAI,
-  generateArtifactsSummary,
   
   init
 };

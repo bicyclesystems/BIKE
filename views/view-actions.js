@@ -27,7 +27,7 @@ function renderActionsView() {
   }
   
   // Helper function to create styled action badges
-  const createActionBadge = (action) => `<span style="text-decoration: underline; opacity: 0.8;">${escapeHtml(action.name.toLowerCase())}</span>`;
+  const createActionBadge = (action) => `<span style="text-decoration: underline; opacity: 0.8;">${window.utils.escapeHtml(action.name.toLowerCase())}</span>`;
   
   return `
     <div class="column gap-l padding-l view">
@@ -68,15 +68,7 @@ function getAvailableActions() {
   }));
 }
 
-function escapeHtml(text) {
-  if (window.utils?.escapeHtml) {
-    return window.utils.escapeHtml(text);
-  }
-  // Fallback implementation
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
+// escapeHtml function removed - using window.utils.escapeHtml directly
 
 // Export functions for global access
 window.actionsView = {

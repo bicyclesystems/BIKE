@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Colorful Todo App</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        .input-container {
+            display: flex;
+            margin-bottom: 25px;
+            gap: 10px;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            padding: 15px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            background: linear-gradient(45deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+        
+        input[type="text"]::placeholder {
+            color: rgba(255, 255, 255, 0.8);
+        }
+        
+        button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            background: linear-gradient(45deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+        }
+        
+        .todo-item {
+            display: flex;
+            align-items: center;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #fa709a 0%, #fee140 100%);
+            border-radius: 10px;
+            transition: transform 0.2s;
+        }
+        
+        .todo-item:hover {
+            transform: translateX(5px);
+        }
+        
+        .todo-item.completed {
+            background: linear-gradient(45deg, #a8edea 0%, #fed6e3 100%);
+            opacity: 0.8;
+        }
+        
+        .todo-item input[type="checkbox"] {
+            margin-right: 15px;
+            transform: scale(1.3);
+        }
+        
+        .todo-text {
+            flex: 1;
+            color: #333;
+            font-weight: 500;
+        }
+        
+        .todo-item.completed .todo-text {
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+        
+        .delete-btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a5a);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .delete-btn:hover {
+            background: linear-gradient(45deg, #ee5a5a, #dc4444);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>✨ Colorful Todos</h1>
+        <div class="input-container">
+            <input type="text" id="todoInput" placeholder="What needs to be done?">
+            <button onclick="addTodo()">Add Task</button>
+        </div>
+        <div id="todoList"></div>
+    </div>
+
+    <script>
+        let todos = [
+            { id: 1, text: "Learn gradients and colors", completed: true },
+            { id: 2, text: "Apply beautiful design", completed: true },
+            { id: 3, text: "Add hover effects", completed: false },
+            { id: 4, text: "Make it responsive", completed: false }
+        ];
+        let nextId = 5;
+
+        function renderTodos() {
+            const todoList = document.getElementById('todoList');
+            todoList.innerHTML = '';
+            
+            todos.forEach(todo => {
+                const todoItem = document.createElement('div');
+                todoItem.className = `todo-item ${todo.completed ? 'completed' : ''}`;
+                
+                todoItem.innerHTML = `
+                    <input type="checkbox" ${todo.completed ? 'checked' : ''} 
+                           onchange="toggleTodo(${todo.id})">
+                    <span class="todo-text">${todo.text}</span>
+                    <button class="delete-btn" onclick="deleteTodo(${todo.id})">×</button>
+                `;
+                
+                todoList.appendChild(todoItem);
+            });
+        }
+
+        function addTodo() {
+            const input = document.getElementById('todoInput');
+            const text = input.value.trim();
+            
+            if (text) {
+                todos.push({
+                    id: nextId++,
+                    text: text,
+                    completed: false
+                });
+                input.value = '';
+                renderTodos();
+            }
+        }
+
+        function toggleTodo(id) {
+            const todo = todos.find(t => t.id === id);
+            if (todo) {
+                todo.completed = !todo.completed;
+                renderTodos();
+            }
+        }
+
+        function deleteTodo(id) {
+            todos = todos.filter(t => t.id !== id);
+            renderTodos();
+        }
+
+        renderTodos();
+    </script>
+</body>
+</html>

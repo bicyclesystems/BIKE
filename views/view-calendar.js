@@ -184,8 +184,8 @@ function renderCalendarView() {
 
 // Chat switching
 const switchToChat = (chatId) => {
-        if (window.actions && window.actions.executeAction) {
-        window.actions.executeAction('chat.switch', { chatId });
+  if (window.actions && window.actions.executeAction) {
+    window.actions.executeAction('chat.switch', { chatId });
   }
 };
 
