@@ -97,7 +97,8 @@ async function renderArtifactView(data) {
   if (artifact.type === 'link') {
     contentHtml = window.linkArtifactRenderer.renderLinkArtifact(artifact, currentVersionIdx, versionIndicator);
   } else if (artifact.type === 'markdown') {
-    contentHtml = window.markdownArtifactRenderer.renderMarkdownArtifact(artifact, currentVersionIdx, versionIndicator);
+    // For markdown, return just the content without any artifact info
+    return window.markdownArtifactRenderer.renderMarkdownArtifact(artifact, currentVersionIdx, versionIndicator);
   } else {
     // Handle other artifact types (text, etc.)
     contentHtml = window.textArtifactRenderer.renderTextArtifact(artifact, currentVersionIdx, versionIndicator);
@@ -106,18 +107,8 @@ async function renderArtifactView(data) {
   // Generate version management UI for standard artifact types
 
   return `
-    <div class="column gap-m padding-xl">
-      <div class="column gap-s padding-m border-bottom">
-        <div class="row justify-between align-start gap-m">
-          <div class="column gap-xs">
-            <h2>${artifact.title}</h2>
-            <div>
-              Type: ${artifact.type} • Updated: ${new Date(artifact.updatedAt).toLocaleString()}
-            </div>
-          </div>
-          ${versionIndicator ? `<div class="row align-center gap-s">${versionIndicator}</div>` : ''}
-        </div>
-      </div>
+    <div class="column">
+      ${versionIndicator ? `<div class="row justify-end padding-s">${versionIndicator}</div>` : ''}
       ${contentHtml}
     </div>
   `;

@@ -6,19 +6,29 @@ function renderMarkdownArtifact(artifact, currentVersionIdx, versionIndicator) {
   
   let contentHtml = '';
   
-  if (content.startsWith('```')) {
-    // Extract code from markdown code blocks
-    const codeMatch = content.match(/```(\w+)?\n?([\s\S]*?)\n?```/);
-    if (codeMatch) {
-      const language = codeMatch[1] || 'text';
-      const code = codeMatch[2];
-      contentHtml = `<pre class="background-secondary padding-l border" style="overflow-x: auto;"><code class="language-${language}">${window.utils.escapeHtml(code)}</code></pre>`;
+  try {
+    // Check if marked library is available
+    if (typeof marked !== 'undefined') {
+      // Configure marked options for better rendering
+      marked.setOptions({
+        breaks: true,        // Convert \n to <br>
+        gfm: true,          // GitHub Flavored Markdown
+        headerIds: false,   // Don't generate header IDs
+        sanitize: false     // We'll handle sanitization if needed
+      });
+      
+      // Parse markdown to HTML
+      const parsedHtml = marked.parse(content);
+      contentHtml = `<div class="view align-center justify-center"><div class="page markdown-content">${parsedHtml}</div></div>`;
     } else {
-      contentHtml = `<div class="padding-m" style="line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
+      // Fallback if marked is not available
+      console.warn('Marked library not available, falling back to plain text rendering');
+      contentHtml = `<div class="view align-center justify-center"><pre>${window.utils.escapeHtml(content)}</pre></div>`;
     }
-  } else {
-    // Handle regular markdown content
-    contentHtml = `<div class="padding-m" style="line-height: 1.6; white-space: pre-wrap;">${window.utils.escapeHtml(content)}</div>`;
+  } catch (error) {
+    // Error handling - show raw content if parsing fails
+    console.error('Markdown parsing error:', error);
+    contentHtml = `<div class="view align-center justify-center"><pre>${window.utils.escapeHtml(content)}</pre></div>`;
   }
   
   return contentHtml;
