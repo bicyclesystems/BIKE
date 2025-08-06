@@ -16,6 +16,8 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <!-- Monaco Editor -->
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
       <script src="views/nohost/filer.min.js"></script>
   <script src="views/nohost/nohost-manager.js"></script>
   <script src="views/nohost/nohost-debug.js"></script>
@@ -31,7 +33,7 @@
     <script src="views/view-artifact/view-artifact-files.js"></script>
     <script src="views/view-artifact/view-artifact-text.js"></script>
     <!-- Main artifact view coordinator -->
-    <script src="views/view-artifact.js"></script>
+    <script src="views/view-artifact/view-artifact.js"></script>
     <script src="views/view-artifacts.js"></script>
   <script src="views/view-calendar.js"></script>
   <script src="views/view-memory.js"></script>
@@ -59,8 +61,10 @@
   <script src="theme.js"></script>
   <script src="template/template.js"></script>
   <script>
+    console.log('[SCRIPT] Main initialization script loaded');
     // Fast initialization - defer heavy operations
     document.addEventListener('DOMContentLoaded', async function () {
+      console.log('[INIT] DOMContentLoaded event fired');
       // Initialize authentication FIRST to determine user state
       const session = await user.initAuth();
       
@@ -70,9 +74,30 @@
       // Show UI immediately - don't wait for sync
       await user.updateAuthState(session);
 
-      // Initialize modules (UI is now ready)
-      artifacts.init();
+      // Initialize modules (UI is now ready) - wait for artifacts to be fully available
+      const waitForArtifacts = () => {
+        if (window.artifacts && typeof window.artifacts.init === 'function') {
+          console.log('[INIT] Artifacts module loaded, calling init()');
+          artifacts.init();
+        } else {
+          console.log('[INIT] Waiting for artifacts module...');
+          setTimeout(waitForArtifacts, 50);
+        }
+      };
+      waitForArtifacts();
       views.init();
+      
+      // Initialize NoHost explicitly after everything is loaded
+      setTimeout(() => {
+        if (window.noHostManager) {
+          console.log('[INIT] Testing NoHost initialization...');
+          window.noHostManager.init().then(() => {
+            console.log('[INIT] NoHost successfully initialized');
+          }).catch(err => {
+            console.error('[INIT] NoHost failed to initialize:', err);
+          });
+        }
+      }, 1000);
       
       // Initialize sync in background after UI is ready
       if (session && window.syncManager) {

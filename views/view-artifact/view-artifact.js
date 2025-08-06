@@ -79,7 +79,7 @@ async function renderArtifactView(data) {
   const versionIndicator = generateVersionIndicator(artifact, currentVersionIdx);
 
   // Use modular renderers for type-specific content
-  if (artifact.type === 'image' && content.startsWith('[[image:')) {
+  if (artifact.type === 'image' && (content.startsWith('[[image:') || content.trim().startsWith('<svg'))) {
     return window.imageArtifactRenderer.renderImageArtifact(artifact, currentVersionIdx, versionIndicator);
   }
 

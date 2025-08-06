@@ -120,7 +120,7 @@ function downloadFileArtifact(fileName, dataUrl, mimeType) {
   document.body.removeChild(link);
 }
 
-// Export for use by main view-artifact.js
+// Export for use by main view-artifact/view-artifact.js
 window.filesArtifactRenderer = {
   renderFilesArtifact,
   renderFileArtifact,

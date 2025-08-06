@@ -9,17 +9,26 @@ function renderImageArtifact(artifact, currentVersionIdx, versionIndicator) {
   const currentVersion = artifact.versions[currentVersionIdx];
   const content = currentVersion.content;
   
-  if (!content.startsWith('[[image:')) {
+  let imageContent = '';
+  
+  // Handle SVG content directly
+  if (content.trim().startsWith('<svg')) {
+    imageContent = content; // Render SVG directly
+  }
+  // Handle [[image:url]] format
+  else if (content.startsWith('[[image:')) {
+    const imageMatch = content.match(/\[\[image:(.*?)\]\]/);
+    if (!imageMatch || !imageMatch[1]) {
+      return renderErrorMessage('Invalid image format');
+    }
+    
+    const imageUrl = imageMatch[1].trim();
+    imageContent = `<img src="${imageUrl}" alt="Generated image" onerror="this.outerHTML='${renderErrorMessage('Failed to load image').replace(/'/g, '&apos;')}'" />`;
+  }
+  // Handle other image formats or invalid content
+  else {
     return renderErrorMessage('Invalid image format');
   }
-  
-  const imageMatch = content.match(/\[\[image:(.*?)\]\]/);
-  if (!imageMatch || !imageMatch[1]) {
-    return renderErrorMessage('Invalid image format');
-  }
-  
-  const imageUrl = imageMatch[1].trim();
-  const imageContent = `<img src="${imageUrl}" alt="Generated image" onerror="this.outerHTML='${renderErrorMessage('Failed to load image').replace(/'/g, '&apos;')}'" />`;
   
   if (versionIndicator) {
     // Return image content with floating version controls overlay
@@ -36,7 +45,7 @@ function renderImageArtifact(artifact, currentVersionIdx, versionIndicator) {
   return imageContent;
 }
 
-// Export for use by main view-artifact.js
+// Export for use by main view-artifact/view-artifact.js
 window.imageArtifactRenderer = {
   renderImageArtifact
 };

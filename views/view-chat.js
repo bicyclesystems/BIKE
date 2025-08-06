@@ -76,8 +76,10 @@ function renderChatView() {
     }
   }
 
-  // Get artifacts for this chat
-  const artifacts = window.context?.getCurrentChatArtifacts() || [];
+  // Get artifacts for this chat, filtering out groups
+  const allArtifacts = window.context?.getCurrentChatArtifacts() || [];
+  const artifacts = allArtifacts.filter(a => a.type !== 'group');
+  const groups = allArtifacts.filter(a => a.type === 'group');
 
   // Get user information for profiles
   const session = window.user?.getActiveSession();
@@ -95,24 +97,74 @@ function renderChatView() {
       case 'link': return '🔗';
       case 'files': return '📁';
       case 'markdown': return '📝';
+      case 'group': return '📂';
       default: return '📄';
     }
   }
 
+  // Helper function to organize artifacts by groups
+  function organizeArtifactsByGroups() {
+    const groupedArtifacts = [];
+    
+    // First, add root level artifacts (no parentId)
+    const rootArtifacts = artifacts.filter(a => !a.parentId);
+    if (rootArtifacts.length > 0) {
+      groupedArtifacts.push({
+        isGroup: false,
+        title: null,
+        artifacts: rootArtifacts
+      });
+    }
+    
+    // Then, add grouped artifacts
+    groups.forEach(group => {
+      const groupArtifacts = artifacts.filter(a => a.parentId === group.id);
+      if (groupArtifacts.length > 0) {
+        groupedArtifacts.push({
+          isGroup: true,
+          title: group.title,
+          artifacts: groupArtifacts
+        });
+      }
+    });
+    
+    return groupedArtifacts;
+  }
+
   // Generate artifacts list HTML
   let artifactsHtml = '';
-  if (artifacts.length > 0) {
+  if (artifacts.length > 0 || groups.length > 0) {
+    const organizedArtifacts = organizeArtifactsByGroups();
+    const totalArtifacts = artifacts.length;
+    
     artifactsHtml = `
       <div class="column align-start gap-s">
-        <h4 class="opacity-half">Artifacts (${artifacts.length})</h4>
+        <h4 class="opacity-half">Artifacts (${totalArtifacts})</h4>
         <div class="column align-start gap-xs">
-          ${artifacts.map(artifact => `
-            <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')">
-              <span>${getTypeEmoji(artifact.type)}</span>
-              <span>${artifact.title}</span>
-              <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
-            </div>
-          `).join('')}
+          ${organizedArtifacts.map(section => {
+            let sectionHtml = '';
+            
+            // Add group title if this is a grouped section
+            if (section.isGroup && section.title) {
+              sectionHtml += `
+                <div class="row align-center gap-s opacity-half" style="padding-top: 8px;">
+                  <span>${getTypeEmoji('group')}</span>
+                  <span style="font-weight: 500;">${section.title}</span>
+                </div>
+              `;
+            }
+            
+            // Add artifacts in this section
+            sectionHtml += section.artifacts.map(artifact => `
+              <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')" style="${section.isGroup ? 'padding-left: 24px;' : ''}">
+                <span>${getTypeEmoji(artifact.type)}</span>
+                <span>${artifact.title}</span>
+                <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
+              </div>
+            `).join('');
+            
+            return sectionHtml;
+          }).join('')}
         </div>
       </div>
     `;

@@ -50,7 +50,7 @@ async function renderHtmlArtifact(artifact, currentVersionIdx, versionIndicator)
   return iframeContent;
 }
 
-// Export for use by main view-artifact.js
+// Export for use by main view-artifact/view-artifact.js
 window.htmlArtifactRenderer = {
   renderHtmlArtifact
 };

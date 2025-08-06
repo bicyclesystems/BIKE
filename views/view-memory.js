@@ -241,7 +241,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     //data stored to the local
     localStorage.setItem("bike_user_data", JSON.stringify({ user }));
-    localStorage.setItem("userPreferences", JSON.stringify(user.preferences));
+    try {
+      localStorage.setItem("userPreferences", JSON.stringify(user?.preferences || {}));
+    } catch (e) {
+      console.warn('[MEMORY] Failed to save userPreferences:', e);
+      localStorage.setItem("userPreferences", JSON.stringify({}));
+    }
     localStorage.setItem("userId", user?.id || "");
     localStorage.setItem("artifacts", JSON.stringify(artifacts));
     localStorage.setItem("chats", JSON.stringify(chats));

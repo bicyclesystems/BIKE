@@ -71,7 +71,7 @@ function renderLinkArtifact(artifact, currentVersionIdx, versionIndicator) {
   return contentHtml;
 }
 
-// Export for use by main view-artifact.js
+// Export for use by main view-artifact/view-artifact.js
 window.linkArtifactRenderer = {
   renderLinkArtifact,
   detectLinkContentType

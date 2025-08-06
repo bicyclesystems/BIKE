@@ -282,9 +282,9 @@ function init() {
     window.chatView.init();
   }
   
-  // Initialize memory view
+  // Initialize memory view (no init method needed)
   if (window.memoryView) {
-    window.memoryView.init();
+    console.log('[VIEWS] Memory view available');
   }
   
   // Always render current view (including memory when activeView is null)
