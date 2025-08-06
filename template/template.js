@@ -61,46 +61,38 @@
           try {
             let versions = [];
             
-            // Handle group artifacts (no file content needed)
-            if (artifactConfig.type === 'group') {
+            // Check if this artifact has multiple versions
+            if (artifactConfig.versions && artifactConfig.versions.length > 0) {
+              // Load multiple versions for this artifact
+              console.log(`[TEMPLATE] Loading ${artifactConfig.versions.length} versions for ${artifactConfig.title}`);
+              
+              for (const versionInfo of artifactConfig.versions) {
+                try {
+                  const versionResponse = await fetch(`./template/${templateId}/${versionInfo.filename}`);
+                  if (!versionResponse.ok) {
+                    throw new Error(`HTTP ${versionResponse.status}: ${versionResponse.statusText}`);
+                  }
+                  const versionContent = await versionResponse.text();
+                  versions.push({
+                    content: versionContent,
+                    timestamp: new Date().toISOString(),
+                    description: versionInfo.description
+                  });
+                } catch (versionError) {
+                  console.warn(`[TEMPLATE] Failed to load version ${versionInfo.filename}:`, versionError);
+                }
+              }
+            } else {
+              // Load single artifact file (fallback)
+              const artifactResponse = await fetch(`./template/${templateId}/${artifactConfig.filename}`);
+              if (!artifactResponse.ok) {
+                throw new Error(`HTTP ${artifactResponse.status}: ${artifactResponse.statusText}`);
+              }
+              const artifactContent = await artifactResponse.text();
               versions.push({
-                content: '',
+                content: artifactContent,
                 timestamp: new Date().toISOString()
               });
-            } else {
-              // Check if this artifact has multiple versions
-              if (artifactConfig.versions && artifactConfig.versions.length > 0) {
-                // Load multiple versions for this artifact
-                console.log(`[TEMPLATE] Loading ${artifactConfig.versions.length} versions for ${artifactConfig.title}`);
-                
-                for (const versionInfo of artifactConfig.versions) {
-                  try {
-                    const versionResponse = await fetch(`./template/${templateId}/${versionInfo.filename}`);
-                    if (!versionResponse.ok) {
-                      throw new Error(`HTTP ${versionResponse.status}: ${versionResponse.statusText}`);
-                    }
-                    const versionContent = await versionResponse.text();
-                    versions.push({
-                      content: versionContent,
-                      timestamp: new Date().toISOString(),
-                      description: versionInfo.description
-                    });
-                  } catch (versionError) {
-                    console.warn(`[TEMPLATE] Failed to load version ${versionInfo.filename}:`, versionError);
-                  }
-                }
-              } else {
-                // Load single artifact file (fallback)
-                const artifactResponse = await fetch(`./template/${templateId}/${artifactConfig.filename}`);
-                if (!artifactResponse.ok) {
-                  throw new Error(`HTTP ${artifactResponse.status}: ${artifactResponse.statusText}`);
-                }
-                const artifactContent = await artifactResponse.text();
-                versions.push({
-                  content: artifactContent,
-                  timestamp: new Date().toISOString()
-                });
-              }
             }
             
             // Create the artifact for this template chat (always fresh)
@@ -108,12 +100,12 @@
               id: artifactConfig.id,
               title: artifactConfig.title,
               type: artifactConfig.type,
+              path: artifactConfig.path || artifactConfig.title, // Use path or fallback to title
               versions: versions,
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
               messageId: artifactConfig.messageId,
-              chatId: templateId,
-              parentId: artifactConfig.parentId || null // Support grouping
+              chatId: templateId
             };
             
             artifacts.push(artifact);

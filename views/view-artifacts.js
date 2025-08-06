@@ -10,60 +10,7 @@ const ARTIFACT_VIEW_MODES = {
   }
 };
 
-// Global state for navigation
-let currentFolderId = null; // null means root level
-
-// =================== Navigation & Hierarchy Utilities ===================
-
-function getCurrentFolderContents(artifacts) {
-  return artifacts.filter(artifact => artifact.parentId === currentFolderId);
-}
-
-
-
-function getFolderPath(artifacts, folderId = currentFolderId) {
-  const path = [];
-  let current = folderId;
-  
-  while (current) {
-    const folder = artifacts.find(a => a.id === current);
-    if (!folder) break;
-    path.unshift(folder);
-    current = folder.parentId;
-  }
-  
-  return path;
-}
-
-function renderBreadcrumbs(artifacts) {
-  const path = getFolderPath(artifacts);
-  
-  let breadcrumbs = `
-    <div class="row align-center gap-s padding-m background-tertiary radius-s">
-      <span style="cursor: pointer; opacity: ${currentFolderId ? '0.7' : '1'};" 
-            onclick="window.artifactsView.navigateToFolder(null)"
-            onmouseover="this.style.opacity='1'" 
-            onmouseout="this.style.opacity='${currentFolderId ? '0.7' : '1'}'">
-Root
-      </span>
-  `;
-  
-  path.forEach((folder, index) => {
-    const isLast = index === path.length - 1;
-    breadcrumbs += `
-      <span>→</span>
-      <span style="cursor: pointer; opacity: ${isLast ? '1' : '0.7'};" 
-            onclick="window.artifactsView.navigateToFolder('${folder.id}')"
-            onmouseover="this.style.opacity='1'" 
-            onmouseout="this.style.opacity='${isLast ? '1' : '0.7'}'">
-${window.utils.escapeHtml(folder.title)}
-      </span>
-    `;
-  });
-  
-  breadcrumbs += '</div>';
-  return breadcrumbs;
-}
+// =================== Simplified Artifacts View ===================
 
 function renderArtifactsView(data) {
   const allArtifacts = window.context?.getCurrentChatArtifacts() || [];
@@ -90,28 +37,28 @@ function renderArtifactsView(data) {
 
 
 function renderGalleryView(artifacts, allArtifacts) {
-  // Filter out group artifacts and organize by parentId
-  const nonGroupArtifacts = artifacts.filter(a => a.type !== 'group');
+  // Group by folder path
+  const folderGroups = new Map();
   
-  // Group artifacts by parentId (null for root level)
-  const artifactGroups = new Map();
-  nonGroupArtifacts.forEach(artifact => {
-    const parentId = artifact.parentId || 'root';
-    if (!artifactGroups.has(parentId)) {
-      artifactGroups.set(parentId, []);
+  artifacts.forEach(artifact => {
+    // Extract folder from path (everything before the last /)
+    const path = artifact.path || '';
+    const lastSlash = path.lastIndexOf('/');
+    const folder = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
+    const folderKey = folder || 'root';
+    
+    if (!folderGroups.has(folderKey)) {
+      folderGroups.set(folderKey, []);
     }
-    artifactGroups.get(parentId).push(artifact);
+    folderGroups.get(folderKey).push(artifact);
   });
   
   let html = `<div class="row gap-m" style="flex-wrap: wrap;">`;
   
-  // Render each group as a stacked collection
-  for (const [parentId, groupArtifacts] of artifactGroups) {
-    // Get group info for labeling
-    const parentGroup = parentId !== 'root' ? allArtifacts.find(a => a.id === parentId) : null;
-    const groupTitle = parentGroup ? parentGroup.title : null;
-    
-    html += renderArtifactGroup(groupArtifacts, groupTitle);
+  // Render each folder group
+  for (const [folder, groupArtifacts] of folderGroups) {
+    const folderTitle = folder === 'root' ? '📁 Root' : `📁 ${folder.replace('/', '')}`;
+    html += renderArtifactGroup(groupArtifacts, folderTitle);
   }
   
   html += '</div>';
@@ -314,11 +261,6 @@ function refreshArtifactsView() {
   }
 }
 
-function navigateToFolder(folderId) {
-  currentFolderId = folderId;
-  refreshArtifactsView();
-}
-
 
 
 
@@ -329,7 +271,5 @@ function navigateToFolder(folderId) {
 window.artifactsView = {
   renderArtifactsView,
   refreshArtifactsView,
-  navigateToFolder,
-  // Export view modes for potential extension
   ARTIFACT_VIEW_MODES
 }; 

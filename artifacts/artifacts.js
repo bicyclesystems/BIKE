@@ -41,6 +41,63 @@ function isFileData(string) {
   }
 }
 
+// =================== Path Generation Utilities ===================
+
+function generateArtifactPath(type, counter) {
+  // Extension mapping
+  const extensions = {
+    'html': 'html',
+    'css': 'css', 
+    'javascript': 'js',
+    'json': 'json',
+    'yaml': 'yml',
+    'markdown': 'md',
+    'image': 'svg',
+    'text': 'txt',
+    'link': 'url',
+    'files': 'file'
+  };
+  
+  // Folder mapping for organized structure
+  const folders = {
+    'html': '',           // Root level
+    'css': 'styles/',     // CSS in styles folder
+    'javascript': 'js/',  // JS in js folder
+    'json': 'data/',      // JSON in data folder
+    'yaml': 'config/',    // YAML in config folder
+    'markdown': 'docs/',  // Markdown in docs folder
+    'image': 'assets/',   // Images in assets folder
+    'text': 'docs/',      // Text files in docs folder
+    'link': 'links/',     // Links in links folder
+    'files': 'uploads/'   // Files in uploads folder
+  };
+  
+  const ext = extensions[type] || 'txt';
+  const folder = folders[type] || '';
+  
+  // Generate filename and title
+  const baseFilename = counter === 1 ? `${type}.${ext}` : `${type}${counter}.${ext}`;
+  const path = folder + baseFilename;
+  
+  // Generate descriptive title
+  const titles = {
+    'html': counter === 1 ? 'Homepage' : `Page ${counter}`,
+    'css': counter === 1 ? 'Main Styles' : `Styles ${counter}`,
+    'javascript': counter === 1 ? 'Main Script' : `Script ${counter}`,
+    'json': counter === 1 ? 'Data Config' : `Data ${counter}`,
+    'yaml': counter === 1 ? 'App Config' : `Config ${counter}`,
+    'markdown': counter === 1 ? 'Documentation' : `Document ${counter}`,
+    'image': counter === 1 ? 'Logo' : `Image ${counter}`,
+    'text': counter === 1 ? 'Notes' : `Notes ${counter}`,
+    'link': counter === 1 ? 'External Link' : `Link ${counter}`,
+    'files': counter === 1 ? 'Upload' : `Upload ${counter}`
+  };
+  
+  const title = titles[type] || baseFilename;
+  
+  return { path, filename: baseFilename, title };
+}
+
 // =================== Core Artifact Functions ===================
 
 function createArtifactBase(content, messageId, type = null, shouldSetActive = true) {
@@ -52,7 +109,6 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
   const artifactsInChat = window.context?.getCurrentChatArtifacts() || [];
   const id = shouldSetActive ? Date.now().toString() : 
              Date.now().toString() + Math.random().toString(36).substr(2, 9); // Ensure uniqueness for silent
-  const title = `Artifact ${artifactsInChat.length + 1}`;
   
   if (!type) {
     const trimmedContent = content.trim();
@@ -80,16 +136,19 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
     }
   }
   
+  // Generate smart path, filename, and title based on type
+  const { path, filename, title } = generateArtifactPath(type, artifactsInChat.length + 1);
+  
   const artifact = {
     id,
-    title,
+    title, // Use descriptive title
     type,
+    path,
     versions: [{ content, timestamp: getCurrentTimestamp() }],
     createdAt: getCurrentTimestamp(),
     updatedAt: getCurrentTimestamp(),
     messageId,
-    chatId: activeChatId,
-    parentId: null // For grouping functionality
+    chatId: activeChatId
   };
   
   if (!artifact.chatId) {
@@ -297,9 +356,9 @@ function getModuleFunction(moduleName, functionName) {
 // Wait for all modules to load, then export unified interface
 function initializeArtifactsModule() {
   const checkModulesLoaded = () => {
-    // Check if all modules are loaded
-    if (window.groupsModule && window.versionsModule) {
-      // All modules loaded, create unified interface
+    // Check if versions module is loaded
+    if (window.versionsModule) {
+      // Create unified interface without grouping functions
       window.artifactsModule = {
         // Core functions
         createArtifact,
@@ -312,17 +371,12 @@ function initializeArtifactsModule() {
         getFileIcon,
         setupArtifactClickHandlers,
         getFaviconUrl,
+        generateArtifactPath,
         
         // Version management functions (from versions module)
         getArtifactVersion: getModuleFunction('versionsModule', 'getArtifactVersion'),
         setArtifactVersion: getModuleFunction('versionsModule', 'setArtifactVersion'),
         deleteArtifactVersion: getModuleFunction('versionsModule', 'deleteArtifactVersion'),
-        
-        // Group management functions (from groups module)
-        createGroup: getModuleFunction('groupsModule', 'createGroup'),
-        moveArtifact: getModuleFunction('groupsModule', 'moveArtifact'),
-        deleteGroup: getModuleFunction('groupsModule', 'deleteGroup'),
-        isDescendantOf: getModuleFunction('groupsModule', 'isDescendantOf'),
         
         // Smart deduplication functions (from versions module)
         findBestMatchingArtifact: getModuleFunction('versionsModule', 'findBestMatchingArtifact'),
@@ -333,16 +387,15 @@ function initializeArtifactsModule() {
         extractHtmlElements: getModuleFunction('versionsModule', 'extractHtmlElements'),
         levenshteinDistance: getModuleFunction('versionsModule', 'levenshteinDistance'),
         
-        
         init
       };
       
       // Also make it available as `artifacts` for backward compatibility
       window.artifacts = window.artifactsModule;
       
-      console.log('[ARTIFACTS] All modules loaded and unified interface created');
+      console.log('[ARTIFACTS] Module loaded with path-based system');
     } else {
-      // Not all modules loaded yet, check again
+      // Versions module not loaded yet, check again
       setTimeout(checkModulesLoaded, 100);
     }
   };

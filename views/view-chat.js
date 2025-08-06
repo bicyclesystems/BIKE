@@ -76,10 +76,8 @@ function renderChatView() {
     }
   }
 
-  // Get artifacts for this chat, filtering out groups
-  const allArtifacts = window.context?.getCurrentChatArtifacts() || [];
-  const artifacts = allArtifacts.filter(a => a.type !== 'group');
-  const groups = allArtifacts.filter(a => a.type === 'group');
+  // Get artifacts for this chat
+  const artifacts = window.context?.getCurrentChatArtifacts() || [];
 
   // Get user information for profiles
   const session = window.user?.getActiveSession();
@@ -97,44 +95,50 @@ function renderChatView() {
       case 'link': return '🔗';
       case 'files': return '📁';
       case 'markdown': return '📝';
-      case 'group': return '📂';
+      case 'css': return '🎨';
+      case 'javascript': return '⚡';
+      case 'json': return '📋';
       default: return '📄';
     }
   }
 
-  // Helper function to organize artifacts by groups
-  function organizeArtifactsByGroups() {
+  // Helper function to organize artifacts by folder
+  function organizeArtifactsByFolder() {
+    const folderGroups = new Map();
+    
+    artifacts.forEach(artifact => {
+      // Extract folder from path
+      const path = artifact.path || '';
+      const lastSlash = path.lastIndexOf('/');
+      const folder = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
+      const folderKey = folder || 'root';
+      
+      if (!folderGroups.has(folderKey)) {
+        folderGroups.set(folderKey, []);
+      }
+      folderGroups.get(folderKey).push(artifact);
+    });
+    
+    // Convert to array format for rendering
     const groupedArtifacts = [];
-    
-    // First, add root level artifacts (no parentId)
-    const rootArtifacts = artifacts.filter(a => !a.parentId);
-    if (rootArtifacts.length > 0) {
-      groupedArtifacts.push({
-        isGroup: false,
-        title: null,
-        artifacts: rootArtifacts
-      });
-    }
-    
-    // Then, add grouped artifacts
-    groups.forEach(group => {
-      const groupArtifacts = artifacts.filter(a => a.parentId === group.id);
-      if (groupArtifacts.length > 0) {
+    for (const [folder, folderArtifacts] of folderGroups) {
+      if (folderArtifacts.length > 0) {
+        const folderTitle = folder === 'root' ? 'Root' : folder.replace('/', '');
         groupedArtifacts.push({
           isGroup: true,
-          title: group.title,
-          artifacts: groupArtifacts
+          title: `📁 ${folderTitle}`,
+          artifacts: folderArtifacts
         });
       }
-    });
+    }
     
     return groupedArtifacts;
   }
 
   // Generate artifacts list HTML
   let artifactsHtml = '';
-  if (artifacts.length > 0 || groups.length > 0) {
-    const organizedArtifacts = organizeArtifactsByGroups();
+  if (artifacts.length > 0) {
+    const organizedArtifacts = organizeArtifactsByFolder();
     const totalArtifacts = artifacts.length;
     
     artifactsHtml = `

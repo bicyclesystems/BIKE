@@ -135,32 +135,11 @@
   ],
   "artifacts": [
     {
-      "id": "group_app_development",
-      "title": "📱 App Development",
-      "type": "group",
-      "messageId": "template_group_1",
-      "filename": "empty"
-    },
-    {
-      "id": "group_documentation",
-      "title": "📚 Documentation",
-      "type": "group",
-      "messageId": "template_group_2", 
-      "filename": "empty"
-    },
-    {
-      "id": "group_design_assets",
-      "title": "🎨 Design Assets",
-      "type": "group",
-      "messageId": "template_group_3",
-      "filename": "empty"
-    },
-    {
       "id": "template_artifact_1",
-      "title": "Todo App Evolution",
+      "title": "Todo App Homepage",
       "type": "html",
+      "path": "index.html",
       "messageId": "template_assistant_1",
-      "parentId": "group_app_development",
       "versions": [
         {
           "filename": "artifact-v1.html",
@@ -182,48 +161,73 @@
     },
     {
       "id": "template_artifact_4",
-      "title": "Component Library",
+      "title": "Component Styles",
       "type": "css",
+      "path": "styles/main.css",
       "messageId": "template_assistant_7",
-      "parentId": "group_app_development",
       "filename": "components.css"
     },
     {
       "id": "template_artifact_5",
-      "title": "JavaScript Utilities",
+      "title": "App Utilities",
       "type": "javascript",
+      "path": "js/utils.js",
       "messageId": "template_assistant_8",
-      "parentId": "group_app_development",
       "filename": "utils.js"
     },
     {
       "id": "template_artifact_2",
       "title": "Project Documentation",
       "type": "markdown",
+      "path": "docs/README.md",
       "messageId": "template_assistant_5",
-      "parentId": "group_documentation",
       "filename": "artifact.md"
     },
     {
       "id": "template_artifact_6",
-      "title": "API Documentation",
+      "title": "API Reference",
       "type": "markdown",
+      "path": "docs/api.md",
       "messageId": "template_assistant_9",
-      "parentId": "group_documentation",
       "filename": "api-docs.md"
     },
     {
       "id": "template_artifact_3",
-      "title": "Visual Template",
+      "title": "App Logo",
       "type": "image",
+      "path": "assets/logo.svg",
       "messageId": "template_assistant_6",
-      "parentId": "group_design_assets",
       "filename": "artifact.svg"
     },
     {
       "id": "template_artifact_7",
       "title": "Deployment Config",
       "type": "yaml",
+      "path": "config/deploy.yml",
+      "messageId": "template_assistant_10",
+      "filename": "deploy.yml"
+    },
+    {
+      "id": "template_artifact_8",
+      "title": "Theme Variables",
+      "type": "css",
+      "path": "styles/theme.css",
+      "messageId": "template_assistant_7",
+      "filename": "components.css"
+    },
+    {
+      "id": "template_artifact_9",
+      "title": "Todo Manager",
+      "type": "javascript",
+      "path": "js/app.js",
+      "messageId": "template_assistant_8",
+      "filename": "utils.js"
+    },
+    {
+      "id": "template_artifact_10",
+      "title": "App Settings",
+      "type": "json",
+      "path": "data/config.json",
       "messageId": "template_assistant_10",
       "filename": "deploy.yml"
     }
