@@ -1,0 +1,12 @@
+// Configuration file for Bike app
+// This file contains sensitive configuration and should not be committed to git
+
+// SECURITY WARNING: These keys are exposed in plain text
+// In production, these should be loaded from environment variables or a secure key management service
+window.API_KEY = 'your-openai-api-key';
+window.CHAT_API_URL = 'https://api.openai.com/v1/chat/completions';
+
+window.SUPABASE_CONFIG = {
+  url: 'https://***.supabase.co',
+  key: 'ey***'
+};
