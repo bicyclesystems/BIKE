@@ -22,7 +22,7 @@ class NoHostManager {
     try {
       // Register nohost service worker
       if ('serviceWorker' in navigator) {
-        await navigator.serviceWorker.register('./views/nohost/nohost-sw.js');
+        await navigator.serviceWorker.register('./views/view-artifact/nohost/nohost-sw.js');
         console.log('[NoHost] Service worker registered');
       } else {
         throw new Error('Service workers not supported');
