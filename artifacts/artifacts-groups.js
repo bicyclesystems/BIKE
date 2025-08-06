@@ -24,12 +24,7 @@ function createGroup(name, parentId = null) {
   window.context?.setContext({ artifacts: [...currentArtifacts, group] });
   window.memory?.saveArtifacts();
   
-  // Sync to nohost when group is created
-  if (window.noHostManager && window.noHostManager.isAvailable()) {
-    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
-      console.warn('[Artifacts] Failed to sync group to nohost:', err)
-    );
-  }
+
   
   return group;
 }
@@ -62,12 +57,7 @@ function moveArtifact(artifactId, targetGroupId) {
   window.context?.setContext({ artifacts });
   window.memory?.saveArtifacts();
   
-  // Sync to nohost
-  if (window.noHostManager && window.noHostManager.isAvailable()) {
-    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
-      console.warn('[Artifacts] Failed to sync move to nohost:', err)
-    );
-  }
+
   
   return true;
 }
@@ -93,12 +83,7 @@ function deleteGroup(groupId) {
   window.context?.setContext({ artifacts: updatedArtifacts });
   window.memory?.saveArtifacts();
   
-  // Sync to nohost
-  if (window.noHostManager && window.noHostManager.isAvailable()) {
-    window.noHostManager.syncChatArtifacts(activeChatId).catch(err => 
-      console.warn('[Artifacts] Failed to sync group deletion to nohost:', err)
-    );
-  }
+
   
   return true;
 }

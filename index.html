@@ -18,9 +18,7 @@
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <!-- Monaco Editor -->
   <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs/loader.js"></script>
-      <script src="views/view-artifact/nohost/filer.min.js"></script>
-  <script src="views/view-artifact/nohost/nohost-manager.js"></script>
-  <script src="views/view-artifact/nohost/nohost-debug.js"></script>
+
   <script src="config.js"></script>
   <script src="memory.js"></script>
   <script src="sync.js"></script>
@@ -50,6 +48,9 @@
   <script src="context/context.js"></script>
   <script src="context/context-highlight.js"></script>
   <script src="user.js"></script>
+      <!-- Load artifacts modules in correct order -->
+      <script src="artifacts/artifacts-groups.js"></script>
+      <script src="artifacts/artifacts-versions.js"></script>
       <script src="artifacts/artifacts.js"></script>
   <script src="input.js"></script>
   <script src="system.js"></script>
@@ -87,23 +88,17 @@
       waitForArtifacts();
       views.init();
       
-      // Initialize NoHost explicitly after everything is loaded
-      setTimeout(() => {
-        if (window.noHostManager) {
-          console.log('[INIT] Testing NoHost initialization...');
-          window.noHostManager.init().then(() => {
-            console.log('[INIT] NoHost successfully initialized');
-          }).catch(err => {
-            console.error('[INIT] NoHost failed to initialize:', err);
-          });
-        }
-      }, 1000);
+
       
       // Initialize sync in background after UI is ready
-      if (session && window.syncManager) {
+      if (session && window.syncManager && window.supabase) {
         window.syncManager.initializeWithAuth(window.supabase, session)
           .then(() => console.log('[INIT] Background sync complete'))
           .catch(err => console.warn('[INIT] Background sync failed:', err));
+      } else if (window.syncManager) {
+        // Initialize sync in offline mode
+        console.log('[INIT] Initializing sync in offline mode');
+        window.syncManager.init();
       }
     });
   </script>

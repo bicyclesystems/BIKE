@@ -30,7 +30,6 @@ class InputManager {
     this.setupEventListeners();
     this.setupGlobalKeyboardListener();
     this.setupMessageHandler();
-    this.setupFileUploadHandlers();
     this.isInitialized = true;
   }
 
@@ -426,14 +425,6 @@ class InputManager {
     this.inputElement.addEventListener('paste', (e) => {
       const clipboardData = e.clipboardData || window.clipboardData;
       
-      if (clipboardData && clipboardData.files && clipboardData.files.length > 0) {
-        e.preventDefault();
-        // Delegate file handling to file upload module
-        if (window.fileUploadModule && window.fileUploadModule.handleFilesPaste) {
-          window.fileUploadModule.handleFilesPaste(clipboardData.files);
-        }
-        return;
-      }
 
       // Original paste behavior for text/context
       setTimeout(() => {
@@ -515,12 +506,6 @@ class InputManager {
     });
   }
 
-  setupFileUploadHandlers() {
-    // Initialize the file upload module
-    if (window.fileUploadModule && window.fileUploadModule.initialize) {
-      window.fileUploadModule.initialize();
-    }
-  }
 
   // =================== INPUT PROCESSING ===================
   // Everything about understanding and analyzing what the user typed

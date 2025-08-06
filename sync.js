@@ -10,7 +10,7 @@ class SupabaseSync {
     this.userId = null;
     this.sessionId = null;
     this.syncQueue = [];
-    this.realtimeSubscriptions = [];
+    this.realtimeSubscriptions = new Map();
     this.isProcessingQueue = false;
     this.lastSyncTime = null;
     this.retryAttempts = 0;
@@ -587,6 +587,11 @@ class SupabaseSync {
   }
 
   async syncChats() {
+    if (!this.supabase || !this.userId) {
+      console.warn("[SYNC] syncChats: Missing supabase client or userId");
+      return;
+    }
+
     const { data: serverChats, error } = await this.supabase
       .from("chats")
       .select("*")
@@ -641,6 +646,11 @@ class SupabaseSync {
   }
 
   async syncMessages() {
+    if (!this.supabase || !this.userId) {
+      console.warn("[SYNC] syncMessages: Missing supabase client or userId");
+      return;
+    }
+
     const { data: serverMessages, error } = await this.supabase
       .from("messages")
       .select("*")
@@ -715,6 +725,11 @@ class SupabaseSync {
   }
 
   async syncArtifacts() {
+    if (!this.supabase || !this.userId) {
+      console.warn("[SYNC] syncArtifacts: Missing supabase client or userId");
+      return;
+    }
+
     const { data: serverArtifacts, error } = await this.supabase
       .from("artifacts")
       .select("*")
@@ -907,9 +922,9 @@ class SupabaseSync {
     this.isOnline = false;
 
     // Unsubscribe from real-time
-    this.realtimeSubscriptions.forEach((subscription) => {
+    for (const subscription of this.realtimeSubscriptions.values()) {
       subscription.unsubscribe();
-    });
+    }
     this.realtimeSubscriptions.clear();
   }
 

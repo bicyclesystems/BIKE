@@ -1,8 +1,19 @@
 // =================== Supabase Client ===================
-const supabase = window.supabase.createClient(
-  window.SUPABASE_CONFIG.url,
-  window.SUPABASE_CONFIG.key
-);
+let supabaseClient = null;
+
+// Initialize Supabase client if config is available
+if (window.SUPABASE_CONFIG?.url && window.SUPABASE_CONFIG?.key) {
+  supabaseClient = window.supabase.createClient(
+    window.SUPABASE_CONFIG.url,
+    window.SUPABASE_CONFIG.key
+  );
+  console.log('[AUTH] Supabase client initialized');
+} else {
+  console.warn('[AUTH] No Supabase config found - running in offline mode');
+}
+
+// Make supabase client available globally  
+window.supabase = supabaseClient;
 
 // =================== Session Management ===================
 class SessionManager {
@@ -80,9 +91,14 @@ window.sessionManager = sessionManager;
 
 // =================== Session Helpers ===================
 async function getCurrentSession() {
+  if (!supabaseClient) {
+    console.warn('[AUTH] Supabase client not available');
+    return null;
+  }
+  
   const {
     data: { session },
-  } = await supabase.auth.getSession();
+  } = await supabaseClient.auth.getSession();
   return session;
 }
 
@@ -167,9 +183,11 @@ function toggleUI(show) {
 // =================== Authentication Functions ===================
 async function loginWithEmail(email) {
   if (!email) throw new Error("Email is required");
+  if (!supabaseClient) throw new Error("Supabase client not available - running in offline mode");
+  
   try {
     const trimmedEmail = email.trim();
-    const { error } = await supabase.auth.signInWithOtp({
+    const { error } = await supabaseClient.auth.signInWithOtp({
       email: trimmedEmail,
     });
     if (error) throw error;
@@ -187,7 +205,9 @@ async function logout() {
     // Clear session manager state
     window.sessionManager.clearAllFlags();
 
-    await supabase.auth.signOut();
+    if (supabaseClient) {
+      await supabaseClient.auth.signOut();
+    }
     userSession = null;
 
     // Purge all user data from localStorage
@@ -224,7 +244,13 @@ function initAuth() {
   document.getElementById("auth-indicator")?.remove();
 
   return new Promise((resolve) => {
-        supabase.auth.onAuthStateChange((event, session) => {
+    if (!supabaseClient) {
+      console.log('[AUTH] No Supabase client - resolving with null session');
+      resolve(null);
+      return;
+    }
+
+    supabaseClient.auth.onAuthStateChange((event, session) => {
       console.log("[AUTH] State change:", event);
       const isNewLogin = event === "SIGNED_IN";
       userSession = session;
@@ -424,14 +450,16 @@ async function updateAuthState(session, forceNewLogin = false) {
 async function getUserData() {
   const session = await getCurrentSession();
   if (!session?.user?.id) return null;
-  const { data, error } = await supabase
+  if (!supabaseClient) return null;
+  
+  const { data, error } = await supabaseClient
     .from("users")
     .select("*")
     .eq("id", session.user.id)
     .single();
 
   if (error) {
-    console.error("[USER] Failed to fetch user data:", error);
+    console.warn("[USER] Failed to fetch user data (database may not be set up):", error.message);
     return null;
   }
 
@@ -444,15 +472,16 @@ async function getUserData() {
 async function getUserArtifacts() {
   const session = await getCurrentSession();
   if (!session?.user?.id) return [];
+  if (!supabaseClient) return [];
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from("artifacts")
     .select("*")
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("[USER] Failed to fetch artifacts:", error);
+    console.warn("[USER] Failed to fetch artifacts (database may not be set up):", error.message);
     return [];
   }
 
@@ -465,15 +494,16 @@ async function getUserArtifacts() {
 async function getUserChats() {
   const session = await getCurrentSession();
   if (!session?.user?.id) return [];
+  if (!supabaseClient) return [];
 
-  const { data, error } = await supabase
+  const { data, error } = await supabaseClient
     .from("chats")
     .select("*")
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
-    console.error("[USER] Failed to fetch chats:", error);
+    console.warn("[USER] Failed to fetch chats (database may not be set up):", error.message);
     return [];
   }
 
@@ -486,15 +516,16 @@ async function getUserChats() {
 async function getUserMessages() {
   const session = await getCurrentSession();
   if (!session?.user?.id) return [];
-  const { data, error } = await supabase
+  if (!supabaseClient) return [];
+  
+  const { data, error } = await supabaseClient
     .from("messages")
     .select("*")
     .eq("user_id", session.user.id)
     .order("created_at", { ascending: false });
 
   if (error) {
-
-    console.error("[USER] Failed to fetch messages:", error);
+    console.warn("[USER] Failed to fetch messages (database may not be set up):", error.message);
     return [];
   }
 

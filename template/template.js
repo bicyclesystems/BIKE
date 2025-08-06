@@ -21,7 +21,7 @@
   function waitForAppReady() {
     return new Promise((resolve) => {
       const checkReady = () => {
-        if (window.context && window.context.getActiveChatId && window.memory && window.messages) {
+        if (window.context && window.context.getActiveChatId && window.memory && window.artifacts) {
           resolve();
         } else {
           setTimeout(checkReady, 100);
@@ -40,6 +40,9 @@
       try {
         // Load chat configuration
         const chatResponse = await fetch(`./template/${templateId}/chat.json`);
+        if (!chatResponse.ok) {
+          throw new Error(`HTTP ${chatResponse.status}: ${chatResponse.statusText}`);
+        }
         const chatConfig = await chatResponse.json();
         
         // Create/update the template chat
@@ -73,6 +76,9 @@
                 for (const versionInfo of artifactConfig.versions) {
                   try {
                     const versionResponse = await fetch(`./template/${templateId}/${versionInfo.filename}`);
+                    if (!versionResponse.ok) {
+                      throw new Error(`HTTP ${versionResponse.status}: ${versionResponse.statusText}`);
+                    }
                     const versionContent = await versionResponse.text();
                     versions.push({
                       content: versionContent,
@@ -86,6 +92,9 @@
               } else {
                 // Load single artifact file (fallback)
                 const artifactResponse = await fetch(`./template/${templateId}/${artifactConfig.filename}`);
+                if (!artifactResponse.ok) {
+                  throw new Error(`HTTP ${artifactResponse.status}: ${artifactResponse.statusText}`);
+                }
                 const artifactContent = await artifactResponse.text();
                 versions.push({
                   content: artifactContent,

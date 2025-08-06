@@ -218,18 +218,24 @@ if (document.readyState === "loading") {
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
-  // Wait until window.SUPABASE_CONFIG is available
-  while (!window.SUPABASE_CONFIG?.url || !window.SUPABASE_CONFIG?.key) {
+  // Wait until supabase client is available (or confirm we're in offline mode)
+  while (!window.supabase && window.supabase !== null) {
     await new Promise((r) => setTimeout(r, 100));
+  }
+  
+  // Skip database fetching if no supabase client (offline mode)
+  if (!window.supabase) {
+    console.log('[MEMORY] Running in offline mode - skipping database fetch');
+    return;
   }
 
   //fetching all the data of the user from database
   try {
     const [user, artifacts, chats, messages] = await Promise.all([
-      getUserData(),
-      getUserArtifacts(),
-      getUserChats(),
-      getUserMessages(),
+      window.user.getUserData(),
+      window.user.getUserArtifacts(),
+      window.user.getUserChats(),
+      window.user.getUserMessages(),
     ]);
 
     const messagesByChat = messages.reduce((acc, message) => {
@@ -260,7 +266,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     
   } catch (err) {
-    console.error("[MEMORY] Failed to fetch and store data:", err);
+    console.warn("[MEMORY] Database fetch failed (tables may not exist or no permission) - continuing in offline mode:", err);
+    // Continue in offline mode without database data
   }
 });
 

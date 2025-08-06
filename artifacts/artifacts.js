@@ -2,44 +2,11 @@
 // Core CRUD operations, initialization, and module coordination
 
 // =================== Module Loading ===================
-
-// Load artifact subsystem modules
-function loadArtifactsModules() {
-  const modules = [
-    './artifacts-groups.js',
-    './artifacts-versions.js',
-    './artifacts-upload/artifacts-parser.js',
-    './artifacts-upload/artifacts-formatting.js', 
-    './artifacts-upload/artifacts-upload.js'
-  ];
-  
-  modules.forEach(modulePath => {
-    try {
-      const script = document.createElement('script');
-      script.src = modulePath;
-      script.async = false; // Ensure ordered loading
-      document.head.appendChild(script);
-    } catch (error) {
-      console.error('[ARTIFACTS] Failed to load module:', modulePath, error);
-    }
-  });
-}
+// Note: Artifacts modules are now loaded statically in index.html
 
 // =================== Core Utility Functions ===================
 
-// NoHost sync utility function
-function syncToNoHost(chatId) {
-  if (window.noHostManager && window.noHostManager.isAvailable() && chatId) {
-    window.noHostManager.syncChatArtifacts(chatId).catch(err => 
-      console.warn('[Artifacts] Failed to sync to nohost:', err)
-    ).finally(() => {
-      // Refresh debug window
-      if (window.noHostDebugger) {
-        window.noHostDebugger.refresh();
-      }
-    });
-  }
-}
+
 
 // Timestamp utility function
 function getCurrentTimestamp() {
@@ -133,8 +100,7 @@ function createArtifactBase(content, messageId, type = null, shouldSetActive = t
   window.context?.setContext({ artifacts: [...currentArtifacts, artifact] });
   window.memory?.saveArtifacts();
   
-  // Sync to nohost when artifact is created
-  syncToNoHost(activeChatId);
+
   
   if (shouldSetActive) {
     window.context?.setActiveArtifactId(id);
@@ -147,7 +113,7 @@ function createArtifact(content, messageId, type = null) {
   return createArtifactBase(content, messageId, type, true);
 }
 
-// Create artifact without auto-opening it (used for file uploads)
+// Create artifact without auto-opening it
 function createArtifactSilent(content, messageId, type = null) {
   return createArtifactBase(content, messageId, type, false);
 }
@@ -169,8 +135,7 @@ function updateArtifact(id, content) {
   window.context?.setActiveVersionIndex(id, artifact.versions.length - 1);
   window.memory?.saveArtifacts();
   
-  // Sync to nohost when artifact is updated
-  syncToNoHost(activeChatId);
+
   
   return artifact;
 }
@@ -306,9 +271,6 @@ function getFaviconUrl(url) {
 // =================== Initialization ===================
 
 function init() {
-  // Load all artifact modules
-  loadArtifactsModules();
-  
   // Setup artifact-specific click handlers
   setupArtifactClickHandlers();
   
@@ -336,7 +298,7 @@ function getModuleFunction(moduleName, functionName) {
 function initializeArtifactsModule() {
   const checkModulesLoaded = () => {
     // Check if all modules are loaded
-    if (window.groupsModule && window.versionsModule && window.fileUploadManager && window.formatFileDataForAI) {
+    if (window.groupsModule && window.versionsModule) {
       // All modules loaded, create unified interface
       window.artifactsModule = {
         // Core functions
@@ -371,31 +333,12 @@ function initializeArtifactsModule() {
         extractHtmlElements: getModuleFunction('versionsModule', 'extractHtmlElements'),
         levenshteinDistance: getModuleFunction('versionsModule', 'levenshteinDistance'),
         
-        // File upload functions (direct access)
-        initializeFileUpload: () => window.fileUploadManager?.initialize(),
-        processFiles: (files, source) => window.fileUploadManager?.processFiles(files, source),
-        handleFilesDrop: (files) => window.fileUploadManager?.handleFilesDrop(files),
-        handleFilesPaste: (files) => window.fileUploadManager?.handleFilesPaste(files),
-        
-        // Enhanced file parser (direct access)
-        parseFile: (file) => window.fileContentParser?.parseFile(file),
-        
-        // AI formatting functions (direct access) 
-        formatFileDataForAI: window.formatFileDataForAI,
         
         init
       };
       
       // Also make it available as `artifacts` for backward compatibility
       window.artifacts = window.artifactsModule;
-      
-      // File upload module (maintain existing interface)
-      window.fileUploadModule = {
-        initialize: () => window.fileUploadManager?.initialize(),
-        processFiles: (files, source) => window.fileUploadManager?.processFiles(files, source),
-        handleFilesDrop: (files) => window.fileUploadManager?.handleFilesDrop(files),
-        handleFilesPaste: (files) => window.fileUploadManager?.handleFilesPaste(files)
-      };
       
       console.log('[ARTIFACTS] All modules loaded and unified interface created');
     } else {
