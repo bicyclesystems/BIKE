@@ -26,7 +26,20 @@ function renderArtifactsView(data) {
   
   // Always use gallery view with all artifacts
   return `
-    <div class="column gap-m padding-l">
+    <style>
+      @media (max-width: 768px) {
+        .artifact-grid {
+          flex-direction: column !important;
+          gap: calc(var(--base-size) * 6) !important;
+        }
+        .artifact-item {
+          min-width: auto !important;
+          max-width: none !important;
+          width: 100% !important;
+        }
+      }
+    </style>
+    <div class="column gap-m padding-xl">
       ${renderGalleryView(allArtifacts, allArtifacts)}
     </div>
   `;
@@ -39,25 +52,36 @@ function renderArtifactsView(data) {
 function renderGalleryView(artifacts, allArtifacts) {
   // Group by folder path
   const folderGroups = new Map();
+  const rootArtifacts = [];
   
   artifacts.forEach(artifact => {
     // Extract folder from path (everything before the last /)
     const path = artifact.path || '';
     const lastSlash = path.lastIndexOf('/');
     const folder = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
-    const folderKey = folder || 'root';
     
-    if (!folderGroups.has(folderKey)) {
-      folderGroups.set(folderKey, []);
+    if (!folder) {
+      // Root artifacts - don't put them in a folder group
+      rootArtifacts.push(artifact);
+    } else {
+      // Non-root artifacts - group by folder
+      if (!folderGroups.has(folder)) {
+        folderGroups.set(folder, []);
+      }
+      folderGroups.get(folder).push(artifact);
     }
-    folderGroups.get(folderKey).push(artifact);
   });
   
-  let html = `<div class="row gap-m" style="flex-wrap: wrap;">`;
+  let html = `<div style="display: flex; flex-wrap: wrap; gap: calc(var(--base-size) * 10);" class="artifact-grid">`;
   
-  // Render each folder group
+  // First render root artifacts without any folder grouping
+  rootArtifacts.forEach(artifact => {
+    html += renderSingleArtifact(artifact, null); // No group title for root artifacts
+  });
+  
+  // Then render folder groups
   for (const [folder, groupArtifacts] of folderGroups) {
-    const folderTitle = folder === 'root' ? '📁 Root' : `📁 ${folder.replace('/', '')}`;
+    const folderTitle = folder.replace('/', '');
     html += renderArtifactGroup(groupArtifacts, folderTitle);
   }
   
@@ -73,17 +97,8 @@ function renderArtifactGroup(artifacts, groupTitle) {
     return renderSingleArtifact(artifacts[0], groupTitle);
   }
   
-  // Multiple artifacts - create stacked effect
-  let html = `
-    <div class="column gap-m" style="min-width: 320px; max-width: 400px; flex: 1; position: relative;">
-      ${groupTitle ? `<div style="font-weight: 500; opacity: 0.8; font-size: 0.9em;">${window.utils.escapeHtml(groupTitle)}</div>` : ''}
-      <div class="artifact-stack" 
-           style="position: relative; height: 350px; overflow: visible;"
-           onmouseenter="this.querySelectorAll('.stacked-card').forEach((card, i) => { const directions = [[-40, -30], [50, -20], [-30, 40], [60, 35], [0, -50], [-50, 0]]; const dir = directions[i % directions.length]; card.style.transform = 'scale(' + card.dataset.scale + ') translate(' + dir[0] + 'px, ' + dir[1] + 'px)'; card.style.opacity = '1'; })"
-           onmouseleave="this.querySelectorAll('.stacked-card').forEach((card, i) => { card.style.transform = 'scale(' + card.dataset.scale + ')'; card.style.opacity = i === 0 ? '1' : '0.8'; })">
-  `;
-  
-  // Render artifacts with stacking effect
+  // Multiple artifacts - create stacked effect as the visual preview
+  let stackContent = '';
   artifacts.forEach((artifact, index) => {
     const offsetX = index * 8;
     const offsetY = index * 8;
@@ -91,15 +106,43 @@ function renderArtifactGroup(artifacts, groupTitle) {
     const opacity = index === 0 ? 1 : 0.8;
     const scale = index === 0 ? 1 : 0.95;
     
-    html += renderStackedArtifact(artifact, offsetX, offsetY, zIndex, opacity, scale, index);
+    stackContent += renderStackedArtifact(artifact, offsetX, offsetY, zIndex, opacity, scale, index);
   });
   
-  html += `
-      </div>
+  // Create the stacked visual as the "visualPreview" for the group
+  const groupVisualPreview = `
+    <div class="artifact-stack" style="position: relative; overflow: visible;"
+         onmouseenter="this.querySelectorAll('.stacked-card').forEach((card, i) => { const directions = [[-40, -30], [50, -20], [-30, 40], [60, 35], [0, -50], [-50, 0]]; const dir = directions[i % directions.length]; card.style.transform = 'scale(' + card.dataset.scale + ') translate(' + dir[0] + 'px, ' + dir[1] + 'px)'; card.style.opacity = '1'; })"
+         onmouseleave="this.querySelectorAll('.stacked-card').forEach((card, i) => { card.style.transform = 'scale(' + card.dataset.scale + ')'; card.style.opacity = i === 0 ? '1' : '0.8'; })">
+      ${stackContent}
     </div>
   `;
   
-  return html;
+  // Use the same structure as a single artifact but with group content
+  const content = `
+    ${renderGroupTitle(groupTitle)}
+    <div class="transition" style="display: flex; flex-direction: column; gap: calc(var(--base-size) * 3); cursor: pointer;" onmouseenter="this.querySelector('.artifact-title').style.opacity='1'" onmouseleave="this.querySelector('.artifact-title').style.opacity='0'">
+      ${groupVisualPreview}
+      ${renderArtifactTitle(`${artifacts.length} artifacts`)}
+    </div>
+  `;
+  
+  return renderArtifactContainer(content);
+}
+
+// Helper function for rendering group titles (DRY)
+function renderGroupTitle(groupTitle) {
+  return groupTitle ? `<h5 class="opacity-s">${window.utils.escapeHtml(groupTitle)}</h5>` : '';
+}
+
+// Helper function for artifact container wrapper (DRY)
+function renderArtifactContainer(content) {
+  return `<div class="artifact-item" style="display: flex; flex-direction: column; gap: calc(var(--base-size) * 3); flex: 1; min-width: 300px; max-width: 400px;">${content}</div>`;
+}
+
+// Helper function for artifact title with hover effect (DRY)
+function renderArtifactTitle(title) {
+  return `<div class="artifact-title transition" style="opacity: 0;">${window.utils.escapeHtml(title)}</div>`;
 }
 
 // Shared content preview generation logic
@@ -109,14 +152,18 @@ function generateArtifactPreview(artifact) {
   let visualPreview = null;
   
   // Generate content preview
-  if (artifact.type === 'link') {
-    const url = latestVersion.content.trim();
-    const domain = window.utils.getDomainFromUrl(url);
-    preview = domain;
-  } else if (artifact.type === 'files') {
+  if (artifact.type === 'files') {
     try {
       const fileData = JSON.parse(latestVersion.content);
-      const fileSize = window.artifactsModule.formatFileSize(fileData.size);
+      // Format file size inline
+      const formatFileSize = (bytes) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const fileSizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + fileSizes[i];
+      };
+      const fileSize = formatFileSize(fileData.size);
       preview = `${fileData.name} (${fileSize})`;
     } catch (e) {
       preview = latestVersion.content.substring(0, 100) + '...';
@@ -132,7 +179,7 @@ function generateArtifactPreview(artifact) {
     if (imageMatch) {
       const imageUrl = imageMatch[1];
       preview = imageUrl;
-      visualPreview = `<img src="${window.utils.escapeHtml(imageUrl)}" alt="Preview" style="width: 100%; height: auto;">`;
+      visualPreview = `<img src="${window.utils.escapeHtml(imageUrl)}" alt="Preview" class="box-l">`;
     }
   } else if (latestVersion.content.toLowerCase().includes('<html') || latestVersion.content.toLowerCase().includes('<!doctype')) {
     const titleMatch = latestVersion.content.match(/<title[^>]*>([^<]*)<\/title>/i);
@@ -144,8 +191,8 @@ function generateArtifactPreview(artifact) {
     }
     const encodedContent = btoa(unescape(encodeURIComponent(latestVersion.content)));
     visualPreview = `<iframe src="data:text/html;base64,${encodedContent}" 
-                            class="radius-s transition" 
-                            style="width: 100%; height: 200px; border: none; margin: 0; padding: 0; outline: none; background: white; opacity: 0;" 
+                            class="radius-s transition box-l" 
+                            style="border: none; margin: 0; padding: 0; outline: none; background: white; opacity: 0;" 
                             sandbox="allow-scripts allow-same-origin"
                             onload="this.style.opacity='1'"></iframe>`;
   } else if (latestVersion.content.startsWith('<svg') || (latestVersion.content.includes('<svg') && latestVersion.content.includes('</svg>'))) {
@@ -156,12 +203,12 @@ function generateArtifactPreview(artifact) {
       preview = latestVersion.content.substring(0, 100) + '...';
     }
     const encodedSvg = btoa(unescape(encodeURIComponent(latestVersion.content)));
-    visualPreview = `<img src="data:image/svg+xml;base64,${encodedSvg}" class="background-tertiary radius-s" style="width: 100%; height: auto;" alt="SVG Preview">`;
+    visualPreview = `<img src="data:image/svg+xml;base64,${encodedSvg}" class="background-tertiary radius-s box-l" alt="SVG Preview">`;
   } else if (latestVersion.content.startsWith('#') || latestVersion.content.includes('##') || latestVersion.content.includes('**') || latestVersion.content.includes('*')) {
     preview = '';
     const markdownPreview = latestVersion.content.substring(0, 500) + (latestVersion.content.length > 500 ? '...' : '');
     const escapedMarkdown = window.utils.escapeHtml(markdownPreview);
-    visualPreview = `<div class="text-s background-secondary padding-m radius-s" style="width: 100%; min-height: 120px; overflow: hidden; line-height: 1.4; white-space: pre-wrap;">${escapedMarkdown}</div>`;
+    visualPreview = `<div class="text-s background-secondary padding-m radius-s box-l" style="min-height: 200px;">${escapedMarkdown}</div>`;
   }
   
   return { preview, visualPreview };
@@ -172,47 +219,45 @@ function generateArtifactClickHandler(artifact) {
   const latestVersion = artifact.versions[artifact.versions.length - 1];
   const escapedId = window.utils.escapeHtml(artifact.id);
   
-  if (artifact.type === 'link') {
-    const url = latestVersion.content.trim();
-    const escapedUrl = window.utils.escapeHtml(url);
-    return `onclick="window.open('${escapedUrl}', '_blank', 'noopener,noreferrer')"`;
-  } else {
-    return `onclick="window.context.setActiveView('artifact', { artifactId: '${escapedId}' })"`;
-  }
+  return `onclick="window.context.setActiveView('artifact', { artifactId: '${escapedId}' })"`;
 }
 
 function renderSingleArtifact(artifact, groupTitle) {
   const { preview, visualPreview } = generateArtifactPreview(artifact);
   const clickHandler = generateArtifactClickHandler(artifact);
   
-  const escapedTitle = window.utils.escapeHtml(artifact.title);
-  const escapedPreview = window.utils.escapeHtml(preview);
-  
-  return `
-    <div class="column gap-m" style="min-width: 320px; max-width: 400px; flex: 1;">
-      ${groupTitle ? `<div style="font-weight: 500; opacity: 0.8; font-size: 0.9em;">${window.utils.escapeHtml(groupTitle)}</div>` : ''}
-      <div class="transition column gap-m" ${clickHandler} style="cursor: pointer;" onmouseenter="this.querySelector('.artifact-title').style.opacity='1'" onmouseleave="this.querySelector('.artifact-title').style.opacity='0'">
-        ${visualPreview || ''}
-        <div class="artifact-title" style="opacity: 0; transition: opacity 0.2s ease;">${escapedTitle}</div>
-      </div>
+  const content = `
+    ${renderGroupTitle(groupTitle)}
+    <div class="transition" ${clickHandler} style="display: flex; flex-direction: column; gap: calc(var(--base-size) * 3); cursor: pointer;" onmouseenter="this.querySelector('.artifact-title').style.opacity='1'" onmouseleave="this.querySelector('.artifact-title').style.opacity='0'">
+      ${visualPreview || ''}
+      ${renderArtifactTitle(artifact.title)}
     </div>
   `;
+  
+  return renderArtifactContainer(content);
 }
 
 function renderStackedArtifact(artifact, offsetX, offsetY, zIndex, opacity, scale, index) {
   const { preview, visualPreview } = generateArtifactPreview(artifact);
   const clickHandler = generateArtifactClickHandler(artifact);
   
-  const escapedTitle = window.utils.escapeHtml(artifact.title);
-  const escapedPreview = window.utils.escapeHtml(preview);
-  
   return `
-    <div class="stacked-card transition column gap-m" 
+    <div class="stacked-card transition" 
          ${clickHandler}
          data-scale="${scale}"
-         onmouseenter="this.querySelector('.artifact-title').style.opacity='1'"
-         onmouseleave="this.querySelector('.artifact-title').style.opacity='0'"
+         data-original-zindex="${zIndex}"
+         onmouseenter="
+           this.querySelector('.artifact-title').style.opacity='1';
+           this.style.zIndex='1000';
+         "
+         onmouseleave="
+           this.querySelector('.artifact-title').style.opacity='0';
+           this.style.zIndex=this.dataset.originalZindex;
+         "
          style="
+           display: flex;
+           flex-direction: column;
+           gap: calc(var(--base-size) * 3);
            position: absolute;
            top: ${offsetY}px;
            left: ${offsetX}px;
@@ -221,10 +266,9 @@ function renderStackedArtifact(artifact, offsetX, offsetY, zIndex, opacity, scal
            opacity: ${opacity};
            transform: scale(${scale});
            cursor: pointer;
-           transition: all 0.3s ease;
          ">
       ${visualPreview || ''}
-      <div class="artifact-title" style="opacity: 0; transition: opacity 0.2s ease;">${escapedTitle}</div>
+      ${renderArtifactTitle(artifact.title)}
     </div>
   `;
 }
@@ -242,9 +286,7 @@ function getArtifactTypeIcon(type) {
     'javascript': 'JS',
     'css': 'CSS',
     'json': 'JSON',
-    'yaml': 'YAML',
-    'link': 'LINK',
-    'files': 'FILE'
+    'yaml': 'YAML'
   };
   return icons[type] || 'FILE';
 }

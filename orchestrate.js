@@ -104,8 +104,8 @@ async function orchestrateAIResponse(response, utilities) {
           artifact.title = title;
         }
       } else {
-        // Create new artifact
-        artifact = createArtifact(finalContent, timestamp, detectedType);
+        // Create new artifact and make it active
+        artifact = createArtifact(finalContent, timestamp, detectedType, true);
         artifact.title = title;
       }
       

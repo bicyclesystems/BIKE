@@ -72,7 +72,7 @@ After saving preference, immediately check for remaining missing preferences and
   "artifacts": [
     {
       "title": "Descriptive title for the artifact",
-      "type": "html|markdown|code|image|text|link",
+      "type": "html|markdown|text|image|files",
       "content": "The actual content or prompt for the artifact"
     }
   ],

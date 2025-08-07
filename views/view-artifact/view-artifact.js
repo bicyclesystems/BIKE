@@ -87,16 +87,12 @@ async function renderArtifactView(data) {
     return await window.htmlArtifactRenderer.renderHtmlArtifact(artifact, currentVersionIdx, versionIndicator);
   }
 
-  if (artifact.type === 'files') {
-    return window.filesArtifactRenderer.renderFilesArtifact(artifact, currentVersionIdx, versionIndicator);
-  }
+
 
   // Use modular renderers for remaining types
   let contentHtml = '';
 
-  if (artifact.type === 'link') {
-    contentHtml = window.linkArtifactRenderer.renderLinkArtifact(artifact, currentVersionIdx, versionIndicator);
-  } else if (artifact.type === 'markdown') {
+  if (artifact.type === 'markdown') {
     // For markdown, return just the content without any artifact info
     return window.markdownArtifactRenderer.renderMarkdownArtifact(artifact, currentVersionIdx, versionIndicator);
   } else {
@@ -114,7 +110,7 @@ async function renderArtifactView(data) {
   `;
 }
 
-// File artifact functions moved to view-artifact-files.js
+
 
 // Version management functions for artifact view
 function toggleVersionHistory(historyId) {
@@ -176,4 +172,4 @@ window.artifactView = {
 
 // Make functions globally available for onclick handlers
 window.toggleVersionHistory = toggleVersionHistory;
-window.downloadFileArtifact = window.filesArtifactRenderer.downloadFileArtifact; 
+ 

@@ -373,13 +373,6 @@ window.utils = {
 };
 
 function getFaviconHtml(artifact) {
-  if (artifact?.type === "link" && artifact.versions?.length > 0) {
-    const url = artifact.versions[artifact.versions.length - 1].content.trim();
-    const faviconUrl = window.artifactsModule.getFaviconUrl(url);
-    return faviconUrl
-      ? `<img src="${faviconUrl}" alt="favicon" onerror="this.classList.add('hidden')"> `
-      : "";
-  }
   return "";
 }
 
@@ -413,7 +406,7 @@ function generateFileAnalysisDisplay(fileAnalysisContext) {
   html += `<div class="foreground-secondary"><strong>📂 Files Analyzed</strong></div>`;
 
   fileAnalysisContext.analyzedFiles.forEach((file) => {
-    const fileIcon = file.type === "files" ? "📄" : "📋";
+    const fileIcon = "📋";
     html += `<div class="row align-center gap-s">`;
     html += `<div>${fileIcon}</div>`;
     html += `<div class="foreground-primary">${applyContextHighlightingToMessage(

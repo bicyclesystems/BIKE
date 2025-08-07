@@ -142,20 +142,7 @@ function setActiveView(viewType, data = {}, options = {}) {
 }
 
 function setActiveArtifactId(id) {
-  // Check if this is a link artifact
-  const artifact = getArtifact(id);
-  
-  if (artifact && artifact.type === 'link') {
-    // For link artifacts, open in new tab instead of setting as active view
-    const latestVersion = artifact.versions[artifact.versions.length - 1];
-    if (latestVersion && latestVersion.content) {
-      const url = latestVersion.content.trim();
-      window.open(url, '_blank', 'noopener,noreferrer');
-    }
-    return;
-  }
-  
-  // For all other artifact types, set as active view
+  // Set as active view for all artifact types
   setActiveView('artifact', { artifactId: id });
 }
 

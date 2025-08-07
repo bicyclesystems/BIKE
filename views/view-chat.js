@@ -92,8 +92,6 @@ function renderChatView() {
     switch (type) {
       case 'html': return '🌐';
       case 'image': return '🖼️';
-      case 'link': return '🔗';
-      case 'files': return '📁';
       case 'markdown': return '📝';
       case 'css': return '🎨';
       case 'javascript': return '⚡';
@@ -105,25 +103,41 @@ function renderChatView() {
   // Helper function to organize artifacts by folder
   function organizeArtifactsByFolder() {
     const folderGroups = new Map();
+    const rootArtifacts = [];
     
     artifacts.forEach(artifact => {
       // Extract folder from path
       const path = artifact.path || '';
       const lastSlash = path.lastIndexOf('/');
       const folder = lastSlash >= 0 ? path.substring(0, lastSlash + 1) : '';
-      const folderKey = folder || 'root';
       
-      if (!folderGroups.has(folderKey)) {
-        folderGroups.set(folderKey, []);
+      if (!folder) {
+        // Root artifacts - don't put them in a folder group
+        rootArtifacts.push(artifact);
+      } else {
+        // Non-root artifacts - group by folder
+        if (!folderGroups.has(folder)) {
+          folderGroups.set(folder, []);
+        }
+        folderGroups.get(folder).push(artifact);
       }
-      folderGroups.get(folderKey).push(artifact);
     });
     
     // Convert to array format for rendering
     const groupedArtifacts = [];
+    
+    // First add root artifacts without folder grouping
+    rootArtifacts.forEach(artifact => {
+      groupedArtifacts.push({
+        isGroup: false,
+        artifact: artifact
+      });
+    });
+    
+    // Then add folder groups
     for (const [folder, folderArtifacts] of folderGroups) {
       if (folderArtifacts.length > 0) {
-        const folderTitle = folder === 'root' ? 'Root' : folder.replace('/', '');
+        const folderTitle = folder.replace('/', '');
         groupedArtifacts.push({
           isGroup: true,
           title: `📁 ${folderTitle}`,
@@ -148,24 +162,36 @@ function renderChatView() {
           ${organizedArtifacts.map(section => {
             let sectionHtml = '';
             
-            // Add group title if this is a grouped section
-            if (section.isGroup && section.title) {
+            if (section.isGroup) {
+              // Add group title for grouped sections
+              if (section.title) {
+                sectionHtml += `
+                  <div class="row align-center gap-s opacity-half" style="padding-top: 8px;">
+                    <span>${getTypeEmoji('group')}</span>
+                    <span style="font-weight: 500;">${section.title}</span>
+                  </div>
+                `;
+              }
+              
+              // Add artifacts in this group
+              sectionHtml += section.artifacts.map(artifact => `
+                <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')" style="padding-left: 24px;">
+                  <span>${getTypeEmoji(artifact.type)}</span>
+                  <span>${artifact.title}</span>
+                  <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
+                </div>
+              `).join('');
+            } else {
+              // Handle individual root artifacts (not in a group)
+              const artifact = section.artifact;
               sectionHtml += `
-                <div class="row align-center gap-s opacity-half" style="padding-top: 8px;">
-                  <span>${getTypeEmoji('group')}</span>
-                  <span style="font-weight: 500;">${section.title}</span>
+                <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')">
+                  <span>${getTypeEmoji(artifact.type)}</span>
+                  <span>${artifact.title}</span>
+                  <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
                 </div>
               `;
             }
-            
-            // Add artifacts in this section
-            sectionHtml += section.artifacts.map(artifact => `
-              <div class="row align-center gap-s opacity-hover cursor-pointer" onclick="window.context?.setActiveArtifactId('${artifact.id}')" style="${section.isGroup ? 'padding-left: 24px;' : ''}">
-                <span>${getTypeEmoji(artifact.type)}</span>
-                <span>${artifact.title}</span>
-                <span class="opacity-half">${artifact.versions.length} version${artifact.versions.length !== 1 ? 's' : ''}</span>
-              </div>
-            `).join('');
             
             return sectionHtml;
           }).join('')}

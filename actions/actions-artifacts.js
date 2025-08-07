@@ -12,7 +12,7 @@ const ARTIFACTS_ACTIONS = {
     optionalParams: ['type', 'messageId'],
     availableData: () => ({
       currentChatArtifacts: window.context?.getCurrentChatArtifacts() || [],
-      supportedTypes: ['html', 'markdown', 'text', 'image', 'link']
+      supportedTypes: ['html', 'markdown', 'text', 'image', 'files']
     }),
     handler: (params) => {
       const { content, type = null, messageId = Date.now().toString() } = params;
@@ -26,7 +26,7 @@ const ARTIFACTS_ACTIONS = {
           'Artifacts module not available'
         );
       }
-      const artifact = window.artifactsModule.createArtifact(content, messageId, type);
+      const artifact = window.artifactsModule.createArtifact(content, messageId, type, true);
       return window.actions.createStandardizedResult(
         'artifacts.create',
         'Create Artifact',
