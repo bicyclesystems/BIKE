@@ -13,9 +13,14 @@ const AI_CONFIG = {
     }
     return window.API_KEY;
   },
+  get CHAT_API_URL() {
+    if (!window.CHAT_API_URL) {
+      throw new Error('CHAT_API_URL not found. Please ensure config.js is loaded and CHAT_API_URL is set.');
+    }
+    return window.CHAT_API_URL;
+  },
   CHAT_MODEL: 'gpt-4o',
   IMAGE_MODEL: 'dall-e-3',
-  CHAT_API_URL: 'https://api.openai.com/v1/chat/completions',
   IMAGE_API_URL: 'https://api.openai.com/v1/images/generations'
 };
 
