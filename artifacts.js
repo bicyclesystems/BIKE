@@ -304,6 +304,21 @@ function init() {
   }
 }
 
+function waitForInit() {
+  return new Promise((resolve) => {
+    const checkArtifacts = () => {
+      if (window.artifacts && typeof window.artifacts.init === 'function') {
+        console.log('[ARTIFACTS] Module loaded, calling init()');
+        artifacts.init();
+        resolve();
+      } else {
+        setTimeout(checkArtifacts, 50);
+      }
+    };
+    checkArtifacts();
+  });
+}
+
 // =================== Module Exports ===================
 
 function initializeArtifactsModule() {
@@ -322,7 +337,10 @@ function initializeArtifactsModule() {
     deleteArtifactVersion,
     
     // Event handling
-    setupArtifactClickHandlers
+    setupArtifactClickHandlers,
+    
+    // Initialization helpers
+    waitForInit
   };
   
   // Backward compatibility

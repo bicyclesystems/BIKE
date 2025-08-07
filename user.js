@@ -240,6 +240,12 @@ async function logout() {
   }
 }
 
+async function initializeAuth() {
+  const session = await initAuth();
+  await updateAuthState(session);
+  return session;
+}
+
 function initAuth() {
   document.getElementById("auth-indicator")?.remove();
 
@@ -535,6 +541,7 @@ async function getUserMessages() {
 window.user = {
   loginWithEmail,
   logout,
+  initializeAuth,
   initAuth,
   getActiveSession,
   updateAuthState,

@@ -140,6 +140,22 @@ class SupabaseSync {
   }
 
   // =================== Authentication Integration ===================
+  
+  async initializeBackground(session) {
+    if (session && window.supabase) {
+      try {
+        await this.initializeWithAuth(window.supabase, session);
+        console.log('[SYNC] Background sync complete');
+      } catch (err) {
+        console.warn('[SYNC] Background sync failed:', err);
+      }
+    } else {
+      // Initialize sync in offline mode
+      console.log('[SYNC] Initializing sync in offline mode');
+      this.init();
+    }
+  }
+
   async initializeWithAuth(supabaseClient, session) {
     try {
   
