@@ -1,6 +1,216 @@
 // =================== AI Response Orchestration Module ===================
 // Pure response interpretation and system coordination - no content generation
 
+// =================== ORCHESTRATION UTILITIES ===================
+
+function findBestMatchingArtifact(title, type, content) {
+  const currentChatArtifacts = window.context?.getCurrentChatArtifacts() || [];
+  
+  // Private helper functions
+  const levenshteinDistance = (str1, str2) => {
+    const matrix = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  };
+  
+  const calculateSimilarity = (str1, str2) => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const editDistance = levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  };
+  
+  const extractHtmlElements = (html) => {
+    const tagMatches = html.match(/<(\w+)(?:\s[^>]*)?>/g) || [];
+    const classMatches = html.match(/class\s*=\s*["']([^"']+)["']/g) || [];
+    
+    const tags = tagMatches.map(tag => tag.match(/<(\w+)/)[1]);
+    const classes = classMatches.map(cls => cls.match(/class\s*=\s*["']([^"']+)["']/)[1]);
+    
+    return [...new Set([...tags, ...classes])];
+  };
+  
+  const calculateContentSimilarity = (content1, content2) => {
+    // For HTML content, compare structure
+    if (content1.includes('<html') && content2.includes('<html')) {
+      const elements1 = extractHtmlElements(content1);
+      const elements2 = extractHtmlElements(content2);
+      
+      const commonElements = elements1.filter(el => elements2.includes(el));
+      const totalElements = new Set([...elements1, ...elements2]).size;
+      
+      return totalElements > 0 ? commonElements.length / totalElements : 0;
+    }
+    
+    // For text content, use text similarity
+    return calculateSimilarity(content1.substring(0, 500), content2.substring(0, 500));
+  };
+  
+  // First, try exact title and type match
+  let match = currentChatArtifacts.find(a => a.title === title && a.type === type);
+  if (match) {
+    return match;
+  }
+  
+  // Try case-insensitive title match with same type
+  match = currentChatArtifacts.find(a => 
+    a.title.toLowerCase() === title.toLowerCase() && a.type === type
+  );
+  if (match) {
+    return match;
+  }
+  
+  // Try fuzzy title matching for refinements
+  match = currentChatArtifacts.find(a => {
+    if (a.type !== type) return false;
+    const aTitle = a.title.toLowerCase();
+    const newTitle = title.toLowerCase();
+    
+    const similarity = calculateSimilarity(aTitle, newTitle);
+    const contains = aTitle.includes(newTitle) || newTitle.includes(aTitle);
+    
+    return contains || similarity > ARTIFACT_CONFIG.thresholds.fuzzyMatch;
+  });
+  if (match) return match;
+  
+  // For HTML apps and similar content, check content similarity
+  if (['html', 'markdown', 'code'].includes(type)) {
+    match = currentChatArtifacts.find(a => {
+      if (a.type !== type) return false;
+      const latestVersion = a.versions[a.versions.length - 1];
+      const similarity = calculateContentSimilarity(latestVersion.content, content);
+      
+      return similarity > ARTIFACT_CONFIG.thresholds.structuralMatch;
+    });
+    if (match) return match;
+  }
+  
+  return null;
+}
+
+function shouldUpdateArtifact(existingArtifact, newContent) {
+  const latestVersion = existingArtifact.versions[existingArtifact.versions.length - 1];
+  
+  if (latestVersion.content.trim() === newContent.trim()) {
+    return false;
+  }
+  
+  // Private helper functions
+  const levenshteinDistance = (str1, str2) => {
+    const matrix = [];
+    for (let i = 0; i <= str2.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= str1.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[str2.length][str1.length];
+  };
+  
+  const calculateSimilarity = (str1, str2) => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    if (longer.length === 0) return 1.0;
+    const editDistance = levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  };
+  
+  const extractHtmlElements = (html) => {
+    const tagMatches = html.match(/<(\w+)(?:\s[^>]*)?>/g) || [];
+    const classMatches = html.match(/class\s*=\s*["']([^"']+)["']/g) || [];
+    const tags = tagMatches.map(tag => tag.match(/<(\w+)/)[1]);
+    const classes = classMatches.map(cls => cls.match(/class\s*=\s*["']([^"']+)["']/)[1]);
+    return [...new Set([...tags, ...classes])];
+  };
+  
+  const calculateContentSimilarity = (content1, content2) => {
+    if (content1.includes('<html') && content2.includes('<html')) {
+      const elements1 = extractHtmlElements(content1);
+      const elements2 = extractHtmlElements(content2);
+      const commonElements = elements1.filter(el => elements2.includes(el));
+      const totalElements = new Set([...elements1, ...elements2]).size;
+      return totalElements > 0 ? commonElements.length / totalElements : 0;
+    }
+    return calculateSimilarity(content1.substring(0, 500), content2.substring(0, 500));
+  };
+  
+  const contentSimilarity = calculateContentSimilarity(latestVersion.content, newContent);
+  return contentSimilarity > ARTIFACT_CONFIG.thresholds.contentSimilarity;
+}
+
+function isRefinedTitle(newTitle, oldTitle) {
+  const newLower = newTitle.toLowerCase();
+  const oldLower = oldTitle.toLowerCase();
+  
+  // Private helper functions
+  const levenshteinDistance = (str1, str2) => {
+    const matrix = [];
+    for (let i = 0; i <= str2.length; i++) matrix[i] = [i];
+    for (let j = 0; j <= str1.length; j++) matrix[0][j] = j;
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    return matrix[str2.length][str1.length];
+  };
+  
+  const calculateSimilarity = (str1, str2) => {
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    if (longer.length === 0) return 1.0;
+    const editDistance = levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  };
+  
+  return newTitle.length > oldTitle.length && 
+         (newLower.includes(oldLower) || calculateSimilarity(newLower, oldLower) > ARTIFACT_CONFIG.thresholds.fuzzyMatch);
+}
+
 // =================== UTILITY FUNCTIONS ===================
 
 function getContextForGeneration() {
@@ -44,7 +254,7 @@ async function orchestrateAIResponse(response, utilities) {
       }
       
       // Look for existing artifacts early for context-aware generation
-      const existingArtifact = window.artifactsModule.findBestMatchingArtifact(title, detectedType, content);
+      const existingArtifact = findBestMatchingArtifact(title, detectedType, content);
       
       // Use specialized modules for content generation
       try {
@@ -90,17 +300,17 @@ async function orchestrateAIResponse(response, utilities) {
       }
       
       // Re-evaluate existing artifact match with final content (in case type changed)
-      const finalExistingArtifact = window.artifactsModule.findBestMatchingArtifact(title, detectedType, finalContent);
+      const finalExistingArtifact = findBestMatchingArtifact(title, detectedType, finalContent);
       
       // Create or update artifact
       let artifact;
       const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
       
-      if (finalExistingArtifact && window.artifactsModule.shouldUpdateArtifact(finalExistingArtifact, finalContent)) {
+      if (finalExistingArtifact && shouldUpdateArtifact(finalExistingArtifact, finalContent)) {
         // Update existing artifact with new version
         artifact = window.artifactsModule.updateArtifact(finalExistingArtifact.id, finalContent);
         // Update title if it's been refined
-        if (title !== finalExistingArtifact.title && window.artifactsModule.isRefinedTitle(title, finalExistingArtifact.title)) {
+        if (title !== finalExistingArtifact.title && isRefinedTitle(title, finalExistingArtifact.title)) {
           artifact.title = title;
         }
       } else {
