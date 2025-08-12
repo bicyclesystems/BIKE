@@ -138,7 +138,7 @@ function generateArtifactPath(type, counter) {
 
 // =================== Core Artifact Functions ===================
 
-function createArtifact(content, messageId, type = null, shouldSetActive = false) {
+function create(content, messageId, type = null, shouldSetActive = false) {
   const activeChatId = utils.getActiveChatId();
   if (activeChatId === null || activeChatId === undefined) {
     return null;
@@ -181,7 +181,7 @@ function createArtifact(content, messageId, type = null, shouldSetActive = false
   return artifact;
 }
 
-function updateArtifact(id, content) {
+function update(id, content) {
   const artifacts = (window.context?.getArtifacts() || []).slice();
   const activeChatId = utils.getActiveChatId();
   const artifact = artifacts.find(a => a.id === id && a.chatId === activeChatId);
@@ -204,7 +204,7 @@ function updateArtifact(id, content) {
   return artifact;
 }
 
-function getArtifact(id) {
+function get(id) {
   return window.context?.findCurrentChatArtifact(id);
 }
 
@@ -248,7 +248,7 @@ function setupArtifactClickHandlers() {
 // =================== Version Management Functions ===================
 
 function getArtifactVersion(artifactId, versionIdx) {
-  const artifact = getArtifact(artifactId);
+  const artifact = get(artifactId);
   if (!artifact || versionIdx < 0 || versionIdx >= artifact.versions.length) {
     return null;
   }
@@ -256,7 +256,7 @@ function getArtifactVersion(artifactId, versionIdx) {
 }
 
 function setArtifactVersion(artifactId, versionIdx) {
-  const artifact = getArtifact(artifactId);
+  const artifact = get(artifactId);
   if (!artifact || versionIdx < 0 || versionIdx >= artifact.versions.length) {
     return false;
   }
@@ -325,9 +325,9 @@ function initializeArtifactsModule() {
   // Create unified interface
   window.artifactsModule = {
     // Core API
-    createArtifact,
-    updateArtifact,
-    getArtifact,
+    create,
+    update,
+    get,
     generateArtifactPath,
     init,
     

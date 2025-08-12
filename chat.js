@@ -11,7 +11,7 @@ window.API_KEY = window.API_KEY || "";
 // =================== CHAT MANAGEMENT ===================
 
 // Simple chat creation function (moved from actions)
-function createNewChat(options = {}) {
+function create(options = {}) {
   const { timestamp, title, description, endTime } = options;
   
   // Reset context for new chat
@@ -43,21 +43,191 @@ function createNewChat(options = {}) {
   });
   
   // Save and switch to new chat
-  window.memory?.saveAll();
-  switchToChat(id);
+  window.memory?.save();
+  switchChat(id);
   
   return chat;
 }
 
 // Simple chat switching function
-function switchToChat(chatId) {
+function switchChat(chatId) {
   if (!chatId) return;
   
   window.context?.setContext({ 
     activeChatId: chatId,
     activeView: null 
   });
-  window.memory?.saveAll();
+  window.memory?.save();
+}
+
+// Rename a chat
+function rename(title, chatId = null) {
+  if (!title || typeof title !== 'string') {
+    throw new Error('Title is required and must be a string');
+  }
+  
+  const trimmedTitle = title.trim();
+  if (trimmedTitle.length === 0) {
+    throw new Error('Chat title cannot be empty');
+  }
+  
+  const targetChatId = chatId || window.context?.getActiveChatId();
+  if (!targetChatId) {
+    throw new Error('No chat ID provided and no active chat');
+  }
+  
+  const chats = window.context?.getChats() || [];
+  const chat = chats.find(c => c.id === targetChatId);
+  if (!chat) {
+    throw new Error(`Chat ${targetChatId} does not exist`);
+  }
+  
+  const oldTitle = chat.title;
+  if (oldTitle === trimmedTitle) {
+    throw new Error(`Chat title is already "${trimmedTitle}"`);
+  }
+  
+  // Update the chat
+  const chatIndex = chats.findIndex(c => c.id === targetChatId);
+  const updatedChats = [...chats];
+  updatedChats[chatIndex] = { ...updatedChats[chatIndex], title: trimmedTitle };
+  
+  window.context?.setContext({ chats: updatedChats });
+  window.memory?.save();
+  
+  return { 
+    success: true, 
+    message: `Renamed chat from "${oldTitle}" to "${trimmedTitle}"`,
+    oldTitle,
+    newTitle: trimmedTitle,
+    chatId: targetChatId
+  };
+}
+
+// Set chat description
+function setDescription(description, chatId = null) {
+  if (description !== null && typeof description !== 'string') {
+    throw new Error('Description must be a string or null');
+  }
+  
+  const trimmedDescription = description ? description.trim() : "";
+  const targetChatId = chatId || window.context?.getActiveChatId();
+  if (!targetChatId) {
+    throw new Error('No chat ID provided and no active chat');
+  }
+  
+  const chats = window.context?.getChats() || [];
+  const chat = chats.find(c => c.id === targetChatId);
+  if (!chat) {
+    throw new Error(`Chat ${targetChatId} does not exist`);
+  }
+  
+  const oldDescription = chat.description || "";
+  if (oldDescription === trimmedDescription) {
+    throw new Error(`Chat description is already "${trimmedDescription}"`);
+  }
+  
+  // Update the chat
+  const chatIndex = chats.findIndex(c => c.id === targetChatId);
+  const updatedChats = [...chats];
+  updatedChats[chatIndex] = { ...updatedChats[chatIndex], description: trimmedDescription };
+  
+  window.context?.setContext({ chats: updatedChats });
+  window.memory?.save();
+  
+  return {
+    success: true,
+    message: trimmedDescription ? 
+      `Set chat "${chat.title}" description to "${trimmedDescription}"` :
+      `Cleared chat "${chat.title}" description`,
+    oldDescription,
+    newDescription: trimmedDescription,
+    chatId: targetChatId
+  };
+}
+
+// Schedule a chat
+function schedule(startTime, endTime, title = 'Scheduled Chat', description = '') {
+  if (!startTime || !endTime) {
+    throw new Error('startTime and endTime are required');
+  }
+  
+  const start = new Date(startTime);
+  const end = new Date(endTime);
+  
+  if (isNaN(start) || isNaN(end)) {
+    throw new Error('startTime and endTime must be valid ISO date strings');
+  }
+  
+  if (end <= start) {
+    throw new Error('End time must be after start time');
+  }
+  
+  // Create the scheduled chat
+  return create({
+    timestamp: start.toISOString(),
+    endTime: end.toISOString(),
+    title: title || 'Scheduled Chat',
+    description: description || ''
+  });
+}
+
+// Delete a chat
+function deleteChat(chatId, confirmDelete = false) {
+  const chats = window.context?.getChats() || [];
+  const chat = chats.find(c => c.id === chatId);
+  
+  if (!chat) {
+    throw new Error(`Chat ${chatId} does not exist`);
+  }
+  
+  // Prevent deleting the last chat
+  if (chats.length <= 1) {
+    throw new Error('Cannot delete the last remaining chat. Create a new chat first.');
+  }
+  
+  // Safety check - require confirmation for non-empty chats
+  const messagesByChat = window.context?.getMessagesByChat() || {};
+  const messages = messagesByChat[chatId] || [];
+  const artifacts = (window.context?.getArtifacts() || []).filter(a => a.chatId === chatId);
+  
+  if ((messages.length > 0 || artifacts.length > 0) && !confirmDelete) {
+    throw new Error(`Chat "${chat.title}" contains ${messages.length} messages and ${artifacts.length} artifacts. Set confirmDelete=true to proceed.`);
+  }
+  
+  // Perform the deletion
+  const updatedChats = chats.filter(c => c.id !== chatId);
+  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+  const updatedMessagesByChat = { ...currentMessagesByChat };
+  delete updatedMessagesByChat[chatId];
+  
+  const currentArtifacts = window.context?.getArtifacts() || [];
+  const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
+  
+  window.context?.setContext({
+    chats: updatedChats,
+    messagesByChat: updatedMessagesByChat,
+    artifacts: updatedArtifacts
+  });
+  
+  // Handle active chat switching
+  if (window.context?.getActiveChatId() === chatId) {
+    // Switch to the most recent chat
+    const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    const newActiveChatId = sortedChats[0].id;
+    switchChat(newActiveChatId);
+  }
+  
+  window.memory?.save();
+  
+  return {
+    success: true,
+    message: `Deleted chat "${chat.title}" with ${messages.length} messages and ${artifacts.length} artifacts`,
+    chatId,
+    chatTitle: chat.title,
+    deletedMessageCount: messages.length,
+    deletedArtifactCount: artifacts.length
+  };
 }
 
 // Typewriter animation state
@@ -1150,6 +1320,10 @@ window.messages = {
 
 // Export chat management functions
 window.chat = {
-  createNewChat,
-  switchToChat
+  create,
+  switchChat,
+  rename,
+  setDescription,
+  schedule,
+  deleteChat
 };

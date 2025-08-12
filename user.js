@@ -181,7 +181,7 @@ function toggleUI(show) {
 }
 
 // =================== Authentication Functions ===================
-async function loginWithEmail(email) {
+async function login(email) {
   if (!email) throw new Error("Email is required");
   if (!supabaseClient) throw new Error("Supabase client not available - running in offline mode");
   
@@ -211,8 +211,8 @@ async function logout() {
     userSession = null;
 
     // Purge all user data from localStorage
-    if (window.memory?.purgeAllData) {
-      window.memory.purgeAllData();
+    if (window.memory?.clear) {
+      window.memory.clear();
     }
 
     // Clear all application state
@@ -528,10 +528,106 @@ async function getUserMessages() {
 
   return data;
 }
+// Update user preferences
+function updatePreferences(preferences) {
+  if (!preferences || typeof preferences !== 'object') {
+    throw new Error('Preferences must be an object');
+  }
+  
+  // Use the context module to handle preferences
+  if (window.context && window.context.setUserPreferences) {
+    window.context.setUserPreferences(preferences);
+    return {
+      success: true,
+      message: `Updated preferences: ${Object.keys(preferences).join(', ')}`,
+      updatedFields: Object.keys(preferences),
+      preferences
+    };
+  } else {
+    throw new Error('Context module not available');
+  }
+}
+
+// Delete user account and all data
+async function deleteAccount(confirmationCode = null) {
+  // Check if memory and sync systems are available
+  if (!window.memory) {
+    throw new Error('Memory system is not loaded');
+  }
+
+  if (!window.syncManager) {
+    throw new Error('Sync system is not loaded');
+  }
+
+  const session = getActiveSession();
+  const userEmail = session?.user?.email || 'unknown user';
+  const userId = session?.user?.id || window.syncManager?.userId;
+  
+  // First, delete all user data and then the user account
+  try {
+    let userDeleted = false;
+    
+    if (userId && window.syncManager?.supabase) {
+      try {
+        // Delete all user tables/data from remote
+        const { error: dataError } = await window.syncManager.supabase
+          .from('user_data')
+          .delete()
+          .eq('user_id', userId);
+          
+        if (dataError) {
+          console.warn('[USER] Failed to delete remote user data:', dataError);
+          // Continue anyway since we'll clear local data
+        }
+        
+        // Delete the auth user account (this signs them out)
+        const { error: authError } = await window.syncManager.supabase.auth.admin.deleteUser(userId);
+        if (authError && !authError.message.includes('User not found')) {
+          console.error('[USER] Failed to delete auth user:', authError);
+          // Continue anyway since data is deleted
+        } else {
+          userDeleted = true;
+        }
+      } catch (error) {
+        console.error('[USER] Error during remote deletion:', error);
+        // Continue to local cleanup
+      }
+    }
+    
+    // Clear local data - account deletion should clear everything
+    window.memory.clear();
+    
+    // Clear sync queue
+    if (window.memory.clearSyncQueue) {
+      window.memory.clearSyncQueue();
+    }
+    
+    // Clear any cached user session
+    if (window.user && window.user.updateAuthState) {
+      window.user.updateAuthState(null);
+    }
+    
+    return {
+      success: true,
+      message: userDeleted ? 
+        `Account ${userEmail} and all data deleted successfully` :
+        `Local data cleared successfully. Remote account deletion ${userId ? 'may have failed' : 'not attempted (offline)'}`,
+      userEmail,
+      localCleared: true,
+      remoteDeleted: userDeleted,
+      wasOnline: !!userId
+    };
+  } catch (error) {
+    throw new Error(`Failed to delete account: ${error.message}`);
+  }
+}
+
 // =================== Public API ===================
 window.user = {
-  loginWithEmail,
+  login,
   logout,
+  updatePreferences,
+  deleteAccount,
   initializeAuth,
   initAuth,
   getActiveSession,

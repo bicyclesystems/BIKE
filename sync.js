@@ -374,7 +374,7 @@ class SupabaseSync {
 
       window.context?.setContext({ chats: localChats });
       if (window.memory?.saveAll) {
-        window.memory.saveAll();
+        window.memory.save();
       }
     }
   }

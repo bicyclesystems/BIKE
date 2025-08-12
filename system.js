@@ -53,7 +53,7 @@ const SYSTEM_SECTIONS = {
 - collaboration: "How do you want to use BIKE? (solo / with others)" - If user chooses "with others", suggest: "You can invite teammates from the settings menu."
 - aiTraits: "How would you like me to communicate? (e.g., casual, professional, detailed, creative)"
 
-MEMORY VIEW: If any preferences show NOT_SET, set "recommendedView": "memory" to help users set preferences.`,
+MEMORY VIEW: If any preferences show NOT_SET, execute "views.switchView" action with "viewId": "memory" to help users set preferences.`,
 
   PREFERENCES: `AUTO-SAVE (STEP 4): When user provides info for missing preferences, execute "user.updatePreferences" to save it. For aiTraits:
 - Add new: {"aiTraits": ["creative"], "traitAction": "add"}
@@ -76,21 +76,21 @@ After saving preference, immediately check for remaining missing preferences and
       "content": "The actual content or prompt for the artifact"
     }
   ],
-  "recommendedView": "artifact", // Optional: "artifact", "artifacts", "calendar", "chat", "memory", or null
   "actionsExecuted": [
     {
-      "actionId": "views.switch",
-      "params": {"viewId": "artifacts"},
-      "result": "Switched to artifacts view"
+      "actionId": "module.function",
+      "params": {"key": "value"},
+      "result": "Action performed"
     }
   ]
-}`,
+}
+
+IMPORTANT: When user makes a request (like "change theme"), you MUST include the corresponding action in actionsExecuted array.`,
 
   CAPABILITIES: `CAPABILITIES (STEP 6):
 - Artifact types and versioning capabilities discoverable from context data
-- Available actions and views provided in context data - use them in "actionsExecuted" array
-- File analysis capabilities available through artifacts module
-- Use recommendedView to auto-trigger view switches`,
+- Available functions are listed in context data - execute user requests by calling appropriate functions
+- Use format: {"actionId": "module.function", "params": {key: value}} in actionsExecuted array`,
 
   USAGE_GUIDELINES: `USAGE (STEP 7):
 - STRICT LIMIT: Keep messages to NO MORE than 2 sentences maximum. For longer explanations, create markdown artifact
@@ -192,14 +192,9 @@ async function buildSystemMessage(contextData = null, isContextualGuidance = fal
       parts.push(`Authentication: isLoggedIn: ${contextData.authStatus.isLoggedIn}, currentUser: ${contextData.authStatus.currentUser || 'null'}`);
     }
     
-    if (contextData.availableActions && contextData.availableActions.actionsByCategory) {
-      const allActions = [];
-      Object.values(contextData.availableActions.actionsByCategory).forEach(categoryActions => {
-        categoryActions.forEach(action => allActions.push(action.id));
-      });
-      if (allActions.length > 0) {
-        parts.push(`Available actions: ${allActions.join(', ')}`);
-      }
+    if (contextData.availableActions) {
+      // availableActions is now a formatted string from buildActionContext()
+      parts.push(contextData.availableActions);
     }
     
     if (contextData.userPreferences) {
@@ -247,11 +242,8 @@ async function buildSystemMessage(contextData = null, isContextualGuidance = fal
       capabilities.push(`${count} artifacts: ${types.join(', ')}`);
     }
     
-    if (contextData.availableActions?.actionsByCategory?.ARTIFACTS) {
-      const createAction = contextData.availableActions.actionsByCategory.ARTIFACTS.find(a => a.id === 'artifacts.create');
-      if (createAction?.currentData?.supportedTypes) {
-        capabilities.push(`Supported types: ${createAction.currentData.supportedTypes.join(', ')}`);
-      }
+    if (contextData.availableActions && contextData.availableActions.includes('artifactsModule: create')) {
+      capabilities.push('artifact creation via AI');
     }
     
     if (window.artifactsModule?.parseFile) {

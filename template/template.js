@@ -139,8 +139,8 @@
     }
     
     // Save all template chats to memory
-    if (window.memory && window.memory.saveAll) {
-      window.memory.saveAll();
+    if (window.memory && window.memory.save) {
+      window.memory.save();
     }
   }
   
@@ -157,8 +157,8 @@
   // Switch to a template chat
   function switchToTemplate(templateId) {
     if (templates[templateId]) {
-      if (window.chat && window.chat.switchToChat) {
-        window.chat.switchToChat(templateId);
+      if (window.chat && window.chat.switchChat) {
+        window.chat.switchChat(templateId);
         console.log(`🔄 Switched to template: ${templates[templateId].chatTitle}`);
       }
     } else {

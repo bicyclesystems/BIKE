@@ -46,9 +46,10 @@ function highlightContextWords(element = null) {
     });
   });
 
-  // Add actions from the actions registry
-  if (window.actions && window.actions.ACTIONS_REGISTRY) {
-    Object.values(window.actions.ACTIONS_REGISTRY).forEach(action => {
+  // Add actions from available functions
+  if (window.actionsView && window.actionsView.getAvailableActions) {
+    const actions = window.actionsView.getAvailableActions();
+    actions.forEach(action => {
       // Add full action names (e.g., "Create New Chat", "Switch View", etc.)
       const actionName = action.name.toLowerCase();
       if (!contextWords.has(actionName)) {
@@ -57,7 +58,7 @@ function highlightContextWords(element = null) {
           actionId: action.id,
           actionName: action.name,
           title: action.name,
-          description: action.description
+          description: `${action.name} from ${action.module}`
         });
       }
       
@@ -268,8 +269,9 @@ function extractContextReferences(element = null) {
   
   // Build action lookup
   const actionsByWord = new Map();
-  if (window.actions && window.actions.ACTIONS_REGISTRY) {
-    Object.values(window.actions.ACTIONS_REGISTRY).forEach(action => {
+  if (window.actionsView && window.actionsView.getAvailableActions) {
+    const actions = window.actionsView.getAvailableActions();
+    actions.forEach(action => {
       const actionName = action.name.toLowerCase();
       actionsByWord.set(actionName, action);
       

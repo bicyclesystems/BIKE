@@ -44,7 +44,7 @@ Core components:
 * **User** — owns data, initiates interactions. Supports organizations and roles.
 * **Context** — active conversation state. Tracks history, artifacts, and participants.
 * **Input** — visual interface for capturing messages. Handles UI/UX, context highlighting, and user input processing.
-* **System** — prompt builder. Converts app state into AI instructions using modular prompt sections.
+* **System** — prompt builder. Converts state into AI instructions using modular prompt sections.
 * **Process** — AI communication. Handles API calls, message flow, and response coordination.
 * **Orchestrate** — response coordinator. Orchestrates AI responses into system changes and operations.
 * **Actions** — system commands: create artifacts, switch views, manage chats.

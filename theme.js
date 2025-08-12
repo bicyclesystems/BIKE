@@ -58,6 +58,69 @@ const setSystemTheme = () => {
   injectColorVariables(theme);
 };
 
+// Set specific theme directly (for AI control)
+const setTheme = (themeName) => {
+  const validThemes = ['light', 'dark', 'system'];
+  if (!validThemes.includes(themeName)) {
+    return {
+      success: false,
+      message: `Invalid theme: ${themeName}. Valid themes: ${validThemes.join(', ')}`,
+      currentTheme: localStorage.getItem("theme") || "system"
+    };
+  }
+
+  const previousTheme = localStorage.getItem("theme") || "system";
+  
+  if (themeName === 'system') {
+    localStorage.removeItem("theme");
+    setSystemTheme();
+  } else {
+    document.documentElement.setAttribute("data-theme", themeName);
+    injectColorVariables(themeName);
+    localStorage.setItem("theme", themeName);
+  }
+
+  return {
+    success: true,
+    message: `Theme changed to ${themeName}`,
+    currentTheme: themeName,
+    previousTheme: previousTheme
+  };
+};
+
+// Toggle between system, light, and dark themes
+const toggle = () => {
+  const currentTheme = localStorage.getItem("theme") || "system";
+  let newTheme;
+
+  switch (currentTheme) {
+    case "system":
+      newTheme = "light";
+      document.documentElement.setAttribute("data-theme", "light");
+      injectColorVariables("light");
+      localStorage.setItem("theme", "light");
+      break;
+    case "light":
+      newTheme = "dark";
+      document.documentElement.setAttribute("data-theme", "dark");
+      injectColorVariables("dark");
+      localStorage.setItem("theme", "dark");
+      break;
+    case "dark":
+      newTheme = "system";
+      localStorage.removeItem("theme");
+      setSystemTheme();
+      break;
+  }
+
+  return { 
+    success: true, 
+    message: `Theme changed to ${newTheme}`,
+    currentTheme: newTheme,
+    previousTheme: currentTheme
+  };
+};
+
 // Handle system theme changes
 function handleSystemThemeChange(e) {
   const storedTheme = localStorage.getItem("theme");
@@ -78,6 +141,8 @@ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", han
 // Export functions for external use
 window.themeManager = {
   setSystemTheme,
+  setTheme,
+  toggle,
   injectColorVariables,
   THEME_COLORS
 }; 

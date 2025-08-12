@@ -146,7 +146,7 @@ const generateWeekDays = (startDate) => {
 
 // Render event
 const renderEvent = (event) => {
-  const clickHandler = event.chatId ? `onclick="window.chat.switchToChat('${event.chatId}')"` : '';
+  const clickHandler = event.chatId ? `onclick="window.chat.switchChat('${event.chatId}')"` : '';
   const isActive = event.color === "#3b82f6";
   const colorClass = isActive ? 'color-primary' : 'background-tertiary foreground-primary';
   
@@ -198,7 +198,7 @@ const renderCompactEventsList = () => {
       html += `
         <div class="column padding-xs radius-xs ${colorClass}" style="
           cursor: pointer;
-        " onclick="window.chat.switchToChat('${event.chatId}')">
+        " onclick="window.chat.switchChat('${event.chatId}')">
           <div style="font-weight: bold;">${formatTime(startTime.getHours())}</div>
           <div>${event.title}</div>
         </div>
@@ -219,7 +219,7 @@ const renderCompactEventsList = () => {
       html += `
         <div class="column padding-xs radius-xs ${colorClass}" style="
           cursor: pointer;
-        " onclick="window.chat.switchToChat('${event.chatId}')">
+        " onclick="window.chat.switchChat('${event.chatId}')">
           <div style="font-weight: bold;">${formatDayName(startTime)} ${formatDate(startTime)}</div>
           <div>${event.title}</div>
         </div>
@@ -419,8 +419,8 @@ const createChatAt = (date, hour) => {
   if (!window.context) return;
   const chatDate = new Date(date);
   chatDate.setHours(hour, 0, 0, 0);
-  if (window.chat && window.chat.createNewChat) {
-    window.chat.createNewChat({ timestamp: chatDate.toISOString() });
+  if (window.chat && window.chat.create) {
+    window.chat.create({ timestamp: chatDate.toISOString() });
   }
   if (window.views?.renderCurrentView) {
     window.views.renderCurrentView();

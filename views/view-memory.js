@@ -193,11 +193,11 @@ function refreshMemoryView() {
 
 function getAvailableActionsCount() {
   // Get all actions from the actions registry
-  if (!window.actions?.ACTIONS_REGISTRY) {
+    if (!window.actionsView?.getAvailableActions) {
     return 0;
   }
-
-  return Object.keys(window.actions.ACTIONS_REGISTRY).length;
+  
+  return window.actionsView.getAvailableActions().length;
 }
 
 // escapeHtml function removed - using window.utils.escapeHtml directly

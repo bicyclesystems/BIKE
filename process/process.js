@@ -63,6 +63,7 @@ async function generateContent(apiType, payload, options = {}) {
 
 async function processContext(input = null, isContextualGuidance = false) {
   const contextData = window.context ? window.context.getContext() : null;
+
   
   // Build system message using system module
   const systemMessage = window.systemModule ? 
@@ -108,7 +109,6 @@ async function processContext(input = null, isContextualGuidance = false) {
       return {
         message: content,
         artifacts: [],
-        recommendedView: null,
         actionsExecuted: []
       };
     }

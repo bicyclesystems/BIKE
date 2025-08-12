@@ -308,14 +308,14 @@ async function orchestrateAIResponse(response, utilities) {
       
       if (finalExistingArtifact && shouldUpdateArtifact(finalExistingArtifact, finalContent)) {
         // Update existing artifact with new version
-        artifact = window.artifactsModule.updateArtifact(finalExistingArtifact.id, finalContent);
+        artifact = window.artifactsModule.update(finalExistingArtifact.id, finalContent);
         // Update title if it's been refined
         if (title !== finalExistingArtifact.title && isRefinedTitle(title, finalExistingArtifact.title)) {
           artifact.title = title;
         }
       } else {
         // Create new artifact and make it active
-        artifact = createArtifact(finalContent, timestamp, detectedType, true);
+        artifact = create(finalContent, timestamp, detectedType, true);
         artifact.title = title;
       }
       
@@ -367,29 +367,40 @@ async function orchestrateAIResponse(response, utilities) {
 
     // Process reported actions simply
     if (response.actionsExecuted && Array.isArray(response.actionsExecuted)) {
+
       for (const actionReport of response.actionsExecuted) {
         if (actionReport.actionId && !actionReport.actionId.startsWith('artifacts.')) {
-          if (window.actions && window.actions.executeAction) {
-            try {
-              const result = await window.actions.executeAction(actionReport.actionId, actionReport.params || {});
-              actionResults.push({
-                actionId: actionReport.actionId,
-                actualResult: {
-                  actionName: actionReport.actionId.replace(/^[^.]+\./, ''),
-                  success: result.success
-                },
-                verification: result.success ? 'SUCCESS' : 'FAILED'
-              });
-            } catch (error) {
-              actionResults.push({
-                actionId: actionReport.actionId,
-                actualResult: {
-                  actionName: actionReport.actionId.replace(/^[^.]+\./, ''),
-                  success: false
-                },
-                verification: 'ERROR'
-              });
+          try {
+            // Direct function call - no registry needed
+            const [module, funcName] = actionReport.actionId.split('.');
+            const moduleObj = window[module];
+            
+            if (!moduleObj || typeof moduleObj[funcName] !== 'function') {
+              throw new Error(`Function ${actionReport.actionId} not found`);
             }
+            
+            const result = await moduleObj[funcName](...Object.values(actionReport.params || {}));
+            
+            actionResults.push({
+              actionId: actionReport.actionId,
+              actualResult: {
+                actionName: funcName,
+                success: true,
+                result
+              },
+              verification: 'SUCCESS'
+            });
+          } catch (error) {
+            console.error('[ACTIONS] Failed to execute:', actionReport.actionId, error.message);
+            actionResults.push({
+              actionId: actionReport.actionId,
+              actualResult: {
+                actionName: actionReport.actionId.replace(/^[^.]+\./, ''),
+                success: false,
+                error: error.message
+              },
+              verification: 'ERROR'
+            });
           }
         }
       }
@@ -400,7 +411,6 @@ async function orchestrateAIResponse(response, utilities) {
     const structuredData = {
       main: response.message,
       artifacts: response.artifacts,
-      recommendedView: response.recommendedView || null,
       actionsExecuted: response.actionsExecuted || [],
       actionResults: actionResults,
       fileAnalysisContext: response.fileAnalysisContext || null
@@ -434,15 +444,11 @@ async function orchestrateAIResponse(response, utilities) {
       }
     }
     
-    // Show recommended view if specified
-    if (response.recommendedView === 'artifact' && Object.keys(artifactIds).length > 0) {
+    // Auto-switch to artifact view when artifacts are created
+    if (Object.keys(artifactIds).length > 0) {
       const firstArtifactId = Object.values(artifactIds)[0];
       if (window.context && window.context.setActiveArtifactId) {
         window.context.setActiveArtifactId(firstArtifactId);
-      }
-    } else if (response.recommendedView && response.recommendedView !== 'artifact') {
-      if (window.context && window.context.setActiveView) {
-        window.context.setActiveView(response.recommendedView);
       }
     }
 
@@ -471,7 +477,6 @@ async function orchestrateAIResponse(response, utilities) {
     structuredData: {
       main: typeof response === 'string' ? response : 'Invalid response format',
       artifacts: [],
-      recommendedView: null,
       actionsExecuted: [],
       actionResults: []
     },

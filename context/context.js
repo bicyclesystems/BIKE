@@ -75,7 +75,7 @@ function getActiveMessages() {
 
 function setActiveMessages(messages) {
   setContext({ messagesByChat: { ...AppContext.messagesByChat, [AppContext.activeChatId]: messages } });
-  window.memory?.saveAll();
+  window.memory?.save();
 }
 
 
@@ -171,6 +171,36 @@ function getArtifact(id) {
   return AppContext.artifacts.find(a => a.id === id);
 }
 
+// =================== Available Actions Context ===================
+
+function buildActionContext() {
+  // Scan window objects for available functions (for AI context only)
+  const APP_MODULES = ['chat', 'user', 'memory', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
+  const byModule = {};
+  
+  for (const moduleName of APP_MODULES) {
+    const moduleObj = window[moduleName];
+    if (!moduleObj || typeof moduleObj !== 'object') continue;
+    
+    const functions = Object.entries(moduleObj)
+      .filter(([, value]) => typeof value === 'function')
+      .map(([name]) => name);
+    
+    if (functions.length > 0) {
+      byModule[moduleName] = functions;
+    }
+  }
+  
+  const moduleList = Object.entries(byModule)
+    .map(([module, functions]) => `${module}: ${functions.join(', ')}`)
+    .join('\n');
+  
+  return `Available Functions:
+${moduleList}
+
+Format: Use in actionsExecuted as 'module.function'`;
+}
+
 // =================== AI Context Integration ===================
 
 function getContext() {
@@ -197,7 +227,7 @@ function getContext() {
     // Current context data
     activeView: AppContext.activeView,
     availableViews: getViewTypes(),
-    availableActions: window.actions?.buildActionContext() || {},
+    availableActions: buildActionContext(),
     activeChatId: AppContext.activeChatId,
     messages: AppContext.messages,
     activeVersionIdxByArtifact: AppContext.activeVersionIdxByArtifact
@@ -219,7 +249,7 @@ async function init(session = null) {
     if (isAuthenticated) {
     // AUTHENTICATED: Load existing data normally
     console.log('[CONTEXT] Initializing for authenticated user');
-    window.memory?.loadAll();
+    window.memory?.load();
     
     // Set up initial active chat from existing data
     const initialChatId = window.memory?.loadActiveChatId() || (AppContext.chats[0] && AppContext.chats[0].id);
@@ -227,7 +257,7 @@ async function init(session = null) {
     
     // Create new chat if none exist
     if (!AppContext.activeChatId && AppContext.chats.length === 0) {
-      window.chat?.createNewChat();
+      window.chat?.create();
     } else if (!AppContext.activeChatId) {
       setContext({ activeChatId: AppContext.chats[0].id });
     }
@@ -275,7 +305,7 @@ async function init(session = null) {
     });
     
     // Create a new chat for the fresh guest session
-    window.chat?.createNewChat();
+    window.chat?.create();
   }
 }
 

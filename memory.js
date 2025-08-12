@@ -227,7 +227,7 @@ async function loadArtifactsFromIndexedDB() {
 }
 
 // =================== Core Data Persistence ===================
-function saveAll(immediate = false) {
+function save(immediate = false) {
   if (immediate) {
     // Immediate saves for critical operations (like page unload)
     localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
@@ -255,7 +255,7 @@ function saveAll(immediate = false) {
   });
 }
 
-function loadAll() {
+function load() {
   setContext({
     chats: JSON.parse(localStorage.getItem(CHATS_KEY) || '[]'),
     messagesByChat: JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'),
@@ -482,7 +482,7 @@ function clearSyncQueue() {
 }
 
 // =================== Data Cleanup ===================
-function purgeAllData() {
+function clear() {
   localStorage.removeItem(CHATS_KEY);
   localStorage.removeItem(MESSAGES_KEY);
   localStorage.removeItem(ARTIFACTS_KEY);
@@ -538,8 +538,8 @@ function getContextData() {
 // =================== Public API ===================
 window.memory = {
   // Core operations
-  saveAll,
-  loadAll,
+  save,
+  load,
   saveArtifacts,
   loadArtifacts,
   
@@ -567,7 +567,7 @@ window.memory = {
   clearSyncQueue,
   
   // Cleanup and status
-  purgeAllData,
+  clear,
   initMemory,
   getStorageStatus,
   

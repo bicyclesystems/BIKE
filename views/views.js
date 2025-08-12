@@ -94,7 +94,7 @@ const VIEWS_REGISTRY = {
     requiredParams: [],
     optionalParams: [],
     availableData: () => ({
-      actions: window.actions?.ACTIONS_REGISTRY ? Object.values(window.actions.ACTIONS_REGISTRY) : []
+      actions: window.actionsView?.getAvailableActions ? window.actionsView.getAvailableActions() : []
     }),
     render: (data) => {
       return window.actionsView.renderActionsView();
@@ -307,6 +307,42 @@ function init() {
   renderCurrentView(false); // No transition on init
 }
 
+// Switch to a view
+function switchView(viewId, data = {}) {
+  if (!viewId) {
+    throw new Error('viewId is required');
+  }
+  
+  const validation = validateViewParams(viewId, data);
+  if (!validation.valid) {
+    throw new Error(validation.error);
+  }
+  
+  const view = getView(viewId);
+  if (!view) {
+    throw new Error(`View ${viewId} not found`);
+  }
+  
+  // Special handling for artifact view - validate artifact exists
+  if (viewId === 'artifact' && data.artifactId) {
+    const artifact = window.context?.findCurrentChatArtifact(data.artifactId);
+    if (!artifact) {
+      throw new Error(`Artifact ${data.artifactId} not found`);
+    }
+  }
+  
+  // Switch to the view
+  window.context.setActiveView(view.type, data);
+  
+  return {
+    success: true,
+    message: `Switched to ${view.name} view`,
+    viewId,
+    viewName: view.name,
+    data
+  };
+}
+
 // Export functions for global access
 window.views = {
   // Registry access
@@ -314,6 +350,7 @@ window.views = {
   getAllViews,
   getViewsByType,
   validateViewParams,
+  switchView,
   VIEWS_REGISTRY,
   // UI functions
   renderViewUI,
