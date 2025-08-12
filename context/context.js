@@ -227,7 +227,7 @@ async function init(session = null) {
     
     // Create new chat if none exist
     if (!AppContext.activeChatId && AppContext.chats.length === 0) {
-      window.actions?.executeAction('chat.create', {});
+      await window.actions?.executeAction('chat.create', {});
     } else if (!AppContext.activeChatId) {
       setContext({ activeChatId: AppContext.chats[0].id });
     }
@@ -275,7 +275,7 @@ async function init(session = null) {
     });
     
     // Create a new chat for the fresh guest session
-    window.actions?.executeAction('chat.create', {});
+    await window.actions?.executeAction('chat.create', {});
   }
 }
 

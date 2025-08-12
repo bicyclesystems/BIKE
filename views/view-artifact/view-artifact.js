@@ -59,6 +59,51 @@ function generateVersionIndicator(artifact, currentVersionIdx) {
 
 // Import modular renderers - moved to specialized files
 
+// Unified artifact renderer - used by both view-artifact.js and view-artifacts.js
+async function renderArtifactContent(artifact, currentVersionIdx = null, versionIndicator = null) {
+  if (!artifact) {
+    return renderErrorMessage('Artifact not found');
+  }
+
+  // Default to latest version if not specified
+  const versionIdx = currentVersionIdx ?? artifact.versions.length - 1;
+  const currentVersion = artifact.versions[versionIdx];
+  
+  if (!currentVersion) {
+    return renderErrorMessage('Version not found');
+  }
+
+  const content = currentVersion.content;
+
+  // Use modular renderers for type-specific content
+  if (artifact.type === 'image' && (content.startsWith('[[image:') || content.trim().startsWith('<svg'))) {
+    return window.imageArtifactRenderer.renderImageArtifact(artifact, versionIdx, versionIndicator);
+  }
+
+  if (artifact.type === 'html') {
+    return await window.htmlArtifactRenderer.renderHtmlArtifact(artifact, versionIdx, versionIndicator);
+  }
+
+  if (artifact.type === 'markdown') {
+    return window.markdownArtifactRenderer.renderMarkdownArtifact(artifact, versionIdx, versionIndicator);
+  } else {
+    // Handle other artifact types (text, etc.)
+    const contentHtml = window.textArtifactRenderer.renderTextArtifact(artifact, versionIdx, versionIndicator);
+    
+    // For text artifacts, wrap with version indicator if provided
+    if (versionIndicator) {
+      return `
+        <div class="column">
+          <div class="row justify-end padding-s">${versionIndicator}</div>
+          ${contentHtml}
+        </div>
+      `;
+    }
+    
+    return contentHtml;
+  }
+}
+
 // Render artifact view for different content types
 async function renderArtifactView(data) {
   const { artifactId } = data;
@@ -69,45 +114,10 @@ async function renderArtifactView(data) {
   }
 
   const currentVersionIdx = window.context?.getActiveVersionIndex(artifactId) ?? artifact.versions.length - 1;
-  const currentVersion = artifact.versions[currentVersionIdx];
-  
-  if (!currentVersion) {
-    return renderErrorMessage('Version not found');
-  }
-
-  const content = currentVersion.content;
   const versionIndicator = generateVersionIndicator(artifact, currentVersionIdx);
 
-  // Use modular renderers for type-specific content
-  if (artifact.type === 'image' && (content.startsWith('[[image:') || content.trim().startsWith('<svg'))) {
-    return window.imageArtifactRenderer.renderImageArtifact(artifact, currentVersionIdx, versionIndicator);
-  }
-
-  if (artifact.type === 'html') {
-    return await window.htmlArtifactRenderer.renderHtmlArtifact(artifact, currentVersionIdx, versionIndicator);
-  }
-
-
-
-  // Use modular renderers for remaining types
-  let contentHtml = '';
-
-  if (artifact.type === 'markdown') {
-    // For markdown, return just the content without any artifact info
-    return window.markdownArtifactRenderer.renderMarkdownArtifact(artifact, currentVersionIdx, versionIndicator);
-  } else {
-    // Handle other artifact types (text, etc.)
-    contentHtml = window.textArtifactRenderer.renderTextArtifact(artifact, currentVersionIdx, versionIndicator);
-  }
-
-  // Generate version management UI for standard artifact types
-
-  return `
-    <div class="column">
-      ${versionIndicator ? `<div class="row justify-end padding-s">${versionIndicator}</div>` : ''}
-      ${contentHtml}
-    </div>
-  `;
+  // Use the unified renderer
+  return await renderArtifactContent(artifact, currentVersionIdx, versionIndicator);
 }
 
 
@@ -165,6 +175,7 @@ function switchToArtifactVersion(artifactId, versionIdx) {
 // Export for global access
 window.artifactView = {
   renderArtifactView,
+  renderArtifactContent,  // Export unified renderer for use in view-artifacts.js
   toggleVersionHistory,
   switchToArtifactVersion,
   generateVersionIndicator

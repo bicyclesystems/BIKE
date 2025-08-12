@@ -41,7 +41,7 @@ const VIEWS_REGISTRY = {
       totalArtifacts: (window.context?.getCurrentChatArtifacts() || []).length,
       
     }),
-    render: (data) => window.artifactsView.renderArtifactsView(data)
+    render: async (data) => await window.artifactsView.renderArtifactsView(data)
   },
   
   'artifact': {
@@ -150,6 +150,7 @@ function validateViewParams(viewId, params = {}) {
 
 // State for managing transitions
 let isTransitioning = false;
+let lastViewType = null;
 
 async function renderCurrentView(withTransition = true) {
   const viewElement = window.context?.getViewElement();
@@ -169,11 +170,21 @@ async function renderCurrentView(withTransition = true) {
   
   // Get new content
   const activeView = window.context?.getActiveView();
+  const currentViewType = activeView ? activeView.type : 'chat';
+  
+  // Call cleanup for previous view if switching
+  if (lastViewType && lastViewType !== currentViewType) {
+    if (lastViewType === 'calendar' && window.calendarView?.cleanup) {
+      window.calendarView.cleanup();
+    }
+    // Add other view cleanups here as needed
+  }
+  
   let newHtml = '';
   
   if (!activeView) {
-    // Always show memory view when activeView is null
-    newHtml = window.memoryView.renderMemoryView();
+    // Show chat view when activeView is null (default view)
+    newHtml = window.chatView.renderChatView();
   } else {
     const { type, data } = activeView;
     
@@ -188,6 +199,9 @@ async function renderCurrentView(withTransition = true) {
       newHtml = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
     }
   }
+  
+  // Update last view type
+  lastViewType = currentViewType;
   
   // If no transition requested or view is empty, render immediately
   if (!withTransition || !currentViewElement.innerHTML.trim()) {

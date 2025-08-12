@@ -51,10 +51,60 @@ const generateChatEvents = () => {
 
 // Calendar state
 let currentWeekOffset = 0;
+let clockViewMode = false; // false = calendar, true = clock
 
 // Navigation
 const navigateWeek = (direction) => {
   currentWeekOffset += direction;
+  renderCurrentView();
+};
+
+// Clock update interval
+let clockInterval = null;
+
+// Update only clock elements without full re-render
+const updateClockElements = () => {
+  if (!clockViewMode) return;
+  
+  const now = new Date();
+  const hours = now.getHours() % 12;
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  
+  // Calculate angles
+  const hourAngle = (hours * 30) + (minutes * 0.5);
+  const minuteAngle = minutes * 6;
+  const secondAngle = seconds * 6;
+  
+  // Update clock hands
+  const hourHand = document.querySelector('.clock-hour-hand');
+  const minuteHand = document.querySelector('.clock-minute-hand');
+  const secondHand = document.querySelector('.clock-second-hand');
+  const digitalTime = document.querySelector('.clock-digital-time');
+  
+  if (hourHand && minuteHand && secondHand && digitalTime) {
+    hourHand.style.transform = `translateX(-50%) translateY(-100%) rotate(${hourAngle}deg)`;
+    minuteHand.style.transform = `translateX(-50%) translateY(-100%) rotate(${minuteAngle}deg)`;
+    secondHand.style.transform = `translateX(-50%) translateY(-100%) rotate(${secondAngle}deg)`;
+    digitalTime.textContent = now.toLocaleTimeString();
+  }
+};
+
+// Clock view toggle
+const toggleClockView = () => {
+  clockViewMode = !clockViewMode;
+  
+  if (clockViewMode) {
+    // Start clock update interval - only update elements, not full re-render
+    clockInterval = setInterval(updateClockElements, 1000);
+  } else {
+    // Clear clock update interval
+    if (clockInterval) {
+      clearInterval(clockInterval);
+      clockInterval = null;
+    }
+  }
+  
   renderCurrentView();
 };
 
@@ -97,23 +147,201 @@ const generateWeekDays = (startDate) => {
 // Render event
 const renderEvent = (event) => {
   const clickHandler = event.chatId ? `onclick="window.calendarView.switchToChat('${event.chatId}')"` : '';
-  const cursor = event.chatId ? 'cursor: pointer;' : '';
+  const isActive = event.color === "#3b82f6";
+  const colorClass = isActive ? 'color-primary' : 'background-tertiary foreground-primary';
   
-  return `<div style="
-    background: ${event.color}; 
-    color: white; 
-    padding: 2px 4px;
+  return `<div class="padding-xs radius-xs ${colorClass}" style="
     margin: 1px;
-    border-radius: 2px;
-    font-size: 11px;
     overflow: hidden;
-    ${cursor}
+    ${event.chatId ? 'cursor: pointer;' : ''}
   " ${clickHandler}>
     ${event.title}
   </div>`;
 };
 
+// Render compact events list for clock view
+const renderCompactEventsList = () => {
+  const chatEvents = generateChatEvents();
+  const today = new Date();
+  
+  // Get today's events
+  const todayEvents = chatEvents.filter(event => {
+    const eventDate = new Date(event.start);
+    return eventDate.toDateString() === today.toDateString();
+  });
+  
+  // Get upcoming events (next 3 days)
+  const upcomingEvents = chatEvents.filter(event => {
+    const eventDate = new Date(event.start);
+    const threeDaysFromNow = new Date(today);
+    threeDaysFromNow.setDate(today.getDate() + 3);
+    return eventDate > today && eventDate <= threeDaysFromNow;
+  }).slice(0, 5); // Limit to 5 upcoming events
+  
+  let html = `
+    <div class="column padding-m background-secondary radius-s" style="
+      max-width: 300px;
+      margin-left: 20px;
+    ">
+      <h3 class="opacity-s" style="margin: 0 0 15px 0;">Events</h3>
+  `;
+  
+  if (todayEvents.length > 0) {
+    html += `
+      <div class="column gap-xs" style="margin-bottom: 15px;">
+        <h4 class="opacity-s" style="margin: 0;">Today</h4>
+    `;
+    todayEvents.forEach(event => {
+      const startTime = new Date(event.start);
+      const isActive = event.color === "#3b82f6";
+      const colorClass = isActive ? 'color-primary' : 'background-tertiary foreground-primary';
+      html += `
+        <div class="column padding-xs radius-xs ${colorClass}" style="
+          cursor: pointer;
+        " onclick="window.calendarView.switchToChat('${event.chatId}')">
+          <div style="font-weight: bold;">${formatTime(startTime.getHours())}</div>
+          <div>${event.title}</div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+  
+  if (upcomingEvents.length > 0) {
+    html += `
+      <div class="column gap-xs">
+        <h4 class=" opacity-s" style="margin: 0;">Upcoming</h4>
+    `;
+    upcomingEvents.forEach(event => {
+      const startTime = new Date(event.start);
+      const isActive = event.color === "#3b82f6";
+      const colorClass = isActive ? 'color-primary' : 'background-tertiary foreground-primary';
+      html += `
+        <div class="column padding-xs radius-xs ${colorClass}" style="
+          cursor: pointer;
+        " onclick="window.calendarView.switchToChat('${event.chatId}')">
+          <div style="font-weight: bold;">${formatDayName(startTime)} ${formatDate(startTime)}</div>
+          <div>${event.title}</div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+  
+  if (todayEvents.length === 0 && upcomingEvents.length === 0) {
+    html += `<div class="opacity-s" style="font-style: italic;">No upcoming events</div>`;
+  }
+  
+  html += `</div>`;
+  return html;
+};
+
+// Render analog clock
+const renderAnalogClock = () => {
+  const now = new Date();
+  const hours = now.getHours() % 12;
+  const minutes = now.getMinutes();
+  const seconds = now.getSeconds();
+  
+  // Calculate angles
+  const hourAngle = (hours * 30) + (minutes * 0.5);
+  const minuteAngle = minutes * 6;
+  const secondAngle = seconds * 6;
+  
+  return `
+    <div class="column align-center justify-center padding-xl">
+      <div style="
+        width: 300px; 
+        height: 300px; 
+        border: 1px solid var(--color-tertiary-background); 
+        border-radius: 50%; 
+        position: relative; 
+        background: var(--color-primary-background);
+      ">
+        <!-- Hour hand -->
+        <div class="clock-hour-hand" style="
+          position: absolute;
+          width: 3px;
+          height: 60px;
+          background: var(--color-primary-foreground);
+          left: 50%;
+          top: 50%;
+          transform-origin: 50% 100%;
+          transform: translateX(-50%) translateY(-100%) rotate(${hourAngle}deg);
+        "></div>
+        
+        <!-- Minute hand -->
+        <div class="clock-minute-hand" style="
+          position: absolute;
+          width: 2px;
+          height: 90px;
+          background: var(--color-primary-foreground);
+          left: 50%;
+          top: 50%;
+          transform-origin: 50% 100%;
+          transform: translateX(-50%) translateY(-100%) rotate(${minuteAngle}deg);
+        "></div>
+        
+        <!-- Second hand -->
+        <div class="clock-second-hand" style="
+          position: absolute;
+          width: 1px;
+          height: 100px;
+          background: var(--color-negative);
+          left: 50%;
+          top: 50%;
+          transform-origin: 50% 100%;
+          transform: translateX(-50%) translateY(-100%) rotate(${secondAngle}deg);
+        "></div>
+        
+        <!-- Center dot -->
+        <div style="
+          position: absolute;
+          width: 6px;
+          height: 6px;
+          background: var(--color-primary-foreground);
+          border-radius: 50%;
+          left: 50%;
+          top: 50%;
+          transform: translate(-50%, -50%);
+        "></div>
+      </div>
+    </div>
+  `;
+};
+
+// Render clock view
+const renderClockView = () => {
+  // Start clock update interval if not already running
+  if (!clockInterval) {
+    clockInterval = setInterval(updateClockElements, 1000);
+  }
+  
+  return `
+    <div class="column padding-m">
+      <!-- Navigation -->
+      <div class="row align-center justify-center gap-s" style="margin-bottom: 20px;">
+        <button onclick="window.calendarView.navigateWeek(-1)" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">‹ Prev</button>
+        <span style="font-weight: bold;">${formatMonthYear(new Date())}</span>
+        <button onclick="window.calendarView.navigateWeek(1)" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">Next ›</button>
+        <button onclick="window.calendarView.toggleClockView()" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">📅 Calendar</button>
+      </div>
+      
+      <!-- Clock and Events Layout -->
+      <div class="row align-start justify-center">
+        ${renderAnalogClock()}
+        ${renderCompactEventsList()}
+      </div>
+    </div>
+  `;
+};
+
 function renderCalendarView() {
+  // Return clock view if clock mode is active
+  if (clockViewMode) {
+    return renderClockView();
+  }
+  
   const chatEvents = generateChatEvents();
   const today = new Date();
   
@@ -127,23 +355,24 @@ function renderCalendarView() {
   const timeSlots = generateTimeSlots();
   
   let html = `
-    <div style="font-family: monospace; padding: 10px;">
+    <div class="column padding-m">
       <!-- Navigation -->
-      <div style="text-align: center; margin-bottom: 20px;">
-        <button onclick="window.calendarView.navigateWeek(-1)" style="margin-right: 10px;">‹ Prev</button>
+      <div class="row align-center justify-center gap-s" style="margin-bottom: 20px;">
+        <button onclick="window.calendarView.navigateWeek(-1)" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">‹ Prev</button>
         <span style="font-weight: bold;">${formatMonthYear(weekDays[0])}</span>
-        <button onclick="window.calendarView.navigateWeek(1)" style="margin-left: 10px;">Next ›</button>
+        <button onclick="window.calendarView.navigateWeek(1)" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">Next ›</button>
+        <button onclick="window.calendarView.toggleClockView()" class="padding-xs background-secondary border radius-xs" style="cursor: pointer;">🕐 Clock</button>
       </div>
       
       <!-- Calendar Grid -->
-      <div style="display: flex; border: 1px solid #ccc;">
+      <div class="row border">
         <!-- Time Column -->
-        <div style="width: 60px; border-right: 1px solid #ccc;">
-          <div style="height: 40px; border-bottom: 1px solid #ccc;"></div>`;
+        <div class="border-right" style="width: 60px;">
+          <div class="border-bottom" style="height: 40px;"></div>`;
   
   // Time labels
   timeSlots.forEach(hour => {
-    html += `<div style="height: 30px; border-bottom: 1px solid #eee; padding: 5px; font-size: 10px; text-align: center;">
+    html += `<div class="padding-xs text-center" style="height: 30px; border-bottom: 1px solid #eee;">
       ${formatTime(hour)}
     </div>`;
   });
@@ -153,9 +382,10 @@ function renderCalendarView() {
   // Day columns
   weekDays.forEach((day, dayIndex) => {
     const isToday = day.toDateString() === today.toDateString();
-    html += `<div style="flex: 1; border-right: 1px solid #ccc;">
+    const todayClass = isToday ? 'background-secondary' : '';
+    html += `<div class="box border-right">
       <!-- Day header -->
-      <div style="height: 40px; border-bottom: 1px solid #ccc; padding: 5px; text-align: center; font-size: 12px; ${isToday ? 'background: #e3f2fd;' : ''}">
+      <div class="padding-xs text-center border-bottom ${todayClass}" style="height: 40px;">
         ${formatDayName(day)} ${formatDate(day)}
       </div>`;
     
@@ -164,7 +394,7 @@ function renderCalendarView() {
       const eventsForSlot = chatEvents.filter(event => isEventOnDay(event, day) && getEventHour(event) === hour);
       html += `<div style="height: 30px; border-bottom: 1px solid #eee; position: relative;"`;
       if (eventsForSlot.length === 0) {
-        html += ` onclick=\"window.calendarView.createChatAt('${day.toISOString()}',${hour})\" style=\"cursor:pointer;\" onmouseover=\"this.style.backgroundColor='#f5f5f5'\" onmouseout=\"this.style.backgroundColor=''\"`;
+        html += ` onclick=\"window.calendarView.createChatAt('${day.toISOString()}',${hour})\" style=\"cursor:pointer;\" onmouseover=\"this.style.backgroundColor='var(--color-secondary-background)'\" onmouseout=\"this.style.backgroundColor=''\"`;
       }
       html += '>';
       // Add events for this hour and day
@@ -202,10 +432,21 @@ const createChatAt = (date, hour) => {
   }
 };
 
+// Cleanup function
+const cleanup = () => {
+  if (clockInterval) {
+    clearInterval(clockInterval);
+    clockInterval = null;
+  }
+  clockViewMode = false;
+};
+
 // Export
 window.calendarView = {
   renderCalendarView,
   navigateWeek,
+  toggleClockView,
   switchToChat,
-  createChatAt
+  createChatAt,
+  cleanup
 }; 

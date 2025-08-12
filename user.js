@@ -340,14 +340,8 @@ function initializeMainApp() {
     `[AUTH] Found ${chats.length} chats, active: ${activeChatId || "none"}`
   );
 
-  if (chats.length === 0) {
-    console.log('[AUTH] Creating new chat');
-    window.actions.executeAction("chat.create", {});
-  } else if (!activeChatId) {
-    console.log('[AUTH] Setting first chat as active');
-    window.context.setActiveChat(chats[0].id);
-  }
-
+  // Context initialization already handled chat creation and activation
+  // Just load the active chat and render the view
   if (window.context.getActiveChatId()) {
     window.context.loadChat();
   }
@@ -364,11 +358,8 @@ async function handleAuthenticatedState() {
   // Start smart session monitoring for authenticated users
   startSessionMonitoring();
 
-  // Show memory view if no active view is set
-  const currentView = window.context.getActiveView();
-  if (window.context?.setActiveView && !currentView) {
-    window.context.setActiveView("memory", {}, { withTransition: false });
-  }
+  // Let the view system handle the default view (chat) when no active view is set
+  // This allows the natural chat view to be shown instead of forcing memory view
 
   initializeMainApp();
   

@@ -546,16 +546,14 @@ function setupMessageEventHandlers(isShowAllMode) {
       el.onclick = createToggleHandler(!isShowAllMode);
       el.classList.add("cursor-pointer", "transition", "hover-grow");
 
-      // Add hover blur effect for single message mode
-      if (!isShowAllMode) {
-        el.onmouseenter = () => {
-          window.inputModule.blurViews();
-        };
+      // Add hover blur effect for both single message and show all modes
+      el.onmouseenter = () => {
+        window.inputModule.blurViews();
+      };
 
-        el.onmouseleave = () => {
-          window.inputModule.unblurViews();
-        };
-      }
+      el.onmouseleave = () => {
+        window.inputModule.unblurViews();
+      };
     }
   );
 

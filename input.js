@@ -68,9 +68,9 @@ class InputManager {
     this.inputElement = document.getElementById('input');
   }
 
-  // Cached DOM elements
+  // Dynamic DOM elements (no caching to avoid stale references during view switching)
   get viewElement() {
-    return this._viewElement || (this._viewElement = document.getElementById('view'));
+    return window.context?.getViewElement() || document.getElementById('view');
   }
 
   // =================== Visibility & Animation Management ===================
