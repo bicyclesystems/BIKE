@@ -157,8 +157,8 @@
   // Switch to a template chat
   function switchToTemplate(templateId) {
     if (templates[templateId]) {
-      if (window.actions && window.actions.executeAction) {
-        window.actions.executeAction('chat.switch', { chatId: templateId });
+      if (window.chat && window.chat.switchToChat) {
+        window.chat.switchToChat(templateId);
         console.log(`🔄 Switched to template: ${templates[templateId].chatTitle}`);
       }
     } else {

@@ -176,8 +176,8 @@ async function checkSession(logMessage) {
 
 function toggleUI(show) {
   const action = show ? "render" : "remove";
-  messages[`${action}MessagesUI`]();
-  views[`${action}ViewUI`]();
+  window.messages[`${action}MessagesUI`]();
+  window.views[`${action}ViewUI`]();
 }
 
 // =================== Authentication Functions ===================

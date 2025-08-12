@@ -249,6 +249,8 @@ function simpleBlurTransition(container, newHtml) {
     // Clean up after transition
     setTimeout(() => {
       container.style.transition = '';
+      container.style.filter = '';
+      container.style.opacity = '';
       isTransitioning = false;
     }, 400);
   }, 400);

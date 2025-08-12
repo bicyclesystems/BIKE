@@ -8,6 +8,58 @@ window.API_KEY = window.API_KEY || "";
 
 // =================== STATE MANAGEMENT ===================
 
+// =================== CHAT MANAGEMENT ===================
+
+// Simple chat creation function (moved from actions)
+function createNewChat(options = {}) {
+  const { timestamp, title, description, endTime } = options;
+  
+  // Reset context for new chat
+  window.context?.setContext({
+    activeVersionIdxByArtifact: {},
+    messages: [],
+    activeMessageIndex: -1,
+    activeView: null
+  });
+  
+  // Create chat object
+  const id = Date.now().toString();
+  const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
+  const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
+  const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
+  const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
+  
+  if (endTime) {
+    chat.endTime = new Date(endTime).toISOString();
+  }
+  
+  // Add to context
+  const currentChats = window.context?.getChats() || [];
+  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+  
+  window.context?.setContext({
+    chats: [...currentChats, chat],
+    messagesByChat: { ...currentMessagesByChat, [id]: [] }
+  });
+  
+  // Save and switch to new chat
+  window.memory?.saveAll();
+  switchToChat(id);
+  
+  return chat;
+}
+
+// Simple chat switching function
+function switchToChat(chatId) {
+  if (!chatId) return;
+  
+  window.context?.setContext({ 
+    activeChatId: chatId,
+    activeView: null 
+  });
+  window.memory?.saveAll();
+}
+
 // Typewriter animation state
 const TypewriterState = {
   currentAnimation: null,
@@ -673,17 +725,7 @@ function setupContextWordHandlers() {
           return;
         }
 
-        // Check for action
-        const action = Object.values(window.actions.ACTIONS_REGISTRY).find(
-          (a) =>
-            a.name.toLowerCase() === word.toLowerCase() ||
-            a.id.toLowerCase().includes(word.toLowerCase()) ||
-            a.name.toLowerCase().includes(word.toLowerCase())
-        );
-        if (action) {
-          window.actions.executeAction(action.id);
-          return;
-        }
+
       }
     }
 
@@ -1104,4 +1146,10 @@ window.messages = {
   // Loading states
   showLoadingIndicator,
   hideLoadingIndicator,
+};
+
+// Export chat management functions
+window.chat = {
+  createNewChat,
+  switchToChat
 };

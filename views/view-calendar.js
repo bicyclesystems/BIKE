@@ -146,7 +146,7 @@ const generateWeekDays = (startDate) => {
 
 // Render event
 const renderEvent = (event) => {
-  const clickHandler = event.chatId ? `onclick="window.calendarView.switchToChat('${event.chatId}')"` : '';
+  const clickHandler = event.chatId ? `onclick="window.chat.switchToChat('${event.chatId}')"` : '';
   const isActive = event.color === "#3b82f6";
   const colorClass = isActive ? 'color-primary' : 'background-tertiary foreground-primary';
   
@@ -198,7 +198,7 @@ const renderCompactEventsList = () => {
       html += `
         <div class="column padding-xs radius-xs ${colorClass}" style="
           cursor: pointer;
-        " onclick="window.calendarView.switchToChat('${event.chatId}')">
+        " onclick="window.chat.switchToChat('${event.chatId}')">
           <div style="font-weight: bold;">${formatTime(startTime.getHours())}</div>
           <div>${event.title}</div>
         </div>
@@ -219,7 +219,7 @@ const renderCompactEventsList = () => {
       html += `
         <div class="column padding-xs radius-xs ${colorClass}" style="
           cursor: pointer;
-        " onclick="window.calendarView.switchToChat('${event.chatId}')">
+        " onclick="window.chat.switchToChat('${event.chatId}')">
           <div style="font-weight: bold;">${formatDayName(startTime)} ${formatDate(startTime)}</div>
           <div>${event.title}</div>
         </div>
@@ -412,20 +412,15 @@ function renderCalendarView() {
   return html;
 }
 
-// Chat switching
-const switchToChat = (chatId) => {
-  if (window.actions && window.actions.executeAction) {
-    window.actions.executeAction('chat.switch', { chatId });
-  }
-};
+
 
 // Create a new chat at a given date and hour
 const createChatAt = (date, hour) => {
   if (!window.context) return;
   const chatDate = new Date(date);
   chatDate.setHours(hour, 0, 0, 0);
-        if (window.actions.executeAction) {
-        window.actions.executeAction('chat.create', { timestamp: chatDate.toISOString() });
+  if (window.chat && window.chat.createNewChat) {
+    window.chat.createNewChat({ timestamp: chatDate.toISOString() });
   }
   if (window.views?.renderCurrentView) {
     window.views.renderCurrentView();
@@ -446,7 +441,6 @@ window.calendarView = {
   renderCalendarView,
   navigateWeek,
   toggleClockView,
-  switchToChat,
   createChatAt,
   cleanup
 }; 
