@@ -146,7 +146,7 @@ function generateArtifactClickHandler(artifact) {
   const latestVersion = artifact.versions[artifact.versions.length - 1];
   const escapedId = window.utils.escapeHtml(artifact.id);
   
-  return `onclick="window.context.setActiveView('artifact', { artifactId: '${escapedId}' })"`;
+  return `onclick="window.views.switchView('artifact', { artifactId: '${escapedId}' })"`;
 }
 
 async function renderSingleArtifact(artifact, groupTitle) {

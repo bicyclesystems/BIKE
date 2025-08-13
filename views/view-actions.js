@@ -141,5 +141,6 @@ function getAvailableActions() {
 // Export functions for global access
 window.actionsView = {
   renderActionsView,
-  refreshActionsView
+  refreshActionsView,
+  getAvailableActions
 }; 

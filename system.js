@@ -172,6 +172,29 @@ You MUST follow this response style in ALL messages. This is the user's explicit
   return basePrompt + (contextInfo ? `\n\nContext: ${contextInfo}` : '') + '\n\nEXAMPLE SIMPLE RESPONSE:\n{"message": "What would you like to change your name to?", "artifacts": [], "actionsExecuted": []}';
 }
 
+// =================== CAPABILITIES DISCOVERY ===================
+
+function buildActionContext() {
+  const modules = ['chat', 'user', 'memory', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
+  const byModule = {};
+  
+  modules.forEach(name => {
+    const mod = window[name];
+    if (mod && typeof mod === 'object') {
+      const fns = Object.keys(mod).filter(k => typeof mod[k] === 'function');
+      if (fns.length) byModule[name] = fns;
+    }
+  });
+  
+  return `Available Functions:\n${Object.entries(byModule).map(([m, f]) => `${m}: ${f.join(', ')}`).join('\n')}\n\nFormat: Use in actionsExecuted as 'module.function'`;
+}
+
+function getAvailableViews() {
+  return window.views?.getAllViews?.()?.map(v => ({ 
+    id: v.id, title: v.name, type: v.type 
+  })) || [];
+}
+
 // =================== CONTEXT BUILDING ===================
 
 async function buildSystemMessage(contextData = null, isContextualGuidance = false) {
@@ -183,8 +206,10 @@ async function buildSystemMessage(contextData = null, isContextualGuidance = fal
     
     parts.push('Context: Bike app with memory, views, artifacts, and actions');
     
-    if (contextData.availableViews && contextData.availableViews.length > 0) {
-      const viewNames = contextData.availableViews.map(view => view.title || view.name || view.id);
+    // Views are now system capabilities, not context
+    const availableViews = getAvailableViews();
+    if (availableViews.length > 0) {
+      const viewNames = availableViews.map(view => view.title || view.name || view.id);
       parts.push(`Available views: ${viewNames.join(', ')}`);
     }
     
@@ -192,9 +217,10 @@ async function buildSystemMessage(contextData = null, isContextualGuidance = fal
       parts.push(`Authentication: isLoggedIn: ${contextData.authStatus.isLoggedIn}, currentUser: ${contextData.authStatus.currentUser || 'null'}`);
     }
     
-    if (contextData.availableActions) {
-      // availableActions is now a formatted string from buildActionContext()
-      parts.push(contextData.availableActions);
+    // Actions are now system capabilities, not context
+    const availableActions = buildActionContext();
+    if (availableActions) {
+      parts.push(availableActions);
     }
     
     if (contextData.userPreferences) {
@@ -235,27 +261,16 @@ async function buildSystemMessage(contextData = null, isContextualGuidance = fal
       }
     }
     
-    const capabilities = [];
+    // Existing artifacts info (situational context)
     if (contextData.artifacts && contextData.artifacts.length > 0) {
       const count = contextData.artifacts.length;
       const types = [...new Set(contextData.artifacts.map(a => a.type))];
-      capabilities.push(`${count} artifacts: ${types.join(', ')}`);
-    }
-    
-    if (contextData.availableActions && contextData.availableActions.includes('artifactsModule: create')) {
-      capabilities.push('artifact creation via AI');
-    }
-    
-    if (window.artifactsModule?.parseFile) {
-      capabilities.push('File analysis: parsing, structure detection, content extraction');
-    }
-    
-    if (contextData.artifacts?.some(a => a.versions?.length > 1)) {
-      capabilities.push('Versioning: automatic detection, history, comparison');
-    }
-    
-    if (capabilities.length > 0) {
-      parts.push(`Capabilities: ${capabilities.join('; ')}`);
+      parts.push(`Current artifacts: ${count} artifacts (${types.join(', ')})`);
+      
+      // Check if any have versions (situational context)
+      if (contextData.artifacts.some(a => a.versions?.length > 1)) {
+        parts.push(`Versioned artifacts available for comparison`);
+      }
     }
     
     contextInfo = parts.join('. ');
@@ -286,6 +301,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 window.systemModule = {
   buildSystemMessage,
+  buildActionContext,
+  getAvailableViews,
   getSystemSections,
   getReadmeContent,
   loadReadmeContent,

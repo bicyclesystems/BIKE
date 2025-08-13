@@ -1,220 +1,119 @@
-// =================== Context Highlighting System ===================
-// Handles real-time highlighting and reference extraction for user input
-
-// Global state for tracking animated words across all elements
 const globalAnimatedWords = new Set();
 
-// =================== Context Highlighting Functions ===================
-
-function highlightContextWords(element = null) {
-  if (!element && window.inputModule && window.inputModule._manager) {
-    element = window.inputModule._manager.inputElement;
-  }
-  
-  if (!element || !window.context) return;
-  
-  // Skip if this element is already being processed or contains only highlighted content
-  if (element.dataset.highlighting === 'true') return;
-  
-  const elementText = element.innerText;
-  if (!elementText.trim()) {
-    return;
-  }
-  
-  // Get available context items
-  const artifacts = window.context?.getCurrentChatArtifacts() || [];
-  const viewTypes = window.context?.getViewTypes() || [];
-  
-  // Build simple word map (just exact title matches for simplicity)
+// Build context word map from all sources
+function buildContextWords() {
   const contextWords = new Map();
   
-  artifacts.forEach(artifact => {
-    const title = artifact.title.toLowerCase();
-    contextWords.set(title, {
-      type: 'artifact',
-      id: artifact.id,
-      title: artifact.title
-    });
+  // Add artifacts
+  (window.artifactsModule?.getCurrentChatArtifacts() || []).forEach(artifact => {
+    contextWords.set(artifact.title.toLowerCase(), { type: 'artifact', id: artifact.id, title: artifact.title });
   });
   
-  viewTypes.forEach(viewType => {
-    const title = viewType.title.toLowerCase();
-    contextWords.set(title, {
-      type: 'view',
-      viewType: viewType.type,
-      title: viewType.title
-    });
+  // Add views
+  (window.views?.getAllViews() || []).forEach(view => {
+    contextWords.set(view.name.toLowerCase(), { type: 'view', viewType: view.type, title: view.name });
   });
-
-  // Add actions from available functions
-  if (window.actionsView && window.actionsView.getAvailableActions) {
-    const actions = window.actionsView.getAvailableActions();
-    actions.forEach(action => {
-      // Add full action names (e.g., "Create New Chat", "Switch View", etc.)
-      const actionName = action.name.toLowerCase();
-      if (!contextWords.has(actionName)) {
-        contextWords.set(actionName, {
-          type: 'action',
-          actionId: action.id,
-          actionName: action.name,
-          title: action.name,
-          description: `${action.name} from ${action.module}`
-        });
-      }
+  
+  // Add chats
+  (window.context?.getChats() || []).forEach(chat => {
+    contextWords.set(chat.title.toLowerCase(), { type: 'chat', id: chat.id, title: chat.title });
+  });
+  
+  // Add actions
+  if (window.actionsView?.getAvailableActions) {
+    window.actionsView.getAvailableActions().forEach(action => {
+      const name = action.name.toLowerCase();
+      const words = name.split(' ').filter(w => w.length > 2);
       
-      // Also add simplified versions of action names for better matching
-      const words = actionName.split(' ').filter(w => w.length > 2);
+      // Full name
+      contextWords.set(name, { type: 'action', actionId: action.id, actionName: action.name, title: action.name });
       
-      // Add individual significant words
+      // Individual words
       words.forEach(word => {
-        if (!contextWords.has(word) && word.length > 2) {
-          contextWords.set(word, {
-            type: 'action',
-            actionId: action.id,
-            actionName: action.name,
-            word: word,
-            isPartial: true
-          });
+        if (!contextWords.has(word)) {
+          contextWords.set(word, { type: 'action', actionId: action.id, actionName: action.name, isPartial: true });
         }
       });
       
-      // Add two-word combinations
+      // Word combinations
       for (let i = 0; i < words.length - 1; i++) {
-        const combination = `${words[i]} ${words[i + 1]}`;
-        if (!contextWords.has(combination)) {
-          contextWords.set(combination, {
-            type: 'action',
-            actionId: action.id,
-            actionName: action.name,
-            word: combination,
-            isPartial: true
-          });
+        const combo = `${words[i]} ${words[i + 1]}`;
+        if (!contextWords.has(combo)) {
+          contextWords.set(combo, { type: 'action', actionId: action.id, actionName: action.name, isPartial: true });
         }
       }
       
-      // Add action ID parts (e.g., "chat.create" -> "create")
+      // Action ID suffix
       const idParts = action.id.split('.');
-      if (idParts.length > 1) {
-        const actionPart = idParts[1].toLowerCase();
-        if (!contextWords.has(actionPart)) {
-          contextWords.set(actionPart, {
-            type: 'action',
-            actionId: action.id,
-            actionName: action.name,
-            word: actionPart,
-            isPartial: true
-          });
-        }
+      if (idParts[1] && !contextWords.has(idParts[1])) {
+        contextWords.set(idParts[1], { type: 'action', actionId: action.id, actionName: action.name, isPartial: true });
       }
     });
   }
   
+  return contextWords;
+}
 
+function highlightContextWords(element = null) {
+  element = element || window.inputModule?._manager?.inputElement;
+  if (!element || !window.context || element.dataset.highlighting === 'true') return;
   
-  // Add chat names to context highlighting
-  const chats = window.context?.getChats() || [];
-  chats.forEach(chat => {
-    const title = chat.title.toLowerCase();
-    contextWords.set(title, {
-      type: 'chat',
-      id: chat.id,
-      title: chat.title
-    });
-  });
+  const text = element.innerText;
+  if (!text.trim()) return;
   
+  const contextWords = buildContextWords();
   if (contextWords.size === 0) return;
   
-  // Smart highlighting - find all matches first, then apply in priority order
-  const allMatches = [];
-  
-  contextWords.forEach((contextItem, word) => {
-    let regexPattern;
-    if (/^[\p{Emoji}\s]|[^\w\s]/u.test(word)) {
-      regexPattern = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    } else {
-      regexPattern = `\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`;
-    }
+  // Find all matches
+  const matches = [];
+  contextWords.forEach((item, word) => {
+    const pattern = /^[\p{Emoji}\s]|[^\w\s]/u.test(word) ? 
+      word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : 
+      `\\b${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`;
     
-    const regex = new RegExp(regexPattern, 'gi');
+    const regex = new RegExp(pattern, 'gi');
     let match;
-    
-    while ((match = regex.exec(elementText)) !== null) {
-      allMatches.push({
-        word: word,
-        contextItem: contextItem,
-        start: match.index,
-        end: match.index + match[0].length,
-        matchText: match[0],
-        length: match[0].length
+    while ((match = regex.exec(text)) !== null) {
+      matches.push({
+        word, item, start: match.index, end: match.index + match[0].length,
+        matchText: match[0], length: match[0].length
       });
     }
   });
   
-  // Sort matches by priority: longer matches first, then by position
-  allMatches.sort((a, b) => {
-    if (a.length !== b.length) {
-      return b.length - a.length;
-    }
-    return a.start - b.start;
-  });
+  // Sort by length (longer first), then position
+  matches.sort((a, b) => b.length - a.length || a.start - b.start);
   
-  // Remove overlapping matches
-  const finalMatches = [];
-  const usedRanges = [];
-  
-  allMatches.forEach(match => {
-    const overlaps = usedRanges.some(range => 
-      (match.start < range.end && match.end > range.start)
-    );
-    
-    if (!overlaps) {
-      finalMatches.push(match);
-      usedRanges.push({ start: match.start, end: match.end });
+  // Remove overlaps
+  const final = [];
+  const used = [];
+  matches.forEach(match => {
+    if (!used.some(range => match.start < range.end && match.end > range.start)) {
+      final.push(match);
+      used.push({ start: match.start, end: match.end });
     }
   });
   
-  // Sort final matches by position for proper replacement
-  finalMatches.sort((a, b) => b.start - a.start);
-  
-  // Apply highlighting
-  let highlightedHtml = elementText;
-  
-  finalMatches.forEach(match => {
-    const { word, contextItem, start, end, matchText } = match;
+  // Apply highlighting (reverse order for string replacement)
+  let html = text;
+  final.sort((a, b) => b.start - a.start).forEach(({ word, item, start, end, matchText }) => {
+    const colors = { artifact: 'blue', view: 'orange', action: 'dark-green', chat: 'violet' };
+    const animated = globalAnimatedWords.has(word);
+    const anim = animated ? '' : 'fade-in ease-out duration-normal once';
+    const escape = t => t.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
     
-    // Determine color based on context type
-    let contextStyle = '';
-    let animationClass = 'fade-in ease-out duration-normal once';
-    
-    if (contextItem.type === 'artifact') {
-      contextStyle = 'style="color: var(--color-blue);"';
-    } else if (contextItem.type === 'view') {
-      contextStyle = 'style="color: var(--color-orange);"';
-    } else if (contextItem.type === 'action') {
-      contextStyle = 'style="color: var(--color-dark-green);"';
-    } else if (contextItem.type === 'chat') {
-      contextStyle = 'style="color: var(--color-violet);"';
-    }
-    
-    const hasBeenAnimated = globalAnimatedWords.has(word);
-    const finalAnimationClass = hasBeenAnimated ? '' : animationClass;
-    
-    const escapeHtml = (text) => window.utils?.escapeHtml ? window.utils.escapeHtml(text) : text.replace(/[&<>"']/g, (m) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-    
-    const replacement = `<span class="${finalAnimationClass}" ${contextStyle} data-word="${escapeHtml(word)}" data-animated="${hasBeenAnimated}">${escapeHtml(matchText)}</span>`;
-    
-    highlightedHtml = highlightedHtml.substring(0, start) + replacement + highlightedHtml.substring(end);
+    const span = `<span class="${anim}" style="color: var(--color-${colors[item.type]});" data-word="${escape(word)}" data-animated="${animated}">${escape(matchText)}</span>`;
+    html = html.substring(0, start) + span + html.substring(end);
   });
   
-  if (highlightedHtml !== element.innerHTML) {
-    // Mark element as being processed to prevent infinite loops
+  if (html !== element.innerHTML) {
     element.dataset.highlighting = 'true';
-    element.innerHTML = highlightedHtml;
+    element.innerHTML = html;
     delete element.dataset.highlighting;
     
+    // Mark new words as animated
     setTimeout(() => {
-      const newlyAnimatedSpans = element.querySelectorAll('span[data-animated="false"]');
-      newlyAnimatedSpans.forEach(span => {
+      element.querySelectorAll('span[data-animated="false"]').forEach(span => {
         const word = span.getAttribute('data-word');
         if (word) {
           globalAnimatedWords.add(word);
@@ -223,171 +122,85 @@ function highlightContextWords(element = null) {
       });
     }, 10);
     
+    // Restore cursor for editable elements
     if (element.contentEditable === 'true') {
       try {
         const range = document.createRange();
-        const sel = window.getSelection();
         range.selectNodeContents(element);
         range.collapse(false);
-        sel.removeAllRanges();
-        sel.addRange(range);
-      } catch (e) {
-        // Ignore cursor placement errors
-      }
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      } catch (e) {}
     }
   }
 }
 
 function extractContextReferences(element = null) {
-  if (!element && window.inputModule && window.inputModule._manager) {
-    element = window.inputModule._manager.inputElement;
-  }
+  element = element || window.inputModule?._manager?.inputElement;
+  if (!element) return { cleanText: '', references: [] };
   
-  if (!element) return { cleanText: element?.innerText || '', references: [] };
+  const spans = element.querySelectorAll('span[data-word]');
+  if (spans.length === 0) return { cleanText: element.innerText.trim(), references: [] };
   
-  const elementText = element.innerText;
-  const artifacts = window.context?.getCurrentChatArtifacts() || [];
-  const viewTypes = window.context?.getViewTypes() || [];
+  const contextWords = buildContextWords();
   const references = [];
+  const clone = element.cloneNode(true);
   
-  const highlightedSpans = element.querySelectorAll('span[data-word]');
-  
-  if (highlightedSpans.length === 0) {
-    return { cleanText: element.innerText.trim(), references: [] };
-  }
-  
-  // Build lookup maps
-  const artifactsByTitle = new Map();
-  artifacts.forEach(artifact => {
-    artifactsByTitle.set(artifact.title.toLowerCase(), artifact);
-  });
-  
-  const viewsByTitle = new Map();
-  viewTypes.forEach(viewType => {
-    viewsByTitle.set(viewType.title.toLowerCase(), viewType);
-  });
-  
-  // Build action lookup
-  const actionsByWord = new Map();
-  if (window.actionsView && window.actionsView.getAvailableActions) {
-    const actions = window.actionsView.getAvailableActions();
-    actions.forEach(action => {
-      const actionName = action.name.toLowerCase();
-      actionsByWord.set(actionName, action);
-      
-      const words = actionName.split(' ').filter(w => w.length > 2);
-      words.forEach(word => {
-        if (!actionsByWord.has(word)) {
-          actionsByWord.set(word, action);
-        }
-      });
-      
-      for (let i = 0; i < words.length - 1; i++) {
-        const combination = `${words[i]} ${words[i + 1]}`;
-        if (!actionsByWord.has(combination)) {
-          actionsByWord.set(combination, action);
-        }
-      }
-      
-      const idParts = action.id.split('.');
-      if (idParts.length > 1) {
-        const actionPart = idParts[1].toLowerCase();
-        if (!actionsByWord.has(actionPart)) {
-          actionsByWord.set(actionPart, action);
-        }
-      }
-    });
-  }
-
-
-  
-  const clonedElement = element.cloneNode(true);
-  const clonedSpans = clonedElement.querySelectorAll('span[data-word]');
-  
-  clonedSpans.forEach(span => {
+  clone.querySelectorAll('span[data-word]').forEach(span => {
     const word = span.getAttribute('data-word');
+    const item = contextWords.get(word);
     let replacement = span.innerText;
     
-    if (artifactsByTitle.has(word)) {
-      const artifact = artifactsByTitle.get(word);
-      replacement = `[[artifact:${artifact.id}]]`;
-      references.push(replacement);
-    } else if (viewsByTitle.has(word)) {
-      const viewType = viewsByTitle.get(word);
-      replacement = `[[view:${viewType.type}]]`;
-      references.push(replacement);
-    } else if (actionsByWord.has(word)) {
-      const action = actionsByWord.get(word);
-      replacement = `[[action:${action.id}]]`;
+    if (item) {
+      if (item.type === 'artifact') {
+        replacement = `[[artifact:${item.id}]]`;
+      } else if (item.type === 'view') {
+        replacement = `[[view:${item.viewType}]]`;
+      } else if (item.type === 'action') {
+        replacement = `[[action:${item.actionId}]]`;
+      } else if (item.type === 'chat') {
+        replacement = `[[chat:${item.id}]]`;
+      }
       references.push(replacement);
     }
     
-    const textNode = document.createTextNode(replacement);
-    span.parentNode.replaceChild(textNode, span);
+    span.parentNode.replaceChild(document.createTextNode(replacement), span);
   });
   
-  const cleanText = clonedElement.innerText.trim();
-  
-  return { cleanText, references };
+  return { cleanText: clone.innerText.trim(), references };
 }
 
-// =================== Simple View Highlighting ===================
-
 function highlightViewContent() {
-  const viewElement = document.getElementById('view');
-  if (!viewElement) return;
+  const view = document.getElementById('view');
+  if (!view) return;
   
-  // Find all elements with text content
-  const allElements = viewElement.querySelectorAll('*');
-  
-  allElements.forEach(element => {
-    // Skip if element has no text content or is already being processed
-    if (!element.innerText?.trim() || element.dataset.highlighting === 'true') return;
+  view.querySelectorAll('*').forEach(el => {
+    if (!el.innerText?.trim() || el.dataset.highlighting === 'true') return;
     
-    // Only highlight "leaf" text elements to avoid layout issues
-    // Skip if this element has child elements that also contain text,
-    // UNLESS all children are marked with data-no-highlight="true"
-    const hasTextChildren = Array.from(element.children).some(child => 
-      child.innerText?.trim()
-    );
+    const hasTextChildren = Array.from(el.children).some(child => child.innerText?.trim());
+    if (hasTextChildren && !Array.from(el.children).every(child => 
+      !child.innerText?.trim() || child.getAttribute('data-no-highlight') === 'true')) return;
     
-    // If element has text children, check if they're all no-highlight elements
-    if (hasTextChildren) {
-      const allChildrenAreNoHighlight = Array.from(element.children).every(child => 
-        !child.innerText?.trim() || child.getAttribute('data-no-highlight') === 'true'
-      );
-      
-      // If not all children are no-highlight, let the children handle their own highlighting
-      if (!allChildrenAreNoHighlight) return;
-    }
-    
-    // Preserve trait tags 
-    const traitTags = element.querySelectorAll('[data-no-highlight="true"]');
-    if (traitTags.length > 0) {
-      const traitData = [];
-      traitTags.forEach((tag, index) => {
-        const placeholder = `__TRAIT_PLACEHOLDER_${index}__`;
-        traitData.push({ placeholder, originalHTML: tag.outerHTML });
+    const noHighlight = el.querySelectorAll('[data-no-highlight="true"]');
+    if (noHighlight.length > 0) {
+      const preserved = [];
+      noHighlight.forEach((tag, i) => {
+        const placeholder = `__PRESERVE_${i}__`;
+        preserved.push({ placeholder, html: tag.outerHTML });
         tag.outerHTML = placeholder;
       });
       
-      highlightContextWords(element);
+      highlightContextWords(el);
       
-      let html = element.innerHTML;
-      traitData.forEach(({ placeholder, originalHTML }) => {
+      let html = el.innerHTML;
+      preserved.forEach(({ placeholder, html: originalHTML }) => {
         html = html.replace(placeholder, originalHTML);
       });
-      element.innerHTML = html;
+      el.innerHTML = html;
     } else {
-      highlightContextWords(element);
+      highlightContextWords(el);
     }
   });
 }
 
-// =================== Public API ===================
-
-window.contextHighlight = {
-  highlightContextWords,
-  extractContextReferences,
-  highlightViewContent
-}; 
+window.contextHighlight = { highlightContextWords, extractContextReferences, highlightViewContent }; 

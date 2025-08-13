@@ -449,7 +449,7 @@ class SupabaseSync {
 
   removeArtifactFromLocalState(artifactId) {
 
-    const localArtifacts = (window.context?.getArtifacts() || []).filter(
+    const localArtifacts = (window.artifactsModule?.getArtifacts() || []).filter(
       (a) => a.id !== artifactId
     );
     window.context?.setContext({ artifacts: localArtifacts });
@@ -647,7 +647,7 @@ class SupabaseSync {
         "[SYNC] Setting active chat to first available chat:",
         finalChats[0].id
       );
-      window.context?.setActiveChat(finalChats[0].id);
+      window.chat?.switchChat(finalChats[0].id);
     }
 
     // Upload any local-only chats to server
@@ -755,7 +755,7 @@ class SupabaseSync {
     if (error) throw error;
 
     // Merge server artifacts with local artifacts
-    const localArtifacts = [...(window.context?.getArtifacts() || [])];
+    const localArtifacts = [...(window.artifactsModule?.getArtifacts() || [])];
     const mergedArtifacts = new Map();
 
     // Add local artifacts

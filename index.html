@@ -72,18 +72,28 @@
   <script>
     // Application initialization sequence
     document.addEventListener('DOMContentLoaded', async function() {
-      console.log('[INIT] Starting application');
-      
-      // 1. Initialize authentication first
+      // Initialize app
       const session = await user.initializeAuth();
+      await memory.initMemory();
       
-      // 2. Initialize context with session
-      await context.init(session);
+      if (session) {
+        // Authenticated: load data and restore last chat/view
+        memory.load();
+        const chatId = memory.loadActiveChatId() || context.getChats()[0]?.id;
+        chatId ? chat.switchChat(chatId) : chat.create();
+        const view = memory.loadActiveView();
+        context.setContext({ activeView: view });
+      } else {
+        // Guest: start fresh
+        context.setContext({ 
+          chats: [], messagesByChat: {}, artifacts: [], activeChatId: null, messages: [],
+          activeMessageIndex: -1, messagesContainer: null, viewElement: null, activeView: null,
+          activeVersionIdxByArtifact: {}, showAllMessages: false 
+        });
+        chat.create();
+      }
       
-      // 3. Initialize artifacts system
       await artifacts.waitForInit();
-      
-      // 4. Initialize views
       views.init();
       
       // 5. Initialize sync in background

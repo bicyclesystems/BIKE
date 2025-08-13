@@ -8,13 +8,13 @@ It's a thinking machine. A "bicycle" for the mind.
 
 **Example**: Say "Create a todo list for my project." Bike generates a structured artifact and displays it. Later, say "Add deployment tasks" and it updates seamlessly.
 
-Messages create artifacts. Artifacts are memory. Views are display. Chat drives everything.
+Chat create artifacts. Artifacts are memory. Views are display. Chat drives everything.
 
 ## Flow Architecture
 
 **Core Loop:**
 
-user + context ───► input ───► process ───► orchestrate
+user + context ───► chat (input) ───► process ───► orchestrate
           ▲                                      │
           │                                      ▼
           │ ◄─────────────────────────────────  chat ←→ view
@@ -30,7 +30,7 @@ user + context ───► input ───► process ───► orchestrate
                                                  │
                                                  ▼
                                                 sync ←→ integrations
-                                                 │                                                  ├── external services
+                                                 │                              external services
                                                  ├── APIs
                                                  └── webhooks
 

@@ -170,7 +170,7 @@ function create(content, messageId, type = null, shouldSetActive = false) {
     throw new Error('Artifact created without chatId!');
   }
   
-  const currentArtifacts = window.context?.getArtifacts() || [];
+  const currentArtifacts = getArtifacts();
   window.context?.setContext({ artifacts: [...currentArtifacts, artifact] });
   window.memory?.saveArtifacts();
   
@@ -182,7 +182,7 @@ function create(content, messageId, type = null, shouldSetActive = false) {
 }
 
 function update(id, content) {
-  const artifacts = (window.context?.getArtifacts() || []).slice();
+  const artifacts = getArtifacts().slice();
   const activeChatId = utils.getActiveChatId();
   const artifact = artifacts.find(a => a.id === id && a.chatId === activeChatId);
   if (!artifact) return null;
@@ -205,7 +205,29 @@ function update(id, content) {
 }
 
 function get(id) {
-  return window.context?.findCurrentChatArtifact(id);
+  return findCurrentChatArtifact(id);
+}
+
+// Core artifact lookup functions
+function getArtifact(id) {
+  const artifacts = window.context?.getArtifacts() || [];
+  return artifacts.find(a => a.id === id);
+}
+
+function findCurrentChatArtifact(artifactId) {
+  const artifacts = window.context?.getArtifacts() || [];
+  const activeChatId = window.context?.getActiveChatId();
+  return artifacts.find(a => a.id === artifactId && a.chatId === activeChatId);
+}
+
+function getArtifacts() {
+  return window.context?.getArtifacts() || [];
+}
+
+function getCurrentChatArtifacts() {
+  const artifacts = window.context?.getArtifacts() || [];
+  const activeChatId = window.context?.getActiveChatId();
+  return artifacts.filter(a => a.chatId === activeChatId);
 }
 
 // =================== Artifact Click Handlers ===================
@@ -268,7 +290,7 @@ function setArtifactVersion(artifactId, versionIdx) {
 }
 
 function deleteArtifactVersion(artifactId, versionIdx) {
-  const artifacts = (window.context?.getArtifacts() || []).slice();
+  const artifacts = getArtifacts().slice();
   const activeChatId = utils.getActiveChatId();
   const artifact = artifacts.find(a => a.id === artifactId && a.chatId === activeChatId);
   
@@ -330,6 +352,12 @@ function initializeArtifactsModule() {
     get,
     generateArtifactPath,
     init,
+    
+    // Lookup functions
+    getArtifact,
+    findCurrentChatArtifact,
+    getArtifacts,
+    getCurrentChatArtifacts,
     
     // Version management
     getArtifactVersion,

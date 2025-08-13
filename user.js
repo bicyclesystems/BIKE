@@ -341,10 +341,7 @@ function initializeMainApp() {
   );
 
   // Context initialization already handled chat creation and activation
-  // Just load the active chat and render the view
-  if (window.context.getActiveChatId()) {
-    window.context.loadChat();
-  }
+  // Messages will be loaded when chat view renders
 
   window.views.renderCurrentView(false); // No transition during initialization
 }
@@ -417,8 +414,8 @@ function handleUnauthenticatedState() {
   
   // Show memory view if no active view is set (mirror authenticated behavior)
   const currentView = window.context.getActiveView();
-  if (window.context?.setActiveView && !currentView) {
-    window.context.setActiveView("memory", {}, { withTransition: false });
+  if (window.views?.switchView && !currentView) {
+    window.views.switchView("memory", {}, { withTransition: false });
   }
 }
 
@@ -534,9 +531,15 @@ function updatePreferences(preferences) {
     throw new Error('Preferences must be an object');
   }
   
-  // Use the context module to handle preferences
-  if (window.context && window.context.setUserPreferences) {
-    window.context.setUserPreferences(preferences);
+  // Update preferences using memory module directly
+  if (window.memory?.setUserPreferences) {
+    window.memory.setUserPreferences(preferences);
+    
+    // Sync to database if available
+    if (window.syncManager?.syncUserPreferences) {
+      window.syncManager.syncUserPreferences(preferences);
+    }
+    
     return {
       success: true,
       message: `Updated preferences: ${Object.keys(preferences).join(', ')}`,
@@ -544,7 +547,7 @@ function updatePreferences(preferences) {
       preferences
     };
   } else {
-    throw new Error('Context module not available');
+    throw new Error('Memory module not available');
   }
 }
 

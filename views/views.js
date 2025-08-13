@@ -10,7 +10,7 @@ const VIEWS_REGISTRY = {
     optionalParams: [],
     availableData: () => ({
       currentUser: window.user?.getActiveSession()?.user?.email || null,
-      userPreferences: window.context?.getUserPreferences() || {}
+      userPreferences: window.memory?.getUserPreferences() || {}
     }),
     render: (data) => window.chatView.renderChatView()
   },
@@ -308,9 +308,27 @@ function init() {
 }
 
 // Switch to a view
-function switchView(viewId, data = {}) {
-  if (!viewId) {
-    throw new Error('viewId is required');
+function switchView(viewId, data = {}, options = {}) {
+  const { withTransition = true } = options;
+  
+  // Handle null/undefined viewId (clear view to show chat)
+  if (viewId === null || viewId === undefined) {
+    const currentView = window.context?.getActiveView();
+    if (currentView === null) return; // Already null, no change needed
+    
+    // Clear the view
+    window.context?.setContext({ activeView: null });
+    window.memory?.saveActiveView(null);
+    if (window.views?.renderCurrentView) {
+      window.views.renderCurrentView(withTransition);
+    }
+    return {
+      success: true,
+      message: 'Cleared active view',
+      viewId: null,
+      viewName: 'Chat',
+      data: {}
+    };
   }
   
   const validation = validateViewParams(viewId, data);
@@ -325,14 +343,50 @@ function switchView(viewId, data = {}) {
   
   // Special handling for artifact view - validate artifact exists
   if (viewId === 'artifact' && data.artifactId) {
-    const artifact = window.context?.findCurrentChatArtifact(data.artifactId);
+    const artifact = window.artifactsModule?.findCurrentChatArtifact(data.artifactId);
     if (!artifact) {
       throw new Error(`Artifact ${data.artifactId} not found`);
     }
   }
   
-  // Switch to the view
-  window.context.setActiveView(view.type, data);
+  const newView = { type: view.type, data };
+  
+  // Simple comparison for view objects (prevent duplicate changes)
+  const currentView = window.context?.getActiveView();
+  if (currentView && 
+      currentView.type === newView.type &&
+      JSON.stringify(currentView.data) === JSON.stringify(newView.data)) {
+    return {
+      success: true,
+      message: `Already viewing ${view.name}`,
+      viewId,
+      viewName: view.name,
+      data
+    };
+  }
+  
+  // Update the view state
+  window.context?.setContext({ activeView: newView });
+  window.memory?.saveActiveView(newView);
+  
+  // Handle version tracking for artifact views
+  if (view.type === 'artifact' && data.artifactId) {
+    const artifactId = data.artifactId;
+    const currentActiveVersions = window.context?.getActiveVersionIndex ? 
+      window.context.getActiveVersionIndex(artifactId) : undefined;
+    
+    if (currentActiveVersions === undefined) {
+      const artifact = window.artifactsModule?.getArtifact(artifactId);
+      if (artifact && window.context?.setActiveVersionIndex) {
+        window.context.setActiveVersionIndex(artifactId, artifact.versions.length - 1);
+      }
+    }
+  }
+  
+  // Render the view
+  if (window.views?.renderCurrentView) {
+    window.views.renderCurrentView(withTransition);
+  }
   
   return {
     success: true,
@@ -343,6 +397,11 @@ function switchView(viewId, data = {}) {
   };
 }
 
+// Helper function for switching to artifact view (equivalent to setActiveArtifactId)
+function switchToArtifact(artifactId, options = {}) {
+  return switchView('artifact', { artifactId }, options);
+}
+
 // Export functions for global access
 window.views = {
   // Registry access
@@ -351,6 +410,7 @@ window.views = {
   getViewsByType,
   validateViewParams,
   switchView,
+  switchToArtifact,
   VIEWS_REGISTRY,
   // UI functions
   renderViewUI,

@@ -117,7 +117,7 @@
         // Always update template chat data (remove old, add fresh)
         const currentChats = window.context.getChats().filter(c => c.id !== templateId);
         const currentMessagesByChat = window.context.getMessagesByChat();
-        const currentArtifacts = window.context.getArtifacts().filter(a => a.chatId !== templateId);
+        const currentArtifacts = window.artifactsModule.getArtifacts().filter(a => a.chatId !== templateId);
         
         // Update with fresh content from files
         delete currentMessagesByChat[templateId]; // Remove old messages

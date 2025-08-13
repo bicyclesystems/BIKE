@@ -53,11 +53,22 @@ function create(options = {}) {
 function switchChat(chatId) {
   if (!chatId) return;
   
+  // Get messages for this chat
+  const messagesByChat = window.context?.getMessagesByChat() || {};
+  const messages = messagesByChat[chatId] || [];
+  
   window.context?.setContext({ 
     activeChatId: chatId,
-    activeView: null 
+    activeView: null,
+    messages: messages,
+    activeMessageIndex: messages.length - 1
   });
   window.memory?.save();
+  
+  // Update messages display if available
+  if (window.messages?.updateMessagesDisplay) {
+    window.messages.updateMessagesDisplay();
+  }
 }
 
 // Rename a chat
@@ -189,7 +200,7 @@ function deleteChat(chatId, confirmDelete = false) {
   // Safety check - require confirmation for non-empty chats
   const messagesByChat = window.context?.getMessagesByChat() || {};
   const messages = messagesByChat[chatId] || [];
-  const artifacts = (window.context?.getArtifacts() || []).filter(a => a.chatId === chatId);
+  const artifacts = (window.artifactsModule?.getArtifacts() || []).filter(a => a.chatId === chatId);
   
   if ((messages.length > 0 || artifacts.length > 0) && !confirmDelete) {
     throw new Error(`Chat "${chat.title}" contains ${messages.length} messages and ${artifacts.length} artifacts. Set confirmDelete=true to proceed.`);
@@ -201,7 +212,7 @@ function deleteChat(chatId, confirmDelete = false) {
   const updatedMessagesByChat = { ...currentMessagesByChat };
   delete updatedMessagesByChat[chatId];
   
-  const currentArtifacts = window.context?.getArtifacts() || [];
+  const currentArtifacts = window.artifactsModule?.getArtifacts() || [];
   const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
   
   window.context?.setContext({
@@ -874,24 +885,24 @@ function setupContextWordHandlers() {
 
       const word = span.getAttribute("data-word");
       if (word) {
-        const artifacts = window.context?.getCurrentChatArtifacts() || [];
-        const viewTypes = window.context.getViewTypes();
+        const artifacts = window.artifactsModule?.getCurrentChatArtifacts() || [];
+        const viewTypes = window.views?.getAllViews() || [];
 
         // Check for artifact
         const artifact = artifacts.find(
           (a) => a.title.toLowerCase() === word.toLowerCase()
         );
         if (artifact) {
-          window.context.setActiveArtifactId(artifact.id);
+          window.views?.switchToArtifact(artifact.id);
           return;
         }
 
-        // Check for view
+        // Check for view (note: getAllViews() uses 'name', not 'title')
         const viewType = viewTypes.find(
-          (v) => v.title.toLowerCase() === word.toLowerCase()
+          (v) => v.name.toLowerCase() === word.toLowerCase()
         );
         if (viewType) {
-          window.context.setActiveView(viewType.type);
+          window.views?.switchView(viewType.type);
           return;
         }
 
@@ -906,7 +917,7 @@ function setupContextWordHandlers() {
       e.stopPropagation();
       const artifactId = artifactLink.getAttribute("data-artifact-id");
       if (artifactId) {
-        window.context.setActiveArtifactId(artifactId);
+        window.views?.switchToArtifact(artifactId);
       }
     }
   });
@@ -1146,7 +1157,7 @@ function addMessage(role, content, options = {}) {
   }
 
   messages.push(message);
-  window.context.setActiveMessages(messages);
+  setActiveMessages(messages);
   window.context.setActiveMessageIndex(messages.length - 1);
 
   window.inputModule.hide();
@@ -1318,6 +1329,19 @@ window.messages = {
   hideLoadingIndicator,
 };
 
+// =================== MESSAGE MANAGEMENT ===================
+
+function setActiveMessages(messages) {
+  const activeChatId = window.context?.getActiveChatId();
+  if (!activeChatId) return;
+  
+  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+  window.context?.setContext({ 
+    messagesByChat: { ...currentMessagesByChat, [activeChatId]: messages } 
+  });
+  window.memory?.save();
+}
+
 // Export chat management functions
 window.chat = {
   create,
@@ -1325,5 +1349,6 @@ window.chat = {
   rename,
   setDescription,
   schedule,
-  deleteChat
+  deleteChat,
+  setActiveMessages
 };

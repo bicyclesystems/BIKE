@@ -107,7 +107,7 @@ async function renderArtifactContent(artifact, currentVersionIdx = null, version
 // Render artifact view for different content types
 async function renderArtifactView(data) {
   const { artifactId } = data;
-  const artifact = window.context?.getArtifact(artifactId);
+  const artifact = window.artifactsModule?.getArtifact(artifactId);
   
   if (!artifact) {
     return renderErrorMessage('Artifact not found');

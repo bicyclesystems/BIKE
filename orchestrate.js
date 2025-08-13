@@ -341,7 +341,7 @@ async function orchestrateAIResponse(response, utilities) {
         artifact.metadata.generationMethod = 'specialized';
       }
       
-      window.context?.setContext({ artifacts: window.context.getArtifacts().map(a => a.id === artifact.id ? artifact : a) });
+      window.context?.setContext({ artifacts: window.artifactsModule.getArtifacts().map(a => a.id === artifact.id ? artifact : a) });
       saveArtifacts();
       
       artifactIds[title] = artifact.id;
@@ -436,7 +436,7 @@ async function orchestrateAIResponse(response, utilities) {
       
       let messages = window.context?.getMessagesByChat()[window.context?.getActiveChatId()] || [];
       messages.push(message);
-      window.context?.setActiveMessages(messages);
+      window.chat?.setActiveMessages(messages);
       window.context?.setActiveMessageIndex(messages.length - 1);
       
       if (window.messages && window.messages.updateMessagesDisplay) {
@@ -447,8 +447,8 @@ async function orchestrateAIResponse(response, utilities) {
     // Auto-switch to artifact view when artifacts are created
     if (Object.keys(artifactIds).length > 0) {
       const firstArtifactId = Object.values(artifactIds)[0];
-      if (window.context && window.context.setActiveArtifactId) {
-        window.context.setActiveArtifactId(firstArtifactId);
+      if (window.views?.switchToArtifact) {
+        window.views.switchToArtifact(firstArtifactId);
       }
     }
 
@@ -486,7 +486,7 @@ async function orchestrateAIResponse(response, utilities) {
   
   let messages = window.context?.getMessagesByChat()[window.context?.getActiveChatId()] || [];
   messages.push(message);
-  window.context?.setActiveMessages(messages);
+  window.chat?.setActiveMessages(messages);
   window.context?.setActiveMessageIndex(messages.length - 1);
   
   if (window.messages && window.messages.updateMessagesDisplay) {
