@@ -15,7 +15,7 @@ function getEffectiveEndTime(chat, activeChatId) {
   }
   
   // Infer from last message
-  const messages = window.context?.getMessagesByChat()[activeChatId] || [];
+  const messages = window.chat?.getMessagesByChat()[activeChatId] || [];
   if (messages.length > 0) {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.timestamp) {
@@ -49,8 +49,8 @@ function getNameFromEmail(email) {
 }
 
 function renderChatView() {
-  const activeChatId = window.context?.getActiveChatId();
-  const chats = window.context?.getChats() || [];
+  const activeChatId = window.chat?.getActiveChatId();
+  const chats = window.chat?.getChats() || [];
   const currentChat = chats.find(c => c.id === activeChatId);
   const currentChatTitle = currentChat?.title;
 
@@ -77,7 +77,7 @@ function renderChatView() {
   }
 
   // Get artifacts for this chat
-  const artifacts = window.context?.getCurrentChatArtifacts() || [];
+  const artifacts = window.artifactsModule?.getCurrentChatArtifacts() || [];
 
   // Get user information for profiles
   const session = window.user?.getActiveSession();

@@ -1,5 +1,9 @@
 // =================== Views Registry ===================
 
+// Views module state
+let viewElement = null;
+let activeView = null;
+
 const VIEWS_REGISTRY = {
   'chat': {
     id: 'chat',
@@ -23,8 +27,8 @@ const VIEWS_REGISTRY = {
     requiredParams: [],
     optionalParams: [],
     availableData: () => ({
-      hasCalendarData: window.context?.getChats().length > 0,
-      chatCount: window.context?.getChats().length
+      hasCalendarData: window.chat?.getChats().length > 0,
+      chatCount: window.chat?.getChats().length
     }),
     render: (data) => window.calendarView.renderCalendarView()
   },
@@ -37,8 +41,8 @@ const VIEWS_REGISTRY = {
     requiredParams: [],
     optionalParams: ['filter', 'sort'],
     availableData: () => ({
-      artifacts: window.context?.getCurrentChatArtifacts() || [],
-      totalArtifacts: (window.context?.getCurrentChatArtifacts() || []).length,
+      artifacts: window.artifactsModule?.getCurrentChatArtifacts() || [],
+      totalArtifacts: (window.artifactsModule?.getCurrentChatArtifacts() || []).length,
       
     }),
     render: async (data) => await window.artifactsView.renderArtifactsView(data)
@@ -52,9 +56,9 @@ const VIEWS_REGISTRY = {
     requiredParams: ['artifactId'],
     optionalParams: [],
     availableData: () => ({
-      currentChatArtifacts: (window.context?.getCurrentChatArtifacts() || [])
+      currentChatArtifacts: (window.artifactsModule?.getCurrentChatArtifacts() || [])
         .map(a => ({ id: a.id, title: a.title, type: a.type, createdAt: a.createdAt })),
-      currentlyViewing: window.context?.getActiveView()?.type === 'artifact' ? window.context.getActiveView().data.artifactId : null
+      currentlyViewing: window.views?.getActiveView()?.type === 'artifact' ? window.views.getActiveView().data.artifactId : null
     }),
     render: async (data) => await window.artifactView.renderArtifactView(data)
   },
@@ -86,20 +90,7 @@ const VIEWS_REGISTRY = {
     render: (data) => window.servicesView.renderServicesView()
   },
   
-  'actions': {
-    id: 'actions',
-    name: 'Actions',
-    description: 'View all available actions you can perform',
-    type: 'actions',
-    requiredParams: [],
-    optionalParams: [],
-    availableData: () => ({
-      actions: window.actionsView?.getAvailableActions ? window.actionsView.getAvailableActions() : []
-    }),
-    render: (data) => {
-      return window.actionsView.renderActionsView();
-    }
-  },
+
   
   'system': {
     id: 'system',
@@ -108,10 +99,8 @@ const VIEWS_REGISTRY = {
     type: 'system',
     requiredParams: [],
     optionalParams: [],
-    availableData: () => ({
-      systemSections: window.systemModule?.getSystemSections() || {}
-    }),
-    render: (data) => window.systemView.renderSystemView()
+    availableData: () => ({}),
+    render: async (data) => await window.systemView.renderSystemView(data)
   }
 };
 
@@ -153,23 +142,22 @@ let isTransitioning = false;
 let lastViewType = null;
 
 async function renderCurrentView(withTransition = true) {
-  const viewElement = window.context?.getViewElement();
   if (!viewElement) {
     // Ensure view element exists before setting it
     if (!document.getElementById('view')) {
       renderViewUI(); // Create the view element if it doesn't exist
     }
-    window.context?.setViewElement(document.getElementById('view'));
+    viewElement = document.getElementById('view');
   }
   
-  const currentViewElement = window.context?.getViewElement();
+  const currentViewElement = viewElement;
   if (!currentViewElement) return;
   
   // Prevent multiple simultaneous transitions
   if (isTransitioning && withTransition) return;
   
   // Get new content
-  const activeView = window.context?.getActiveView();
+  const activeView = window.views?.getActiveView();
   const currentViewType = activeView ? activeView.type : 'chat';
   
   // Call cleanup for previous view if switching
@@ -192,8 +180,12 @@ async function renderCurrentView(withTransition = true) {
     const view = Object.values(VIEWS_REGISTRY).find(v => v.type === type);
     
     if (view && view.render) {
+      // Merge view data with available data from the view definition
+      const availableData = view.availableData ? view.availableData() : {};
+      const mergedData = { ...availableData, ...data };
+      
       // Handle both sync and async renders
-      const result = view.render(data);
+      const result = view.render(mergedData);
       newHtml = result instanceof Promise ? await result : result;
     } else {
       newHtml = `<div class="column align-center justify-center padding-xl foreground-tertiary">Unknown view type: ${type}</div>`;
@@ -275,7 +267,7 @@ function renderViewUI() {
   }
   
   // Set up context references
-  window.context?.setViewElement(document.getElementById('view'));
+  viewElement = document.getElementById('view');
 }
 
 function removeViewUI() {
@@ -285,7 +277,7 @@ function removeViewUI() {
   });
   
   // Clear context references
-  window.context?.setViewElement(null);
+  viewElement = null;
 }
 
 
@@ -313,11 +305,11 @@ function switchView(viewId, data = {}, options = {}) {
   
   // Handle null/undefined viewId (clear view to show chat)
   if (viewId === null || viewId === undefined) {
-    const currentView = window.context?.getActiveView();
+    const currentView = window.views?.getActiveView();
     if (currentView === null) return; // Already null, no change needed
     
     // Clear the view
-    window.context?.setContext({ activeView: null });
+    activeView = null;
     window.memory?.saveActiveView(null);
     if (window.views?.renderCurrentView) {
       window.views.renderCurrentView(withTransition);
@@ -352,7 +344,7 @@ function switchView(viewId, data = {}, options = {}) {
   const newView = { type: view.type, data };
   
   // Simple comparison for view objects (prevent duplicate changes)
-  const currentView = window.context?.getActiveView();
+  const currentView = window.views?.getActiveView();
   if (currentView && 
       currentView.type === newView.type &&
       JSON.stringify(currentView.data) === JSON.stringify(newView.data)) {
@@ -366,19 +358,19 @@ function switchView(viewId, data = {}, options = {}) {
   }
   
   // Update the view state
-  window.context?.setContext({ activeView: newView });
+  activeView = newView;
   window.memory?.saveActiveView(newView);
   
   // Handle version tracking for artifact views
   if (view.type === 'artifact' && data.artifactId) {
     const artifactId = data.artifactId;
-    const currentActiveVersions = window.context?.getActiveVersionIndex ? 
-      window.context.getActiveVersionIndex(artifactId) : undefined;
+    const currentActiveVersions = window.artifactsModule?.getActiveVersionIndex ? 
+      window.artifactsModule.getActiveVersionIndex(artifactId) : undefined;
     
     if (currentActiveVersions === undefined) {
       const artifact = window.artifactsModule?.getArtifact(artifactId);
-      if (artifact && window.context?.setActiveVersionIndex) {
-        window.context.setActiveVersionIndex(artifactId, artifact.versions.length - 1);
+      if (artifact && window.artifactsModule?.setActiveVersionIndex) {
+        window.artifactsModule.setActiveVersionIndex(artifactId, artifact.versions.length - 1);
       }
     }
   }
@@ -402,6 +394,17 @@ function switchToArtifact(artifactId, options = {}) {
   return switchView('artifact', { artifactId }, options);
 }
 
+// Restore view from saved state (used during initialization)
+function restoreView(savedView) {
+  if (!savedView || !savedView.type) return;
+  
+  // Find the view ID from the registry based on type
+  const viewId = Object.keys(VIEWS_REGISTRY).find(id => VIEWS_REGISTRY[id].type === savedView.type);
+  if (viewId) {
+    switchView(viewId, savedView.data || {});
+  }
+}
+
 // Export functions for global access
 window.views = {
   // Registry access
@@ -417,5 +420,9 @@ window.views = {
   removeViewUI,
   renderCurrentView,
   simpleBlurTransition,
-  init
+  init,
+  restoreView,
+  // State access
+  getViewElement: () => viewElement || document.getElementById('view'),
+  getActiveView: () => activeView
 }; 

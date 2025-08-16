@@ -15,7 +15,7 @@ function buildContextWords() {
   });
   
   // Add chats
-  (window.context?.getChats() || []).forEach(chat => {
+  (window.chat?.getChats() || []).forEach(chat => {
     contextWords.set(chat.title.toLowerCase(), { type: 'chat', id: chat.id, title: chat.title });
   });
   

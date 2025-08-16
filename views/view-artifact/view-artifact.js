@@ -113,7 +113,7 @@ async function renderArtifactView(data) {
     return renderErrorMessage('Artifact not found');
   }
 
-  const currentVersionIdx = window.context?.getActiveVersionIndex(artifactId) ?? artifact.versions.length - 1;
+  const currentVersionIdx = window.artifactsModule?.getActiveVersionIndex(artifactId) ?? artifact.versions.length - 1;
   const versionIndicator = generateVersionIndicator(artifact, currentVersionIdx);
 
   // Use the unified renderer
@@ -157,7 +157,7 @@ function switchToArtifactVersion(artifactId, versionIdx) {
   const success = window.artifactsModule.setArtifactVersion(artifactId, versionIdx);
   if (success) {
     // Refresh the current artifact view to show updated version
-    const activeView = window.context?.getActiveView();
+    const activeView = window.views?.getActiveView();
     if (activeView && activeView.type === 'artifact' && 
         activeView.data.artifactId === artifactId) {
       if (window.views?.renderCurrentView) {

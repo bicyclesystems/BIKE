@@ -23,7 +23,7 @@ function debouncedSaveChats() {
     clearTimeout(saveTimeouts.chats);
   }
   saveTimeouts.chats = setTimeout(() => {
-    localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
+    localStorage.setItem(CHATS_KEY, JSON.stringify(window.chat?.getChats() || []));
     saveTimeouts.chats = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -34,7 +34,7 @@ function debouncedSaveMessages() {
     clearTimeout(saveTimeouts.messages);
   }
   saveTimeouts.messages = setTimeout(() => {
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(window.chat?.getMessagesByChat() || {}));
     saveTimeouts.messages = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -45,7 +45,7 @@ function debouncedSaveArtifacts() {
     clearTimeout(saveTimeouts.artifacts);
   }
   saveTimeouts.artifacts = setTimeout(() => {
-    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
+    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(window.artifactsModule?.getArtifacts() || []));
     saveTimeouts.artifacts = null;
     
   }, SAVE_DEBOUNCE_DELAY);
@@ -105,9 +105,9 @@ function flushAllPendingSaves() {
   });
   
   // Immediate saves of all data
-  localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
-  localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
-  localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
+  localStorage.setItem(CHATS_KEY, JSON.stringify(window.chat?.getChats() || []));
+  localStorage.setItem(MESSAGES_KEY, JSON.stringify(window.chat?.getMessagesByChat() || {}));
+  localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(window.artifactsModule?.getArtifacts() || []));
   localStorage.setItem(USER_PREFERENCES_KEY, JSON.stringify(userPreferences));
   
   // Note: activeView and activeChatId are saved when they change, 
@@ -189,7 +189,7 @@ async function saveArtifactsToIndexedDB() {
     });
 
     // Add all current artifacts
-    for (const artifact of AppContext.artifacts) {
+    for (const artifact of (window.artifactsModule?.getArtifacts() || [])) {
       await new Promise((resolve, reject) => {
         const addRequest = store.add(artifact);
         addRequest.onsuccess = () => resolve();
@@ -230,9 +230,9 @@ async function loadArtifactsFromIndexedDB() {
 function save(immediate = false) {
   if (immediate) {
     // Immediate saves for critical operations (like page unload)
-    localStorage.setItem(CHATS_KEY, JSON.stringify(AppContext.chats));
-    localStorage.setItem(MESSAGES_KEY, JSON.stringify(AppContext.messagesByChat));
-    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(AppContext.artifacts));
+    localStorage.setItem(CHATS_KEY, JSON.stringify(window.chat?.getChats() || []));
+    localStorage.setItem(MESSAGES_KEY, JSON.stringify(window.chat?.getMessagesByChat() || {}));
+    localStorage.setItem(ARTIFACTS_KEY, JSON.stringify(window.artifactsModule?.getArtifacts() || []));
   
   } else {
     // Use debounced saves for better performance
@@ -249,18 +249,31 @@ function save(immediate = false) {
 
   // Notify sync system that data has changed
   dispatchDataChange('all', {
-    chats: AppContext.chats,
-    messagesByChat: AppContext.messagesByChat,
-    artifacts: AppContext.artifacts
+    chats: window.chat?.getChats() || [],
+    messagesByChat: window.chat?.getMessagesByChat() || {},
+    artifacts: window.artifactsModule?.getArtifacts() || []
   });
 }
 
 function load() {
-  setContext({
-    chats: JSON.parse(localStorage.getItem(CHATS_KEY) || '[]'),
-    messagesByChat: JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}'),
-    artifacts: JSON.parse(localStorage.getItem(ARTIFACTS_KEY) || '[]')
-  });
+  // Load data and initialize modules directly
+  const chats = JSON.parse(localStorage.getItem(CHATS_KEY) || '[]');
+  const messagesByChat = JSON.parse(localStorage.getItem(MESSAGES_KEY) || '{}');
+  const artifacts = JSON.parse(localStorage.getItem(ARTIFACTS_KEY) || '[]');
+  
+  // Initialize chat module with loaded data
+  if (window.chat && chats.length > 0) {
+    const chatsArray = window.chat.getChats();
+    const msgsByChat = window.chat.getMessagesByChat();
+    chatsArray.push(...chats);
+    Object.assign(msgsByChat, messagesByChat);
+  }
+  
+  // Initialize artifacts module with loaded data
+  if (window.artifactsModule && artifacts.length > 0) {
+    const artifactsArray = window.artifactsModule.getArtifacts();
+    artifactsArray.push(...artifacts);
+  }
 }
 
 async function saveArtifacts() {
@@ -275,7 +288,7 @@ async function saveArtifacts() {
   }
 
   // Notify sync system that artifacts have changed
-  dispatchDataChange('artifacts', AppContext.artifacts);
+  dispatchDataChange('artifacts', window.artifactsModule?.getArtifacts() || []);
 }
 
 async function loadArtifacts() {
@@ -297,38 +310,44 @@ async function loadArtifacts() {
     }
   }
   
-  if (artifacts) {
-    setContext({ artifacts });
+  if (artifacts && window.artifactsModule) {
+    const artifactsArray = window.artifactsModule.getArtifacts();
+    artifactsArray.length = 0; // Clear existing
+    artifactsArray.push(...artifacts);
   }
 }
 
 // =================== Individual Item Persistence ===================
 function saveChat(chat) {
-  const chats = [...AppContext.chats];
-  const existingIndex = chats.findIndex(c => c.id === chat.id);
-  
-  if (existingIndex >= 0) {
-    chats[existingIndex] = chat;
-  } else {
-    chats.push(chat);
+  // Get chats from chat module and update there
+  const chats = window.chat?.getChats();
+  if (chats) {
+    const existingIndex = chats.findIndex(c => c.id === chat.id);
+    
+    if (existingIndex >= 0) {
+      chats[existingIndex] = chat;
+    } else {
+      chats.push(chat);
+    }
   }
   
-  setContext({ chats });
-  debouncedSaveChats(); // Use debounced save instead of immediate save
+  debouncedSaveChats(); // Save to localStorage
   
   // Notify sync system
   dispatchDataChange('chat', chat);
 }
 
 function saveMessage(chatId, message) {
-  const messagesByChat = { ...AppContext.messagesByChat };
-  if (!messagesByChat[chatId]) {
-    messagesByChat[chatId] = [];
+  // Get messagesByChat from chat module and update there
+  const messagesByChat = window.chat?.getMessagesByChat();
+  if (messagesByChat) {
+    if (!messagesByChat[chatId]) {
+      messagesByChat[chatId] = [];
+    }
+    messagesByChat[chatId].push(message);
   }
   
-  messagesByChat[chatId].push(message);
-  setContext({ messagesByChat });
-  debouncedSaveMessages(); // Use debounced save instead of immediate save
+  debouncedSaveMessages(); // Save to localStorage
   
   // Notify sync system
   dispatchDataChange('message', { chatId, message });
@@ -338,22 +357,32 @@ function deleteChat(chatId) {
 
   
   try {
-    // 1. Remove chat from chats array
-    const updatedChats = AppContext.chats.filter(c => c.id !== chatId);
+    // 1. Remove chat from chats array in chat module
+    const chats = window.chat?.getChats();
+    if (chats) {
+      const chatIndex = chats.findIndex(c => c.id === chatId);
+      if (chatIndex >= 0) {
+        chats.splice(chatIndex, 1);
+      }
+    }
     
-    // 2. Remove messages for this chat
-    const updatedMessagesByChat = { ...AppContext.messagesByChat };
-    delete updatedMessagesByChat[chatId];
+    // 2. Remove messages for this chat from chat module
+    const messagesByChat = window.chat?.getMessagesByChat();
+    if (messagesByChat && messagesByChat[chatId]) {
+      delete messagesByChat[chatId];
+    }
     
-    // 3. Remove artifacts for this chat
-    const updatedArtifacts = AppContext.artifacts.filter(a => a.chatId !== chatId);
-    
-    // 4. Update state
-    setContext({
-      chats: updatedChats,
-      messagesByChat: updatedMessagesByChat,
-      artifacts: updatedArtifacts
-    });
+    // 3. Remove artifacts for this chat from artifacts module
+    const artifacts = window.artifactsModule?.getArtifacts();
+    if (artifacts) {
+      const toRemove = artifacts.filter(a => a.chatId === chatId);
+      toRemove.forEach(artifact => {
+        const index = artifacts.findIndex(a => a.id === artifact.id);
+        if (index >= 0) {
+          artifacts.splice(index, 1);
+        }
+      });
+    }
     
     // 5. Use debounced saves for better performance
     debouncedSaveChats();
@@ -392,17 +421,19 @@ function deleteChat(chatId) {
 }
 
 function saveArtifact(artifact) {
-  const artifacts = [...AppContext.artifacts];
-  const existingIndex = artifacts.findIndex(a => a.id === artifact.id);
-  
-  if (existingIndex >= 0) {
-    artifacts[existingIndex] = artifact;
-  } else {
-    artifacts.push(artifact);
+  // Get artifacts from artifacts module and update there
+  const artifacts = window.artifactsModule?.getArtifacts();
+  if (artifacts) {
+    const existingIndex = artifacts.findIndex(a => a.id === artifact.id);
+    
+    if (existingIndex >= 0) {
+      artifacts[existingIndex] = artifact;
+    } else {
+      artifacts.push(artifact);
+    }
   }
   
-  setContext({ artifacts });
-  debouncedSaveArtifacts(); // Use debounced save instead of immediate save
+  debouncedSaveArtifacts(); // Save to localStorage
   
   // Also save to IndexedDB asynchronously
   saveArtifactsToIndexedDB().catch(error => {
@@ -518,8 +549,8 @@ function getStorageStatus() {
   return {
     indexedDBAvailable: !!indexedDB_instance,
     indexedDBName: DB_NAME,
-    localStorageSize: JSON.stringify(AppContext.artifacts).length,
-    artifactCount: AppContext.artifacts.length,
+    localStorageSize: JSON.stringify(window.artifactsModule?.getArtifacts() || []).length,
+    artifactCount: (window.artifactsModule?.getArtifacts() || []).length,
     lastOperation: new Date().toISOString()
   };
 }
@@ -528,9 +559,9 @@ function getStorageStatus() {
 function getContextData() {
   return {
     userPreferences: userPreferences,
-    chats: AppContext.chats,
-    artifacts: AppContext.artifacts,
-    messagesByChat: AppContext.messagesByChat,
+    chats: window.chat?.getChats() || [],
+    artifacts: window.artifactsModule?.getArtifacts() || [],
+    messagesByChat: window.chat?.getMessagesByChat() || {},
     storageStatus: getStorageStatus()
   };
 }

@@ -4,7 +4,7 @@
 // =================== ORCHESTRATION UTILITIES ===================
 
 function findBestMatchingArtifact(title, type, content) {
-  const currentChatArtifacts = window.context?.getCurrentChatArtifacts() || [];
+  const currentChatArtifacts = window.artifactsModule?.getCurrentChatArtifacts() || [];
   
   // Private helper functions
   const levenshteinDistance = (str1, str2) => {
@@ -341,7 +341,12 @@ async function orchestrateAIResponse(response, utilities) {
         artifact.metadata.generationMethod = 'specialized';
       }
       
-      window.context?.setContext({ artifacts: window.artifactsModule.getArtifacts().map(a => a.id === artifact.id ? artifact : a) });
+      // Update artifact in artifacts module directly
+      const artifactsArray = window.artifactsModule.getArtifacts();
+      const index = artifactsArray.findIndex(a => a.id === artifact.id);
+      if (index !== -1) {
+        artifactsArray[index] = artifact;
+      }
       saveArtifacts();
       
       artifactIds[title] = artifact.id;
@@ -434,10 +439,10 @@ async function orchestrateAIResponse(response, utilities) {
         timestamp
       };
       
-      let messages = window.context?.getMessagesByChat()[window.context?.getActiveChatId()] || [];
+      let messages = window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
       messages.push(message);
       window.chat?.setActiveMessages(messages);
-      window.context?.setActiveMessageIndex(messages.length - 1);
+      window.chat?.setActiveMessageIndex(messages.length - 1);
       
       if (window.messages && window.messages.updateMessagesDisplay) {
         window.messages.updateMessagesDisplay();
@@ -484,10 +489,10 @@ async function orchestrateAIResponse(response, utilities) {
     timestamp
   };
   
-  let messages = window.context?.getMessagesByChat()[window.context?.getActiveChatId()] || [];
+  let messages = window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
   messages.push(message);
   window.chat?.setActiveMessages(messages);
-  window.context?.setActiveMessageIndex(messages.length - 1);
+  window.chat?.setActiveMessageIndex(messages.length - 1);
   
   if (window.messages && window.messages.updateMessagesDisplay) {
     window.messages.updateMessagesDisplay();

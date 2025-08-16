@@ -21,7 +21,7 @@
   function waitForAppReady() {
     return new Promise((resolve) => {
       const checkReady = () => {
-        if (window.context && window.context.getActiveChatId && window.memory && window.artifacts) {
+        if (window.chat && window.chat.getActiveChatId && window.memory && window.artifactsModule) {
           resolve();
         } else {
           setTimeout(checkReady, 100);
@@ -115,21 +115,32 @@
         }
         
         // Always update template chat data (remove old, add fresh)
-        const currentChats = window.context.getChats().filter(c => c.id !== templateId);
-        const currentMessagesByChat = window.context.getMessagesByChat();
+        const currentChats = window.chat.getChats().filter(c => c.id !== templateId);
+        const currentMessagesByChat = window.chat.getMessagesByChat();
         const currentArtifacts = window.artifactsModule.getArtifacts().filter(a => a.chatId !== templateId);
         
         // Update with fresh content from files
         delete currentMessagesByChat[templateId]; // Remove old messages
         
-        window.context.setContext({
-          chats: [...currentChats, templateChat],
-          messagesByChat: { 
-            ...currentMessagesByChat, 
-            [templateId]: chatConfig.messages 
-          },
-          artifacts: [...currentArtifacts, ...artifacts]
-        });
+        // Update modules directly instead of context
+        // Add chat to chat module
+        if (window.chat) {
+          const existingChats = window.chat.getChats();
+          const chatExists = existingChats.find(c => c.id === templateId);
+          if (!chatExists) {
+            // Add template chat to chat module state
+            window.chat.getChats().push(templateChat);
+            const currentMsgsByChat = window.chat.getMessagesByChat();
+            currentMsgsByChat[templateId] = chatConfig.messages;
+          }
+        }
+        
+        // Add artifacts to artifacts module
+        if (window.artifactsModule) {
+          for (const artifact of artifacts) {
+            window.artifactsModule.getArtifacts().push(artifact);
+          }
+        }
         
         console.log(`[TEMPLATE] ✅ Synced template chat: ${templateInfo.chatTitle}`);
         

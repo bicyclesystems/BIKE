@@ -7,7 +7,7 @@ function getCalendarEndTime(chat) {
   }
   
   // Try to infer from last message
-  const messages = window.context?.getMessagesByChat()[chat.id] || [];
+  const messages = window.chat?.getMessagesByChat()[chat.id] || [];
   if (messages.length > 0) {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.timestamp) {
@@ -29,12 +29,12 @@ function getCalendarEndTime(chat) {
 
 // Smart chat events generation with real durations
 const generateChatEvents = () => {
-  const chats = window.context?.getChats() || [];
+  const chats = window.chat?.getChats() || [];
   
   return chats.map(chat => {
     const startTime = new Date(chat.timestamp);
     const endTime = getCalendarEndTime(chat);
-    const isActive = chat.id === window.context?.getActiveChatId();
+    const isActive = chat.id === window.chat?.getActiveChatId();
     const color = isActive ? "#3b82f6" : "#9ca3af";
     
     return {

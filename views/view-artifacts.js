@@ -13,7 +13,7 @@ const ARTIFACT_VIEW_MODES = {
 // =================== Simplified Artifacts View ===================
 
 async function renderArtifactsView(data) {
-  const allArtifacts = window.context?.getCurrentChatArtifacts() || [];
+  const allArtifacts = window.artifactsModule?.getCurrentChatArtifacts() || [];
   
   if (allArtifacts.length === 0) {
     return `
@@ -208,7 +208,7 @@ function getArtifactTypeIcon(type) {
 
 function refreshArtifactsView() {
   // Re-render the artifacts view to reflect version changes
-  const activeView = window.context?.getActiveView();
+  const activeView = window.views?.getActiveView();
   if (activeView && activeView.type === 'artifacts') {
     if (window.views?.renderCurrentView) {
       window.views.renderCurrentView();

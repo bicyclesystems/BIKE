@@ -70,7 +70,7 @@ class InputManager {
 
   // Dynamic DOM elements (no caching to avoid stale references during view switching)
   get viewElement() {
-    return window.context?.getViewElement() || document.getElementById('view');
+    return window.views?.getViewElement() || document.getElementById('view');
   }
 
   // =================== Visibility & Animation Management ===================
@@ -98,7 +98,7 @@ class InputManager {
 
   show() {
     // Hide messages when showing input
-    const container = window.context?.getMessagesContainer();
+    const container = document.getElementById('messages');
     if (container) {
       container.innerHTML = '';
     }
@@ -585,12 +585,5 @@ window.inputModule = {
   highlightContextWords: () => inputManager.highlightContextWords(),
   stopPlaceholderAnimation: () => inputManager.stopPlaceholderAnimation(),
   
-  // Legacy send function - now delegates to processModule
-  send: () => {
-    if (window.processModule && window.processModule.process) {
-      window.processModule.process();
-    } else {
-      console.error('[INPUT] processModule not available');
-    }
-  }
+  // All input processing delegated to processModule via callbacks
 }; 

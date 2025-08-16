@@ -45,7 +45,7 @@
   <script src="views/view-memory.js"></script>
   <script src="views/view-services.js"></script>
   <script src="views/view-chat.js"></script>
-  <script src="views/view-actions.js"></script>
+
   <script src="views/view-system.js"></script>
   <!-- Main views coordinator -->
   <script src="views/views.js"></script>
@@ -76,25 +76,25 @@
       const session = await user.initializeAuth();
       await memory.initMemory();
       
+      // Initialize modules first
+      await artifacts.waitForInit();
+      views.init();
+      
       if (session) {
         // Authenticated: load data and restore last chat/view
         memory.load();
-        const chatId = memory.loadActiveChatId() || context.getChats()[0]?.id;
+        chat.initChatState(); // Initialize chat state from memory
+        artifactsModule.initArtifactsState(); // Initialize artifacts state from memory
+        const chatId = memory.loadActiveChatId() || chat.getChats()[0]?.id;
         chatId ? chat.switchChat(chatId) : chat.create();
         const view = memory.loadActiveView();
-        context.setContext({ activeView: view });
+        if (view && window.views?.restoreView) {
+          window.views.restoreView(view);
+        }
       } else {
-        // Guest: start fresh
-        context.setContext({ 
-          chats: [], messagesByChat: {}, artifacts: [], activeChatId: null, messages: [],
-          activeMessageIndex: -1, messagesContainer: null, viewElement: null, activeView: null,
-          activeVersionIdxByArtifact: {}, showAllMessages: false 
-        });
+        // Guest: start fresh - modules will initialize with empty state
         chat.create();
       }
-      
-      await artifacts.waitForInit();
-      views.init();
       
       // 5. Initialize sync in background
       if (window.syncManager) {

@@ -1,11 +1,4 @@
-// =================== SYSTEM MODULE ===================
-// This module handles system prompts and AI instructions
-// Organized in sections: Prompt Engineering → System Instructions → Context Building
-
-// =================== PROMPT ENGINEERING ===================
-// Modular system prompt sections for better maintenance and customization
-
-// Load README content for system identity
+// System Module - builds AI prompts and instructions
 async function loadReadmeContent() {
   try {
     const response = await fetch('./README.md');
@@ -18,7 +11,6 @@ async function loadReadmeContent() {
   return null;
 }
 
-// Cache README content
 let cachedReadmeContent = null;
 
 async function getReadmeContent() {
@@ -31,7 +23,7 @@ async function getReadmeContent() {
 const SYSTEM_SECTIONS = {
   IDENTITY: `You are a helpful assistant that creates artifacts for users. When you create something, respond with structured JSON.`,
 
-  README: '', // This will be populated with README content
+  README: '',
 
   WELCOME: `WELCOME (STEP 1): If NO user session exists (isLoggedIn: false or currentUser: null):
 - Provide warm welcome introducing yourself and app capabilities
@@ -121,10 +113,7 @@ Key behaviors:
 - Keep suggestions practical and actionable`
 };
 
-// =================== SYSTEM INSTRUCTIONS BUILDER ===================
-
-async function createStructuredSystemPrompt(contextInfo = '', userResponseStyle = '', isContextualGuidance = false) {
-  // Load README content for system identity
+async function createStructuredSystemPrompt(appStateInfo = '', userResponseStyle = '', isContextualGuidance = false) {
   const readmeContent = await getReadmeContent();
   if (readmeContent) {
     SYSTEM_SECTIONS.README = `SYSTEM DOCUMENTATION:
@@ -136,7 +125,7 @@ This documentation describes exactly what you are and how you work. Use this kno
 
   let sections = [SYSTEM_SECTIONS.IDENTITY];
 
-  // Always include README if available
+
   if (SYSTEM_SECTIONS.README) {
     sections.push(SYSTEM_SECTIONS.README);
   }
@@ -169,22 +158,18 @@ You MUST follow this response style in ALL messages. This is the user's explicit
 
   let basePrompt = sections.join('\n\n');
 
-  return basePrompt + (contextInfo ? `\n\nContext: ${contextInfo}` : '') + '\n\nEXAMPLE SIMPLE RESPONSE:\n{"message": "What would you like to change your name to?", "artifacts": [], "actionsExecuted": []}';
+  return basePrompt + (appStateInfo ? `\n\nContext: ${appStateInfo}` : '') + '\n\nEXAMPLE SIMPLE RESPONSE:\n{"message": "What would you like to change your name to?", "artifacts": [], "actionsExecuted": []}';
 }
 
-// =================== CAPABILITIES DISCOVERY ===================
-
-function buildActionContext() {
-  const modules = ['chat', 'user', 'memory', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
-  const byModule = {};
-  
-  modules.forEach(name => {
+function buildAvailableFunctions() {
+  const byModule = MODULES.reduce((acc, name) => {
     const mod = window[name];
     if (mod && typeof mod === 'object') {
       const fns = Object.keys(mod).filter(k => typeof mod[k] === 'function');
-      if (fns.length) byModule[name] = fns;
+      if (fns.length) acc[name] = fns;
     }
-  });
+    return acc;
+  }, {});
   
   return `Available Functions:\n${Object.entries(byModule).map(([m, f]) => `${m}: ${f.join(', ')}`).join('\n')}\n\nFormat: Use in actionsExecuted as 'module.function'`;
 }
@@ -195,99 +180,94 @@ function getAvailableViews() {
   })) || [];
 }
 
-// =================== CONTEXT BUILDING ===================
+// Constants for DRY code
+const PREF_FIELDS = ['name', 'role', 'usingFor', 'collaboration'];
+const MODULES = ['chat', 'user', 'memory', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
 
-async function buildSystemMessage(contextData = null, isContextualGuidance = false) {
-  let contextInfo = '';
+const formatTraits = (traits) => Array.isArray(traits) ? traits.join(', ') : traits;
+const getFieldValue = (obj, field) => obj?.[field] || 'NOT_SET';
+
+const buildAppStateParts = {
+  base: () => 'Bike app with memory, views, artifacts, and actions',
+  
+  views: () => {
+    const views = getAvailableViews();
+    return views.length ? `Available views: ${views.map(v => v.title || v.name || v.id).join(', ')}` : null;
+  },
+  
+  auth: (auth) => auth ? `Authentication: isLoggedIn: ${auth.isLoggedIn}, currentUser: ${auth.currentUser || 'null'}` : null,
+  
+  actions: () => buildAvailableFunctions(),
+  
+  preferences: (prefs) => {
+    if (!prefs) return PREF_FIELDS.map(f => `${f.charAt(0).toUpperCase() + f.slice(1)}: NOT_SET`).concat('AI traits: NOT_SET');
+    
+    const result = PREF_FIELDS.map(field => {
+      const label = field === 'usingFor' ? 'Using for' : field.charAt(0).toUpperCase() + field.slice(1);
+      return `${label}: ${getFieldValue(prefs, field)}`;
+    });
+    
+    const traits = prefs.aiTraits ? formatTraits(prefs.aiTraits) : 'NOT_SET';
+    result.push(`AI traits: ${traits}`);
+    
+    return result;
+  },
+  
+  activeView: (view, artifacts) => {
+    if (!view) return null;
+    const parts = [`Current view: ${view.type}`];
+    
+    if (view.data?.artifactId) {
+      const artifact = artifacts?.find(a => a.id === view.data.artifactId);
+      if (artifact) parts.push(`Viewing: "${artifact.title}" (${artifact.type})`);
+    }
+    
+    return parts;
+  },
+  
+  artifacts: (artifacts) => {
+    if (!artifacts?.length) return null;
+    const types = [...new Set(artifacts.map(a => a.type))];
+    const parts = [`Current artifacts: ${artifacts.length} artifacts (${types.join(', ')})`];
+    
+    if (artifacts.some(a => a.versions?.length > 1)) {
+      parts.push('Versioned artifacts available for comparison');
+    }
+    
+    return parts;
+  }
+};
+
+async function system(contextData = null, isContextualGuidance = false) {
   let userResponseStyle = '';
   
-  if (contextData && typeof contextData === 'object') {
-    const parts = [];
-    
-    parts.push('Context: Bike app with memory, views, artifacts, and actions');
-    
-    // Views are now system capabilities, not context
-    const availableViews = getAvailableViews();
-    if (availableViews.length > 0) {
-      const viewNames = availableViews.map(view => view.title || view.name || view.id);
-      parts.push(`Available views: ${viewNames.join(', ')}`);
-    }
-    
-    if (contextData.authStatus) {
-      parts.push(`Authentication: isLoggedIn: ${contextData.authStatus.isLoggedIn}, currentUser: ${contextData.authStatus.currentUser || 'null'}`);
-    }
-    
-    // Actions are now system capabilities, not context
-    const availableActions = buildActionContext();
-    if (availableActions) {
-      parts.push(availableActions);
-    }
-    
-    if (contextData.userPreferences) {
-      const prefs = contextData.userPreferences;
-      
-      parts.push(`User: ${prefs.name || 'NOT_SET'}`);
-      parts.push(`Role: ${prefs.role || 'NOT_SET'}`);
-      parts.push(`Using for: ${prefs.usingFor || 'NOT_SET'}`);
-      parts.push(`Collaboration: ${prefs.collaboration || 'NOT_SET'}`);
-      
-      const traitsDisplay = prefs.aiTraits 
-        ? (Array.isArray(prefs.aiTraits) ? prefs.aiTraits.join(', ') : prefs.aiTraits)
-        : 'NOT_SET';
-      parts.push(`AI traits: ${traitsDisplay}`);
-      
-      if (prefs.aiTraits) {
-        if (Array.isArray(prefs.aiTraits)) {
-          userResponseStyle = prefs.aiTraits.join(', ');
-        } else {
-          userResponseStyle = prefs.aiTraits;
-        }
-      }
-    } else {
-      parts.push(`User: NOT_SET`);
-      parts.push(`Role: NOT_SET`);
-      parts.push(`Using for: NOT_SET`);
-      parts.push(`Collaboration: NOT_SET`);
-      parts.push(`AI traits: NOT_SET`);
-    }
-    
-    if (contextData.activeView) {
-      parts.push(`Current view: ${contextData.activeView.type}`);
-      if (contextData.activeView.data?.artifactId) {
-        const artifact = contextData.artifacts?.find(a => a.id === contextData.activeView.data.artifactId);
-        if (artifact) {
-          parts.push(`Viewing: "${artifact.title}" (${artifact.type})`);
-        }
-      }
-    }
-    
-    // Existing artifacts info (situational context)
-    if (contextData.artifacts && contextData.artifacts.length > 0) {
-      const count = contextData.artifacts.length;
-      const types = [...new Set(contextData.artifacts.map(a => a.type))];
-      parts.push(`Current artifacts: ${count} artifacts (${types.join(', ')})`);
-      
-      // Check if any have versions (situational context)
-      if (contextData.artifacts.some(a => a.versions?.length > 1)) {
-        parts.push(`Versioned artifacts available for comparison`);
-      }
-    }
-    
-    contextInfo = parts.join('. ');
+  // Always provide some basic context, even if contextData is empty
+  if (!contextData || Object.keys(contextData).length === 0) {
+    const basicAppState = 'Bike app with memory, views, artifacts, and actions (no active context data)';
+    return await createStructuredSystemPrompt(basicAppState, userResponseStyle, isContextualGuidance);
   }
   
-  return await createStructuredSystemPrompt(contextInfo, userResponseStyle, isContextualGuidance);
+  const parts = [buildAppStateParts.base()];
+  
+  // Build app state parts efficiently
+  [
+    buildAppStateParts.views(),
+    buildAppStateParts.auth(contextData.authStatus),
+    buildAppStateParts.actions(),
+    ...buildAppStateParts.preferences(contextData.userPreferences),
+    ...buildAppStateParts.activeView(contextData.activeView, contextData.artifacts) || [],
+    ...buildAppStateParts.artifacts(contextData.artifacts) || []
+  ].forEach(part => part && parts.push(part));
+  
+  // Extract user response style
+  if (contextData.userPreferences?.aiTraits) {
+    userResponseStyle = formatTraits(contextData.userPreferences.aiTraits);
+  }
+  
+  return await createStructuredSystemPrompt(parts.join('. '), userResponseStyle, isContextualGuidance);
 }
 
-// =================== SYSTEM VIEWER UTILITIES ===================
 
-function getSystemSections() {
-  return SYSTEM_SECTIONS;
-}
-
-// =================== INITIALIZATION ===================
-
-// Pre-load README content when the module loads for better performance
 document.addEventListener('DOMContentLoaded', async () => {
   try {
     await getReadmeContent();
@@ -297,14 +277,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
 });
 
-// =================== PUBLIC API ===================
-
 window.systemModule = {
-  buildSystemMessage,
-  buildActionContext,
-  getAvailableViews,
-  getSystemSections,
-  getReadmeContent,
-  loadReadmeContent,
-  SYSTEM_SECTIONS
+  system
 }; 

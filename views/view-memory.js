@@ -28,7 +28,7 @@ function setupMemoryViewEventListeners() {
   if (window.memory?.events) {
     window.memory.events.addEventListener("dataChanged", (event) => {
       // Only refresh if memory view is currently active
-      if (window.context?.getActiveView()?.type === "memory") {
+      if (window.views?.getActiveView()?.type === "memory") {
         console.log(
           "[MEMORY VIEW] Data changed, refreshing view:",
           event.detail?.type
@@ -184,7 +184,7 @@ function renderMemoryView() {
 }
 
 function refreshMemoryView() {
-  if (window.context?.getActiveView()?.type === "memory") {
+  if (window.views?.getActiveView()?.type === "memory") {
     window.views?.renderCurrentView();
   }
 }

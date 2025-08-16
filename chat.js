@@ -14,13 +14,9 @@ window.API_KEY = window.API_KEY || "";
 function create(options = {}) {
   const { timestamp, title, description, endTime } = options;
   
-  // Reset context for new chat
-  window.context?.setContext({
-    activeVersionIdxByArtifact: {},
-    messages: [],
-    activeMessageIndex: -1,
-    activeView: null
-  });
+  // Reset chat state for new chat
+  messages = [];
+  activeMessageIndex = -1;
   
   // Create chat object
   const id = Date.now().toString();
@@ -34,13 +30,12 @@ function create(options = {}) {
   }
   
   // Add to context
-  const currentChats = window.context?.getChats() || [];
-  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+  const currentChats = window.chat?.getChats() || [];
+  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
   
-  window.context?.setContext({
-    chats: [...currentChats, chat],
-    messagesByChat: { ...currentMessagesByChat, [id]: [] }
-  });
+  // Update chat state
+  chats = [...currentChats, chat];
+  messagesByChat = { ...currentMessagesByChat, [id]: [] };
   
   // Save and switch to new chat
   window.memory?.save();
@@ -54,15 +49,13 @@ function switchChat(chatId) {
   if (!chatId) return;
   
   // Get messages for this chat
-  const messagesByChat = window.context?.getMessagesByChat() || {};
-  const messages = messagesByChat[chatId] || [];
+  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
+  const chatMessages = currentMessagesByChat[chatId] || [];
   
-  window.context?.setContext({ 
-    activeChatId: chatId,
-    activeView: null,
-    messages: messages,
-    activeMessageIndex: messages.length - 1
-  });
+  // Update chat state
+  activeChatId = chatId;
+  messages = chatMessages;
+  activeMessageIndex = chatMessages.length - 1;
   window.memory?.save();
   
   // Update messages display if available
@@ -82,12 +75,12 @@ function rename(title, chatId = null) {
     throw new Error('Chat title cannot be empty');
   }
   
-  const targetChatId = chatId || window.context?.getActiveChatId();
+  const targetChatId = chatId || window.chat?.getActiveChatId();
   if (!targetChatId) {
     throw new Error('No chat ID provided and no active chat');
   }
   
-  const chats = window.context?.getChats() || [];
+  const chats = window.chat?.getChats() || [];
   const chat = chats.find(c => c.id === targetChatId);
   if (!chat) {
     throw new Error(`Chat ${targetChatId} does not exist`);
@@ -103,7 +96,7 @@ function rename(title, chatId = null) {
   const updatedChats = [...chats];
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], title: trimmedTitle };
   
-  window.context?.setContext({ chats: updatedChats });
+  chats = updatedChats;
   window.memory?.save();
   
   return { 
@@ -122,12 +115,12 @@ function setDescription(description, chatId = null) {
   }
   
   const trimmedDescription = description ? description.trim() : "";
-  const targetChatId = chatId || window.context?.getActiveChatId();
+  const targetChatId = chatId || window.chat?.getActiveChatId();
   if (!targetChatId) {
     throw new Error('No chat ID provided and no active chat');
   }
   
-  const chats = window.context?.getChats() || [];
+  const chats = window.chat?.getChats() || [];
   const chat = chats.find(c => c.id === targetChatId);
   if (!chat) {
     throw new Error(`Chat ${targetChatId} does not exist`);
@@ -143,7 +136,7 @@ function setDescription(description, chatId = null) {
   const updatedChats = [...chats];
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], description: trimmedDescription };
   
-  window.context?.setContext({ chats: updatedChats });
+  chats = updatedChats;
   window.memory?.save();
   
   return {
@@ -157,35 +150,11 @@ function setDescription(description, chatId = null) {
   };
 }
 
-// Schedule a chat
-function schedule(startTime, endTime, title = 'Scheduled Chat', description = '') {
-  if (!startTime || !endTime) {
-    throw new Error('startTime and endTime are required');
-  }
-  
-  const start = new Date(startTime);
-  const end = new Date(endTime);
-  
-  if (isNaN(start) || isNaN(end)) {
-    throw new Error('startTime and endTime must be valid ISO date strings');
-  }
-  
-  if (end <= start) {
-    throw new Error('End time must be after start time');
-  }
-  
-  // Create the scheduled chat
-  return create({
-    timestamp: start.toISOString(),
-    endTime: end.toISOString(),
-    title: title || 'Scheduled Chat',
-    description: description || ''
-  });
-}
+
 
 // Delete a chat
 function deleteChat(chatId, confirmDelete = false) {
-  const chats = window.context?.getChats() || [];
+  const chats = window.chat?.getChats() || [];
   const chat = chats.find(c => c.id === chatId);
   
   if (!chat) {
@@ -198,7 +167,7 @@ function deleteChat(chatId, confirmDelete = false) {
   }
   
   // Safety check - require confirmation for non-empty chats
-  const messagesByChat = window.context?.getMessagesByChat() || {};
+  const messagesByChat = window.chat?.getMessagesByChat() || {};
   const messages = messagesByChat[chatId] || [];
   const artifacts = (window.artifactsModule?.getArtifacts() || []).filter(a => a.chatId === chatId);
   
@@ -208,21 +177,19 @@ function deleteChat(chatId, confirmDelete = false) {
   
   // Perform the deletion
   const updatedChats = chats.filter(c => c.id !== chatId);
-  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
+  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
   const updatedMessagesByChat = { ...currentMessagesByChat };
   delete updatedMessagesByChat[chatId];
   
   const currentArtifacts = window.artifactsModule?.getArtifacts() || [];
   const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
   
-  window.context?.setContext({
-    chats: updatedChats,
-    messagesByChat: updatedMessagesByChat,
-    artifacts: updatedArtifacts
-  });
+  // Update chat state (artifacts handled by artifacts module)
+  chats = updatedChats;
+  messagesByChat = updatedMessagesByChat;
   
   // Handle active chat switching
-  if (window.context?.getActiveChatId() === chatId) {
+  if (window.chat?.getActiveChatId() === chatId) {
     // Switch to the most recent chat
     const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     const newActiveChatId = sortedChats[0].id;
@@ -265,7 +232,7 @@ const MessagesState = {
   },
 
   get hasMessages() {
-    const messages = window.context?.getMessages();
+    const messages = window.chat?.getMessages();
     return messages && messages.length > 0;
   },
 
@@ -532,9 +499,30 @@ function hideLoadingIndicator() {
 
 // =================== UTILITY FUNCTIONS ===================
 
+// Chat module state
+let messagesContainer = null;
+let showAllMessages = false;
+let activeMessageIndex = -1;
+let chats = [];
+let messagesByChat = {};
+let activeChatId = null;
+let messages = [];
+
+// Initialize chat state from memory
+function initChatState() {
+  // Load data from memory when available
+  const memoryData = window.memory?.getContextData();
+  if (memoryData) {
+    chats = memoryData.chats || [];
+    messagesByChat = memoryData.messagesByChat || {};
+    activeChatId = window.memory?.loadActiveChatId() || null;
+    messages = messagesByChat[activeChatId] || [];
+  }
+}
+
 // First-principles DOM utilities
 const dom = {
-  getContainer: () => window.context?.getMessagesContainer(),
+  getContainer: () => messagesContainer,
 
   removeEffectClasses: (element) => {
     element.className = element.className.replace(
@@ -544,7 +532,7 @@ const dom = {
   },
 
   addMessageIndex: (element, index = null) => {
-    const msgIndex = index ?? window.context?.getActiveMessageIndex();
+    const msgIndex = index ?? activeMessageIndex;
     element.setAttribute("data-msg-idx", msgIndex);
     return element;
   },
@@ -656,7 +644,7 @@ function generateFileAnalysisDisplay(fileAnalysisContext) {
 
 function addMessageAttributes(html, messageIndex, isShowAllMode) {
   const opacityClass = isShowAllMode
-    ? messageIndex === window.context?.getActiveMessageIndex()
+    ? messageIndex === activeMessageIndex
       ? ""
       : "opacity-xs"
     : "";
@@ -716,7 +704,6 @@ function renderMessage(message, processedContent, isUser, returnHtml) {
       if (returnHtml) return html;
 
       // Single batched DOM update instead of multiple innerHTML assignments
-      const messagesContainer = window.context?.getMessagesContainer();
       if (messagesContainer) {
         messagesContainer.innerHTML = html;
       }
@@ -735,7 +722,6 @@ function renderMessage(message, processedContent, isUser, returnHtml) {
   if (returnHtml) return html;
 
   // Single batched DOM update instead of multiple innerHTML assignments
-  const messagesContainer = window.context?.getMessagesContainer();
   if (messagesContainer) {
     messagesContainer.innerHTML = html;
   }
@@ -769,7 +755,7 @@ function setupMessageEventHandlers(isShowAllMode) {
     e.preventDefault();
     e.stopPropagation();
     animateMessageToggle(() => {
-      window.context?.setShowAllMessages(shouldToggle);
+      showAllMessages = shouldToggle;
       updateMessagesDisplay();
     });
   };
@@ -926,7 +912,7 @@ function setupContextWordHandlers() {
 function setupHoverFunctionality() {
   if (!window.hoverMouseMoveHandler) {
     window.hoverMouseMoveHandler = function (e) {
-      if (!window.context?.getMessagesContainer()) return;
+      if (!messagesContainer) return;
 
       if (hoverTimeout) {
         clearTimeout(hoverTimeout);
@@ -972,7 +958,7 @@ function checkHoverState(x, y) {
   } else if (
     !isInMiddleArea &&
     !isCurrentlyHidden &&
-    !window.context?.getShowAllMessages()
+    !showAllMessages
   ) {
     hideMessagesWithEffect();
   }
@@ -1032,14 +1018,14 @@ function hideMessagesWithEffect() {
 }
 
 function handleInputNavigation(direction) {
-  const currentIndex = window.context.getActiveMessageIndex();
-  const messages = window.context.getMessages();
+  const currentIndex = activeMessageIndex;
+  const messages = window.chat?.getMessages();
 
   if (direction === "up" && currentIndex > 0) {
-    window.context.setActiveMessageIndex(currentIndex - 1);
+    activeMessageIndex = currentIndex - 1;
     updateMessagesDisplay();
   } else if (direction === "down" && currentIndex < messages.length - 1) {
-    window.context.setActiveMessageIndex(currentIndex + 1);
+    activeMessageIndex = currentIndex + 1;
     updateMessagesDisplay();
   }
 }
@@ -1067,7 +1053,7 @@ function renderMessagesUI() {
 
   // Create messages container
   if (!document.getElementById("messages")) {
-    const messagesContainer = window.utils.createElementWithClass(
+    messagesContainer = window.utils.createElementWithClass(
       "div",
       "transition padding-l"
     );
@@ -1078,16 +1064,16 @@ function renderMessagesUI() {
     messagesContainer.addEventListener("click", function (e) {
       e.stopPropagation();
     });
+  } else {
+    messagesContainer = document.getElementById("messages");
   }
-
-  window.context.setMessagesContainer(document.getElementById("messages"));
 
   // Add document click listener
   if (!window.messagesDocumentClickHandler) {
     window.messagesDocumentClickHandler = function (e) {
-      if (window.context.getMessagesContainer()) {
-        const wasShowingAll = window.context.getShowAllMessages();
-        window.context.setShowAllMessages(false);
+      if (messagesContainer) {
+        const wasShowingAll = showAllMessages;
+        showAllMessages = false;
 
         // Remove blur effect if we were showing all messages
         if (wasShowingAll) {
@@ -1124,7 +1110,7 @@ function removeMessagesUI() {
     hoverTimeout = null;
   }
 
-  window.context.setMessagesContainer(null);
+  messagesContainer = null;
 }
 
 // =================== MESSAGE MANAGEMENT ===================
@@ -1141,7 +1127,7 @@ function addMessage(role, content, options = {}) {
     minute: "2-digit",
   });
   let messages =
-    window.context.getMessagesByChat()[window.context.getActiveChatId()] || [];
+    window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
 
   // Generating the unique message id to keep the track
   const userId = localStorage.getItem("userId") || "guest";
@@ -1158,7 +1144,7 @@ function addMessage(role, content, options = {}) {
 
   messages.push(message);
   setActiveMessages(messages);
-  window.context.setActiveMessageIndex(messages.length - 1);
+  activeMessageIndex = messages.length - 1;
 
   window.inputModule.hide();
 
@@ -1183,13 +1169,12 @@ function updateMessagesDisplay() {
   const container = dom.getContainer();
   if (!container) return;
 
-  const viewElement = window.context.getViewElement();
-  if (!viewElement)
-    window.context.setViewElement(document.getElementById("view"));
+  const viewElement = window.views?.getViewElement();
+  if (!viewElement) return;
 
   container.classList.remove("hidden");
 
-  const messages = window.context.getMessages();
+  const messages = window.chat?.getMessages();
   if (messages.length === 0) {
     container.innerHTML = "";
     if (window.views?.renderCurrentView) {
@@ -1201,12 +1186,12 @@ function updateMessagesDisplay() {
   // Normalize message index using first-principles approach
   const normalizeIndex = (index, max) => Math.max(0, Math.min(index, max - 1));
   const currentIndex = normalizeIndex(
-    window.context.getActiveMessageIndex(),
+    activeMessageIndex,
     messages.length
   );
-  window.context.setActiveMessageIndex(currentIndex);
+  activeMessageIndex = currentIndex;
 
-  if (window.context.getShowAllMessages()) {
+  if (showAllMessages) {
     renderAllMessagesMode();
   } else {
     renderSingleMessageMode();
@@ -1215,7 +1200,7 @@ function updateMessagesDisplay() {
 
 function renderAllMessagesMode() {
   const container = dom.getContainer();
-  const messages = window.context.getMessages();
+  const messages = window.chat?.getMessages();
 
   container.className = "column box-m transition gap-xs";
   
@@ -1270,8 +1255,8 @@ function renderAllMessagesMode() {
 
 function renderSingleMessageMode() {
   const container = dom.getContainer();
-  const messages = window.context.getMessages();
-  const activeIndex = window.context.getActiveMessageIndex();
+  const messages = window.chat?.getMessages();
+  const activeIndex = activeMessageIndex;
 
   container.className = "column align-center justify-center box-s transition";
 
@@ -1332,13 +1317,12 @@ window.messages = {
 // =================== MESSAGE MANAGEMENT ===================
 
 function setActiveMessages(messages) {
-  const activeChatId = window.context?.getActiveChatId();
+  const activeChatId = window.chat?.getActiveChatId();
   if (!activeChatId) return;
   
-  const currentMessagesByChat = window.context?.getMessagesByChat() || {};
-  window.context?.setContext({ 
-    messagesByChat: { ...currentMessagesByChat, [activeChatId]: messages } 
-  });
+  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
+  // Update messages for current chat
+  messagesByChat = { ...currentMessagesByChat, [activeChatId]: messages };
   window.memory?.save();
 }
 
@@ -1348,7 +1332,14 @@ window.chat = {
   switchChat,
   rename,
   setDescription,
-  schedule,
   deleteChat,
-  setActiveMessages
+  setActiveMessages,
+  setActiveMessageIndex: (idx) => { activeMessageIndex = idx; },
+  // State management
+  initChatState,
+  // State getters
+  getChats: () => chats,
+  getMessagesByChat: () => messagesByChat,
+  getActiveChatId: () => activeChatId,
+  getMessages: () => messages
 };

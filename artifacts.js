@@ -4,6 +4,20 @@
 // =================== Module Loading ===================
 // Note: Artifacts modules are now loaded statically in index.html
 
+// =================== Artifacts State ===================
+// Artifact version tracking
+let activeVersionIdxByArtifact = {};
+// Internal artifacts array
+let artifacts = [];
+
+// Initialize artifacts state from memory
+function initArtifactsState() {
+  const memoryData = window.memory?.getContextData();
+  if (memoryData?.artifacts) {
+    artifacts = memoryData.artifacts;
+  }
+}
+
 // =================== Constants ===================
 
 const ARTIFACT_CONFIG = {
@@ -65,7 +79,7 @@ const ARTIFACT_CONFIG = {
 const utils = {
   getCurrentTimestamp: () => new Date().toISOString(),
   
-  getActiveChatId: () => window.context?.getActiveChatId(),
+  getActiveChatId: () => window.chat?.getActiveChatId(),
   
   isValidUrl: (string) => {
     try {
@@ -117,7 +131,7 @@ const utils = {
 
 // Helper function for refreshing active artifact view
 function refreshActiveArtifactView(artifactId) {
-  const activeView = window.context?.getActiveView();
+  const activeView = window.views?.getActiveView();
   if (activeView && activeView.type === 'artifact' && activeView.data.artifactId === artifactId) {
     window.views?.renderCurrentView?.();
   }
@@ -144,7 +158,7 @@ function create(content, messageId, type = null, shouldSetActive = false) {
     return null;
   }
   
-  const artifactsInChat = window.context?.getCurrentChatArtifacts() || [];
+  const artifactsInChat = window.artifactsModule?.getCurrentChatArtifacts() || [];
   const id = Date.now().toString() + (shouldSetActive ? '' : Math.random().toString(36).substr(2, 9));
   
   if (!type) {
@@ -171,12 +185,10 @@ function create(content, messageId, type = null, shouldSetActive = false) {
   }
   
   const currentArtifacts = getArtifacts();
-  window.context?.setContext({ artifacts: [...currentArtifacts, artifact] });
+  artifacts = [...currentArtifacts, artifact];
   window.memory?.saveArtifacts();
   
-  if (shouldSetActive) {
-    window.context?.setActiveArtifactId(id);
-  }
+  // shouldSetActive parameter no longer needed since context doesn't manage artifact state
   
   return artifact;
 }
@@ -191,14 +203,9 @@ function update(id, content) {
   artifact.versions.push({ content, timestamp });
   artifact.updatedAt = timestamp;
   
-  window.context?.setContext({
-    artifacts: artifacts,
-    activeVersionIdxByArtifact: { 
-      ...window.context.getActiveVersionIndex ? {} : {}, 
-      [id]: artifact.versions.length - 1 
-    }
-  });
-  window.context?.setActiveVersionIndex(id, artifact.versions.length - 1);
+  // Update internal state instead of context
+  // artifacts already updated in place above
+  activeVersionIdxByArtifact[id] = artifact.versions.length - 1;
   window.memory?.saveArtifacts();
   
   return artifact;
@@ -210,36 +217,27 @@ function get(id) {
 
 // Core artifact lookup functions
 function getArtifact(id) {
-  const artifacts = window.context?.getArtifacts() || [];
   return artifacts.find(a => a.id === id);
 }
 
 function findCurrentChatArtifact(artifactId) {
-  const artifacts = window.context?.getArtifacts() || [];
-  const activeChatId = window.context?.getActiveChatId();
+  const activeChatId = window.chat?.getActiveChatId();
   return artifacts.find(a => a.id === artifactId && a.chatId === activeChatId);
 }
 
 function getArtifacts() {
-  return window.context?.getArtifacts() || [];
+  return artifacts; // Use internal state, not context!
 }
 
 function getCurrentChatArtifacts() {
-  const artifacts = window.context?.getArtifacts() || [];
-  const activeChatId = window.context?.getActiveChatId();
+  const activeChatId = window.chat?.getActiveChatId();
   return artifacts.filter(a => a.chatId === activeChatId);
 }
 
 // =================== Artifact Click Handlers ===================
 
 function setupArtifactClickHandlers() {
-  // Handle artifact link hover
-  document.addEventListener('mouseenter', function (e) {
-    if (e.target.classList?.contains('artifact-link')) {
-      const artifactId = e.target.getAttribute('data-artifact-id');
-      window.context?.setActiveArtifactId(artifactId);
-    }
-  }, true);
+  // Artifact hover effects removed - no longer needed without context state management
   
   // Handle click events with delegation
   document.addEventListener('click', function (e) {
@@ -283,7 +281,7 @@ function setArtifactVersion(artifactId, versionIdx) {
     return false;
   }
   
-  window.context?.setActiveVersionIndex(artifactId, versionIdx);
+  activeVersionIdxByArtifact[artifactId] = versionIdx;
   refreshActiveArtifactView(artifactId);
   
   return true;
@@ -301,11 +299,11 @@ function deleteArtifactVersion(artifactId, versionIdx) {
   artifact.versions.splice(versionIdx, 1);
   artifact.updatedAt = utils.getCurrentTimestamp();
   
-  const currentActiveIdx = window.context?.getActiveVersionIndex(artifactId) ?? artifact.versions.length;
+  const currentActiveIdx = activeVersionIdxByArtifact[artifactId] ?? artifact.versions.length;
   const newActiveIdx = currentActiveIdx >= versionIdx ? Math.max(0, currentActiveIdx - 1) : currentActiveIdx;
   
-  window.context?.setContext({ artifacts: artifacts });
-  window.context?.setActiveVersionIndex(artifactId, newActiveIdx);
+  // artifacts already updated in the artifacts array above
+  activeVersionIdxByArtifact[artifactId] = newActiveIdx;
   window.memory?.saveArtifacts();
   
   // Re-render if this artifact is currently active
@@ -363,6 +361,11 @@ function initializeArtifactsModule() {
     getArtifactVersion,
     setArtifactVersion,
     deleteArtifactVersion,
+    getActiveVersionIndex: (id) => activeVersionIdxByArtifact[id],
+    setActiveVersionIndex: (id, idx) => { activeVersionIdxByArtifact[id] = idx; },
+    
+    // State management
+    initArtifactsState,
     
     // Event handling
     setupArtifactClickHandlers,
@@ -371,8 +374,7 @@ function initializeArtifactsModule() {
     waitForInit
   };
   
-  // Backward compatibility
-  window.artifacts = window.artifactsModule;
+  // Unified artifacts interface ready
   
   console.log('[ARTIFACTS] Module loaded with unified artifact system');
 }

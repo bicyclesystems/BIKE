@@ -215,22 +215,14 @@ async function logout() {
       window.memory.clear();
     }
 
-    // Clear all application state
-    if (window.context?.setContext) {
-      window.context.setContext({
-        chats: [],
-        messagesByChat: {},
-        artifacts: [],
-        activeChatId: null,
-        messages: [],
-        activeMessageIndex: -1,
-        messagesContainer: null,
-        viewElement: null,
-        activeView: null,
-        activeVersionIdxByArtifact: {},
-        showAllMessages: false,
-        userPreferences: {},
-      });
+    // Clear all application state by resetting modules
+    if (window.chat) {
+      window.chat.getChats().length = 0; // Clear chats array
+      const msgsByChat = window.chat.getMessagesByChat();
+      Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]); // Clear messages
+    }
+    if (window.artifactsModule) {
+      window.artifactsModule.getArtifacts().length = 0; // Clear artifacts array
     }
     // Remove all main UI
     toggleUI(false);
@@ -333,8 +325,8 @@ function removeIntroScreen() {
 function initializeMainApp() {
   console.log('[AUTH] Initializing app');
 
-  const chats = window.context.getChats() || [];
-  const activeChatId = window.context.getActiveChatId();
+  const chats = window.chat.getChats() || [];
+  const activeChatId = window.chat.getActiveChatId();
 
   console.log(
     `[AUTH] Found ${chats.length} chats, active: ${activeChatId || "none"}`
@@ -393,27 +385,21 @@ function handleUnauthenticatedState() {
     window.memory.purgeAllData();
   }
 
-  // Clear all application state
-  if (window.context?.setContext) {
-    window.context.setContext({
-      chats: [],
-      messagesByChat: {},
-      artifacts: [],
-      activeChatId: null,
-      messages: [],
-      activeMessageIndex: -1,
-      activeView: null,
-      activeVersionIdxByArtifact: {},
-      showAllMessages: false,
-      userPreferences: {},
-    });
+  // Clear all application state by resetting modules
+  if (window.chat) {
+    window.chat.getChats().length = 0; // Clear chats array
+    const msgsByChat = window.chat.getMessagesByChat();
+    Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]); // Clear messages
+  }
+  if (window.artifactsModule) {
+    window.artifactsModule.getArtifacts().length = 0; // Clear artifacts array
   }
 
   // Keep intro screen visible for unauthenticated users
   toggleUI(true); // Enable UI so users can interact
   
   // Show memory view if no active view is set (mirror authenticated behavior)
-  const currentView = window.context.getActiveView();
+  const currentView = window.views.getActiveView();
   if (window.views?.switchView && !currentView) {
     window.views.switchView("memory", {}, { withTransition: false });
   }

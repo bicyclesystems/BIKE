@@ -67,12 +67,12 @@ async function processContext(input = null, isContextualGuidance = false) {
   
   // Build system message using system module
   const systemMessage = window.systemModule ? 
-    await window.systemModule.buildSystemMessage(contextData, isContextualGuidance) :
+    await window.systemModule.system(contextData, isContextualGuidance) :
     'You are a helpful assistant. Respond with JSON format.';
   
   const messages = [
     { role: "system", content: systemMessage },
-    ...(window.context?.getMessages() || []).map(message => ({
+    ...(contextData?.messages || []).map(message => ({
       role: message.role === 'assistant' ? 'assistant' : 'user',
       content: message.content || message.structuredData?.main || ''
     }))
