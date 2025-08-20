@@ -14,7 +14,7 @@ const VIEWS_REGISTRY = {
     optionalParams: [],
     availableData: () => ({
       currentUser: window.user?.getActiveSession()?.user?.email || null,
-      userPreferences: window.memory?.getUserPreferences() || {}
+      userPreferences: window.user?.getUserPreferences() || {}
     }),
     render: (data) => window.chatView.renderChatView()
   },
@@ -71,8 +71,7 @@ const VIEWS_REGISTRY = {
     requiredParams: [],
     optionalParams: [],
     availableData: () => ({
-      memoryData: window.memory?.getContextData() || {},
-      storageStatus: window.memory?.getStorageStatus() || {}
+      contextData: window.context?.getContext() || {}
     }),
     render: (data) => {
       return window.memoryView.renderMemoryView();
@@ -310,7 +309,7 @@ function switchView(viewId, data = {}, options = {}) {
     
     // Clear the view
     activeView = null;
-    window.memory?.saveActiveView(null);
+    // No longer saving activeView to localStorage
     if (window.views?.renderCurrentView) {
       window.views.renderCurrentView(withTransition);
     }
@@ -359,7 +358,7 @@ function switchView(viewId, data = {}, options = {}) {
   
   // Update the view state
   activeView = newView;
-  window.memory?.saveActiveView(newView);
+  // No longer saving activeView to localStorage
   
   // Handle version tracking for artifact views
   if (view.type === 'artifact' && data.artifactId) {
@@ -425,4 +424,11 @@ window.views = {
   // State access
   getViewElement: () => viewElement || document.getElementById('view'),
   getActiveView: () => activeView
-}; 
+};
+
+// =================== Auto-Initialization ===================
+document.addEventListener('DOMContentLoaded', function() {
+  console.log('[VIEWS] Initializing views system...');
+  window.views.init();
+  console.log('[VIEWS] Views system initialized');
+}); 

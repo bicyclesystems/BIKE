@@ -4,8 +4,6 @@
 
 // =================== CONFIGURATION ===================
 
-window.API_KEY = window.API_KEY || "";
-
 // =================== STATE MANAGEMENT ===================
 
 // =================== CHAT MANAGEMENT ===================
@@ -18,27 +16,29 @@ function create(options = {}) {
   messages = [];
   activeMessageIndex = -1;
   
-  // Create chat object
+  // Create chat object with embedded messages
   const id = Date.now().toString();
   const chatTitle = title && typeof title === 'string' && title.trim() ? title.trim() : "New Chat";
   const chatDescription = description && typeof description === 'string' && description.trim() ? description.trim() : "";
   const chatTimestamp = timestamp ? new Date(timestamp).toISOString() : new Date().toISOString();
-  const chat = { id, title: chatTitle, description: chatDescription, timestamp: chatTimestamp };
+  const chat = { 
+    id, 
+    title: chatTitle, 
+    description: chatDescription, 
+    timestamp: chatTimestamp,
+    messages: []
+  };
   
   if (endTime) {
     chat.endTime = new Date(endTime).toISOString();
   }
   
-  // Add to context
+  // Add to chats array
   const currentChats = window.chat?.getChats() || [];
-  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
-  
-  // Update chat state
   chats = [...currentChats, chat];
-  messagesByChat = { ...currentMessagesByChat, [id]: [] };
   
   // Save and switch to new chat
-  window.memory?.save();
+  window.memory?.saveChats(chats);
   switchChat(id);
   
   return chat;
@@ -48,19 +48,21 @@ function create(options = {}) {
 function switchChat(chatId) {
   if (!chatId) return;
   
-  // Get messages for this chat
-  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
-  const chatMessages = currentMessagesByChat[chatId] || [];
+  // Find chat and get its messages
+  const chat = chats.find(c => c.id === chatId);
+  const chatMessages = chat?.messages || [];
   
   // Update chat state
   activeChatId = chatId;
   messages = chatMessages;
   activeMessageIndex = chatMessages.length - 1;
-  window.memory?.save();
+  
+  // Save active chat ID to localStorage
+  localStorage.setItem(ACTIVE_CHAT_ID_KEY, chatId || '');
   
   // Update messages display if available
-  if (window.messages?.updateMessagesDisplay) {
-    window.messages.updateMessagesDisplay();
+  if (window.chat?.updateMessagesDisplay) {
+    window.chat.updateMessagesDisplay();
   }
 }
 
@@ -97,7 +99,7 @@ function rename(title, chatId = null) {
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], title: trimmedTitle };
   
   chats = updatedChats;
-  window.memory?.save();
+  window.memory?.saveChats(chats);
   
   return { 
     success: true, 
@@ -137,7 +139,7 @@ function setDescription(description, chatId = null) {
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], description: trimmedDescription };
   
   chats = updatedChats;
-  window.memory?.save();
+  window.memory?.saveChats(chats);
   
   return {
     success: true,
@@ -167,45 +169,69 @@ function deleteChat(chatId, confirmDelete = false) {
   }
   
   // Safety check - require confirmation for non-empty chats
-  const messagesByChat = window.chat?.getMessagesByChat() || {};
-  const messages = messagesByChat[chatId] || [];
+  const chatMessages = chat.messages || [];
   const artifacts = (window.artifactsModule?.getArtifacts() || []).filter(a => a.chatId === chatId);
   
-  if ((messages.length > 0 || artifacts.length > 0) && !confirmDelete) {
-    throw new Error(`Chat "${chat.title}" contains ${messages.length} messages and ${artifacts.length} artifacts. Set confirmDelete=true to proceed.`);
+  if ((chatMessages.length > 0 || artifacts.length > 0) && !confirmDelete) {
+    throw new Error(`Chat "${chat.title}" contains ${chatMessages.length} messages and ${artifacts.length} artifacts. Set confirmDelete=true to proceed.`);
   }
   
-  // Perform the deletion
-  const updatedChats = chats.filter(c => c.id !== chatId);
-  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
-  const updatedMessagesByChat = { ...currentMessagesByChat };
-  delete updatedMessagesByChat[chatId];
-  
-  const currentArtifacts = window.artifactsModule?.getArtifacts() || [];
-  const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
-  
-  // Update chat state (artifacts handled by artifacts module)
-  chats = updatedChats;
-  messagesByChat = updatedMessagesByChat;
-  
-  // Handle active chat switching
-  if (window.chat?.getActiveChatId() === chatId) {
-    // Switch to the most recent chat
-    const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-    const newActiveChatId = sortedChats[0].id;
-    switchChat(newActiveChatId);
+  try {
+    // 1. Remove chat from chats array (messages are embedded, so this removes everything)
+    const updatedChats = chats.filter(c => c.id !== chatId);
+    
+    // 2. Remove artifacts for this chat
+    const currentArtifacts = window.artifactsModule?.getArtifacts() || [];
+    const updatedArtifacts = currentArtifacts.filter(a => a.chatId !== chatId);
+    
+    // 3. Update module states
+    chats.length = 0;
+    chats.push(...updatedChats);
+    
+    if (window.artifactsModule?.getArtifacts) {
+      const artifactsArray = window.artifactsModule.getArtifacts();
+      artifactsArray.length = 0;
+      artifactsArray.push(...updatedArtifacts);
+    }
+    
+    // 5. Handle active chat switching
+    if (window.chat?.getActiveChatId() === chatId) {
+      const sortedChats = updatedChats.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+      const newActiveChatId = sortedChats[0].id;
+      switchChat(newActiveChatId);
+    } else {
+      // Just save the data since we're not switching chats
+      window.memory?.saveChats(updatedChats);
+      window.memory?.saveArtifacts(updatedArtifacts);
+    }
+    
+    // 6. No need to clear activeChatId since we don't store it in localStorage
+    
+    // 7. Delete from database if sync is available
+    if (window.syncManager?.deleteChatFromDatabase) {
+      window.syncManager.deleteChatFromDatabase(chatId).catch(error => {
+        console.warn('[CHAT] Failed to delete chat from database:', error);
+      });
+    }
+    
+    // 8. Notify sync system
+    window.memory?.events?.dispatchEvent(new CustomEvent('dataChanged', { 
+      detail: { type: 'chatDeleted', data: { chatId } } 
+    }));
+    
+    return {
+      success: true,
+      message: `Deleted chat "${chat.title}" with ${chatMessages.length} messages and ${artifacts.length} artifacts`,
+      chatId,
+      chatTitle: chat.title,
+      deletedMessageCount: chatMessages.length,
+      deletedArtifactCount: artifacts.length
+    };
+    
+  } catch (error) {
+    console.error('[CHAT] Error deleting chat:', error);
+    throw new Error(`Failed to delete chat: ${error.message}`);
   }
-  
-  window.memory?.save();
-  
-  return {
-    success: true,
-    message: `Deleted chat "${chat.title}" with ${messages.length} messages and ${artifacts.length} artifacts`,
-    chatId,
-    chatTitle: chat.title,
-    deletedMessageCount: messages.length,
-    deletedArtifactCount: artifacts.length
-  };
 }
 
 // Typewriter animation state
@@ -503,20 +529,44 @@ function hideLoadingIndicator() {
 let messagesContainer = null;
 let showAllMessages = false;
 let activeMessageIndex = -1;
-let chats = [];
-let messagesByChat = {};
+let chats = []; // Now contains embedded messages: [{ id, title, messages: [...] }]
 let activeChatId = null;
-let messages = [];
+let messages = []; // Current active chat's messages (derived from chats)
+
+// Active chat persistence
+const ACTIVE_CHAT_ID_KEY = 'activeChatId';
+
+
 
 // Initialize chat state from memory
 function initChatState() {
-  // Load data from memory when available
-  const memoryData = window.memory?.getContextData();
-  if (memoryData) {
-    chats = memoryData.chats || [];
-    messagesByChat = memoryData.messagesByChat || {};
-    activeChatId = window.memory?.loadActiveChatId() || null;
-    messages = messagesByChat[activeChatId] || [];
+  // Load chats from memory (already loaded in memory.js initMemory)
+  const chatsFromMemory = window.chat?.getChats() || [];
+  
+  // Get saved active chat ID from localStorage
+  const savedActiveChatId = localStorage.getItem(ACTIVE_CHAT_ID_KEY) || null;
+  
+  if (chatsFromMemory.length > 0) {
+    // Use saved active chat ID if it exists and the chat still exists
+    const savedActiveChat = chatsFromMemory.find(c => c.id === savedActiveChatId);
+    if (savedActiveChat) {
+      activeChatId = savedActiveChatId;
+      messages = savedActiveChat.messages || [];
+      activeMessageIndex = messages.length - 1;
+    } else {
+      // Fall back to the most recent chat if saved ID doesn't exist
+      const latestChat = chatsFromMemory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))[0];
+      activeChatId = latestChat.id;
+      messages = latestChat.messages || [];
+      activeMessageIndex = messages.length - 1;
+      // Save this as the new active chat
+      localStorage.setItem(ACTIVE_CHAT_ID_KEY, activeChatId || '');
+    }
+  } else {
+    // No chats available
+    activeChatId = null;
+    messages = [];
+    activeMessageIndex = -1;
   }
 }
 
@@ -536,13 +586,6 @@ const dom = {
     element.setAttribute("data-msg-idx", msgIndex);
     return element;
   },
-
-  createBreathingElement: () => {
-    const element = document.createElement("div");
-    element.className =
-      "background-secondary padding-l radius-m typewriter-container column align-center justify-center transition blur-s";
-    return element;
-  },
 };
 
 function escapeHtml(text) {
@@ -551,13 +594,7 @@ function escapeHtml(text) {
   return div.innerHTML;
 }
 
-function getDomainFromUrl(url) {
-  try {
-    return new URL(url).hostname;
-  } catch (e) {
-    return url;
-  }
-}
+
 
 function showError(message) {
   console.error("Error:", message);
@@ -566,7 +603,6 @@ function showError(message) {
 // Export utilities for global access
 window.utils = {
   escapeHtml,
-  getDomainFromUrl,
   showError,
 
   hideElement: (selector) => {
@@ -592,10 +628,6 @@ window.utils = {
     return element;
   },
 };
-
-function getFaviconHtml(artifact) {
-  return "";
-}
 
 function applyContextHighlightingToMessage(content) {
   const tempElement = document.createElement("div");
@@ -1126,8 +1158,7 @@ function addMessage(role, content, options = {}) {
     hour: "2-digit",
     minute: "2-digit",
   });
-  let messages =
-    window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
+  let chatMessages = window.chat?.getMessages() || [];
 
   // Generating the unique message id to keep the track
   const userId = localStorage.getItem("userId") || "guest";
@@ -1142,9 +1173,18 @@ function addMessage(role, content, options = {}) {
     message.structuredData = structuredData;
   }
 
-  messages.push(message);
-  setActiveMessages(messages);
-  activeMessageIndex = messages.length - 1;
+  chatMessages.push(message);
+  
+  // Update active chat's messages and save
+  if (activeChatId) {
+    const chatIndex = chats.findIndex(c => c.id === activeChatId);
+    if (chatIndex !== -1) {
+      chats[chatIndex] = { ...chats[chatIndex], messages: chatMessages };
+      messages = chatMessages;
+      window.memory?.saveChats(chats);
+    }
+  }
+  activeMessageIndex = chatMessages.length - 1;
 
   window.inputModule.hide();
 
@@ -1300,46 +1340,34 @@ function renderSingleMessageMode() {
 
 // =================== PUBLIC API ===================
 
-window.messages = {
-  // Core lifecycle
-  renderMessagesUI,
-  removeMessagesUI,
-  updateMessagesDisplay,
-
-  // Message management (unified interface)
-  addMessage,
-
-  // Loading states
-  showLoadingIndicator,
-  hideLoadingIndicator,
-};
-
-// =================== MESSAGE MANAGEMENT ===================
-
-function setActiveMessages(messages) {
-  const activeChatId = window.chat?.getActiveChatId();
-  if (!activeChatId) return;
-  
-  const currentMessagesByChat = window.chat?.getMessagesByChat() || {};
-  // Update messages for current chat
-  messagesByChat = { ...currentMessagesByChat, [activeChatId]: messages };
-  window.memory?.save();
-}
-
-// Export chat management functions
+// Export combined chat and messages functions
 window.chat = {
+  // Chat management
   create,
   switchChat,
   rename,
   setDescription,
   deleteChat,
-  setActiveMessages,
-  setActiveMessageIndex: (idx) => { activeMessageIndex = idx; },
   // State management
   initChatState,
   // State getters
   getChats: () => chats,
-  getMessagesByChat: () => messagesByChat,
   getActiveChatId: () => activeChatId,
-  getMessages: () => messages
+  getMessages: () => messages,
+  // Message UI lifecycle
+  renderMessagesUI,
+  removeMessagesUI,
+  updateMessagesDisplay,
+  // Message management
+  addMessage,
+  // Loading states
+  showLoadingIndicator,
+  hideLoadingIndicator,
 };
+
+// =================== Auto-Initialization ===================
+// Chat initialization is handled by user.js auth state changes
+// This ensures proper order: auth → memory → chat
+window.addEventListener('load', function() {
+  console.log('[CHAT] Chat system ready');
+});

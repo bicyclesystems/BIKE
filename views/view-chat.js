@@ -15,7 +15,7 @@ function getEffectiveEndTime(chat, activeChatId) {
   }
   
   // Infer from last message
-  const messages = window.chat?.getMessagesByChat()[activeChatId] || [];
+  const messages = window.chat?.getMessages() || [];
   if (messages.length > 0) {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.timestamp) {
@@ -82,7 +82,7 @@ function renderChatView() {
   // Get user information for profiles
   const session = window.user?.getActiveSession();
   const email = session?.user?.email || "";
-  const contextData = window.memory?.getContextData() || {};
+  const contextData = window.context?.getContext() || {};
   const userPreferences = contextData.userPreferences || {};
   const userName = userPreferences.name || getNameFromEmail(email);
   const userInitial = userName.charAt(0).toUpperCase();

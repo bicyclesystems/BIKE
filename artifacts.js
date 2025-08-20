@@ -12,9 +12,9 @@ let artifacts = [];
 
 // Initialize artifacts state from memory
 function initArtifactsState() {
-  const memoryData = window.memory?.getContextData();
-  if (memoryData?.artifacts) {
-    artifacts = memoryData.artifacts;
+  const contextData = window.context?.getContext();
+  if (contextData?.artifacts) {
+    artifacts = contextData.artifacts;
   }
 }
 
@@ -314,30 +314,39 @@ function deleteArtifactVersion(artifactId, versionIdx) {
 
 // =================== Initialization ===================
 
-function init() {
+async function init() {
   // Setup artifact-specific click handlers
   setupArtifactClickHandlers();
   
-  // Load artifacts data
-  if (window.memory?.loadArtifacts) {
-    window.memory.loadArtifacts();
+  // Load artifacts data and update module state
+  await loadArtifactsIntoModule();
+}
+
+// Load artifacts from storage and update module state
+async function loadArtifactsIntoModule() {
+  try {
+    // Try IndexedDB first
+    let artifactsData = null;
+    if (window.indexedDB) {
+      // Could add IndexedDB logic here if needed
+    }
+    
+    // Fallback to localStorage
+    if (!artifactsData) {
+      const saved = localStorage.getItem('artifacts');
+      artifactsData = saved ? JSON.parse(saved) : [];
+    }
+    
+    if (artifactsData) {
+      artifacts.length = 0;
+      artifacts.push(...artifactsData);
+    }
+  } catch (error) {
+    console.error('[ARTIFACTS] Failed to load artifacts:', error);
   }
 }
 
-function waitForInit() {
-  return new Promise((resolve) => {
-    const checkArtifacts = () => {
-      if (window.artifacts && typeof window.artifacts.init === 'function') {
-        console.log('[ARTIFACTS] Module loaded, calling init()');
-        artifacts.init();
-        resolve();
-      } else {
-        setTimeout(checkArtifacts, 50);
-      }
-    };
-    checkArtifacts();
-  });
-}
+// waitForInit function removed - no longer needed with self-initialization
 
 // =================== Module Exports ===================
 
@@ -368,10 +377,7 @@ function initializeArtifactsModule() {
     initArtifactsState,
     
     // Event handling
-    setupArtifactClickHandlers,
-    
-    // Initialization helpers
-    waitForInit
+    setupArtifactClickHandlers
   };
   
   // Unified artifacts interface ready

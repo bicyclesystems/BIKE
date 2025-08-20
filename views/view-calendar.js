@@ -7,7 +7,7 @@ function getCalendarEndTime(chat) {
   }
   
   // Try to infer from last message
-  const messages = window.chat?.getMessagesByChat()[chat.id] || [];
+  const messages = chat.messages || [];
   if (messages.length > 0) {
     const lastMessage = messages[messages.length - 1];
     if (lastMessage.timestamp) {

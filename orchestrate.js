@@ -421,33 +421,12 @@ async function orchestrateAIResponse(response, utilities) {
       fileAnalysisContext: response.fileAnalysisContext || null
     };
     
-    // Use incremental message adding for smooth animation
-    if (window.messages && window.messages.addMessage) {
-      window.messages.addMessage('assistant', response.message, { 
-        artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null,
-        structuredData,
-        isIncremental: true 
-      });
-    } else {
-      // Fallback to regular message adding if incremental system not available
-      const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const message = {
-        role: 'assistant',
-        content: response.message,
-        structuredData,
-        artifactIds,
-        timestamp
-      };
-      
-      let messages = window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
-      messages.push(message);
-      window.chat?.setActiveMessages(messages);
-      window.chat?.setActiveMessageIndex(messages.length - 1);
-      
-      if (window.messages && window.messages.updateMessagesDisplay) {
-        window.messages.updateMessagesDisplay();
-      }
-    }
+    // Add assistant message with incremental display
+    window.chat.addMessage('assistant', response.message, { 
+      artifactIds: Object.keys(artifactIds).length > 0 ? artifactIds : null,
+      structuredData,
+      isIncremental: true 
+    });
     
     // Auto-switch to artifact view when artifacts are created
     if (Object.keys(artifactIds).length > 0) {
@@ -474,29 +453,10 @@ async function orchestrateAIResponse(response, utilities) {
   // Invalid response format - this should never happen with structured-only mode
   console.error('[ORCHESTRATE] Received non-structured response:', response);
   
-  // Add a fallback message
-  const timestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  const message = {
-    role: 'assistant',
-    content: typeof response === 'string' ? response : 'Invalid response format',
-    structuredData: {
-      main: typeof response === 'string' ? response : 'Invalid response format',
-      artifacts: [],
-      actionsExecuted: [],
-      actionResults: []
-    },
-    artifactIds: {},
-    timestamp
-  };
-  
-  let messages = window.chat?.getMessagesByChat()[window.chat?.getActiveChatId()] || [];
-  messages.push(message);
-  window.chat?.setActiveMessages(messages);
-  window.chat?.setActiveMessageIndex(messages.length - 1);
-  
-  if (window.messages && window.messages.updateMessagesDisplay) {
-    window.messages.updateMessagesDisplay();
-  }
+  // Add error message
+  window.chat.addMessage('assistant', 
+    typeof response === 'string' ? response : 'Invalid response format'
+  );
 }
 
 // =================== Global Export ===================

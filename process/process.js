@@ -150,14 +150,14 @@ function process(input = null) {
       }
       
       // Add user message only if we have input to display (not in contextual guidance mode)
-      if (cleanText && !isContextualGuidance && window.messages && window.messages.addMessage) {
+      if (cleanText && !isContextualGuidance && window.chat && window.chat.addMessage) {
         const displayText = typeof originalText !== 'undefined' && originalText !== null ? originalText : cleanText;
-        window.messages.addMessage('user', displayText);
+        window.chat.addMessage('user', displayText);
       }
       
       // Show loading indicator when processing
-      if (window.messages && window.messages.showLoadingIndicator) {
-        window.messages.showLoadingIndicator();
+      if (window.chat && window.chat.showLoadingIndicator) {
+        window.chat.showLoadingIndicator();
       }
       
       // Process with AI (with contextual guidance flag if no input)
@@ -178,8 +178,8 @@ function process(input = null) {
     } catch (error) {
       console.error('Error in process():', error);
       // Hide loading on error
-      if (window.messages && window.messages.hideLoadingIndicator) {
-        window.messages.hideLoadingIndicator();
+      if (window.chat && window.chat.hideLoadingIndicator) {
+        window.chat.hideLoadingIndicator();
       }
       if (window.utils && window.utils.showError) {
         window.utils.showError(`AI Error: ${error.message}`);

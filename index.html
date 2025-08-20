@@ -27,8 +27,7 @@
   <script src="user.js"></script>
   
   <!-- 2. Context management (initializes second) -->
-  <script src="context/context.js"></script>
-  <script src="context/context-highlight.js"></script>
+  <script src="context.js"></script>
   
   <!-- 3. Artifacts system (initializes third) -->
   <script src="artifacts.js"></script>
@@ -69,41 +68,7 @@
   <script src="theme.js"></script>
   <script src="template/template.js"></script>
   
-  <script>
-    // Application initialization sequence
-    document.addEventListener('DOMContentLoaded', async function() {
-      // Initialize app
-      const session = await user.initializeAuth();
-      await memory.initMemory();
-      
-      // Initialize modules first
-      await artifacts.waitForInit();
-      views.init();
-      
-      if (session) {
-        // Authenticated: load data and restore last chat/view
-        memory.load();
-        chat.initChatState(); // Initialize chat state from memory
-        artifactsModule.initArtifactsState(); // Initialize artifacts state from memory
-        const chatId = memory.loadActiveChatId() || chat.getChats()[0]?.id;
-        chatId ? chat.switchChat(chatId) : chat.create();
-        const view = memory.loadActiveView();
-        if (view && window.views?.restoreView) {
-          window.views.restoreView(view);
-        }
-      } else {
-        // Guest: start fresh - modules will initialize with empty state
-        chat.create();
-      }
-      
-      // 5. Initialize sync in background
-      if (window.syncManager) {
-        await window.syncManager.initializeBackground(session);
-      }
-      
-      console.log('[INIT] Application ready');
-    });
-  </script>
+
 </body>
 
 </html>

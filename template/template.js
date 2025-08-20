@@ -116,22 +116,16 @@
         
         // Always update template chat data (remove old, add fresh)
         const currentChats = window.chat.getChats().filter(c => c.id !== templateId);
-        const currentMessagesByChat = window.chat.getMessagesByChat();
         const currentArtifacts = window.artifactsModule.getArtifacts().filter(a => a.chatId !== templateId);
         
-        // Update with fresh content from files
-        delete currentMessagesByChat[templateId]; // Remove old messages
-        
         // Update modules directly instead of context
-        // Add chat to chat module
+        // Add chat to chat module (messages are already embedded in templateChat)
         if (window.chat) {
           const existingChats = window.chat.getChats();
           const chatExists = existingChats.find(c => c.id === templateId);
           if (!chatExists) {
             // Add template chat to chat module state
             window.chat.getChats().push(templateChat);
-            const currentMsgsByChat = window.chat.getMessagesByChat();
-            currentMsgsByChat[templateId] = chatConfig.messages;
           }
         }
         
@@ -149,9 +143,13 @@
       }
     }
     
-    // Save all template chats to memory
-    if (window.memory && window.memory.save) {
-      window.memory.save();
+    // Save all template chats to memory using specific bulk operations
+    if (window.memory) {
+      const chats = window.chat?.getChats() || [];
+      const artifacts = window.artifactsModule?.getArtifacts() || [];
+      
+      window.memory.saveChats(chats); // Now contains embedded messages
+      window.memory.saveArtifacts(artifacts);
     }
   }
   

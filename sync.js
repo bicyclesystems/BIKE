@@ -1,6 +1,19 @@
 // =================== Supabase Sync System ===================
 // Handles real-time sync between Supabase and local storage with offline support
 
+// =================== Sync Queue Management ===================
+const SYNC_QUEUE_KEY = 'syncQueue';
+
+function saveSyncQueueToStorage(queue) {
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+}
+
+function saveSyncQueue(queue) {
+  saveSyncQueueToStorage(queue);
+}
+
+
+
 class SupabaseSync {
   constructor() {
     this.isOnline = navigator.onLine;
@@ -93,51 +106,8 @@ class SupabaseSync {
     }
   }
 
-  // =================== Initialization ===================
-  async init() {
-    try {
-      // Create sync event listeners for memory system
-      if (window.memory && typeof window.memory.on === "function") {
-        window.memory.on("dataChanged", (data) => this.handleDataChange(data));
-        window.memory.on("artifactChanged", (artifact) =>
-          this.handleArtifactChange(artifact)
-        );
-      }
-
-      // If no Supabase config, run offline mode only
-      if (!window.SUPABASE_CONFIG) {
-        this.isOfflineOnly = true;
-        this.userId =
-          localStorage.getItem("bike_offline_user_id") ||
-          "offline_" + Date.now();
-        localStorage.setItem("bike_offline_user_id", this.userId);
-        this.isInitialized = true;
-        return;
-      }
-
-      try {
-        // Don't create Supabase client here - let auth system provide it
-        // This ensures we use the same authenticated session
-        this.isInitialized = true;
-    
-      } catch (error) {
-        this.isOfflineOnly = true;
-        this.sessionId = "fallback_" + Date.now();
-        this.userId =
-          localStorage.getItem("bike_fallback_user_id") || this.sessionId;
-        localStorage.setItem("bike_fallback_user_id", this.userId);
-        this.isInitialized = true;
-      }
-    } catch (error) {
-      console.error("[SYNC] Initialization failed:", error);
-      this.isOfflineOnly = true;
-      this.sessionId = "emergency_" + Date.now();
-      this.userId =
-        localStorage.getItem("bike_emergency_user_id") || this.sessionId;
-      localStorage.setItem("bike_emergency_user_id", this.userId);
-      this.isInitialized = true;
-    }
-  }
+  // =================== Basic Initialization ===================
+  // Note: Full initialization happens via initializeBackground() when auth is ready
 
   // =================== Authentication Integration ===================
   
@@ -221,14 +191,14 @@ class SupabaseSync {
 
       if (existingUser) {
         // Local preferences are ALWAYS authoritative - push them to database
-        const currentLocalPrefs = window.memory?.getUserPreferences() || {};
+        const currentLocalPrefs = window.user?.getUserPreferences() || {};
         if (Object.keys(currentLocalPrefs).length > 0) {
           // Update database with current local preferences
           await this.syncUserPreferences(currentLocalPrefs);
         }
       } else {
         // Create new user with the authenticated user ID
-        const currentPrefs = window.memory?.getUserPreferences() || {};
+        const currentPrefs = window.user?.getUserPreferences() || {};
         const { error } = await this.supabase.from("users").insert([
           {
             id: this.userId,
@@ -359,8 +329,9 @@ class SupabaseSync {
     };
 
     // Use memory module to save the chat
-    if (window.memory?.saveChat) {
-      window.memory.saveChat(chat);
+    if (window.memory?.saveChats) {
+      const chats = window.chat?.getChats() || [];
+      window.memory.saveChats(chats);
     } else {
       // Fallback to direct state update
       const localChats = [...(window.chat?.getChats() || [])];
@@ -378,9 +349,9 @@ class SupabaseSync {
         chatsArray.length = 0;
         chatsArray.push(...localChats);
       }
-      if (window.memory?.saveAll) {
-        window.memory.save();
-      }
+      // Save using specific bulk operations
+      window.memory?.saveChats(window.chat?.getChats() || []);
+
     }
   }
 
@@ -393,11 +364,11 @@ class SupabaseSync {
 
     const chatId = serverMessage.chat_id;
 
-    // Use memory module to save the message
-    if (window.memory?.saveMessage) {
+    // Add message to chat and save
+    if (window.chat && window.memory?.saveChats) {
       // Check if message already exists to prevent duplicates
-      const existingMessages =
-        window.chat?.getMessagesByChat()[chatId] || [];
+      const chat = window.chat?.getChats()?.find(c => c.id === chatId);
+      const existingMessages = chat?.messages || [];
       const exists = existingMessages.some(
         (m) =>
           m.role === message.role &&
@@ -409,7 +380,16 @@ class SupabaseSync {
       );
 
       if (!exists) {
-        window.memory.saveMessage(chatId, message);
+        // Add message to chat and save
+        const chats = window.chat?.getChats() || [];
+        const chatIndex = chats.findIndex(c => c.id === chatId);
+        if (chatIndex !== -1) {
+          if (!chats[chatIndex].messages) {
+            chats[chatIndex].messages = [];
+          }
+          chats[chatIndex].messages.push(message);
+          window.memory.saveChats(chats);
+        }
       }
     }
   }
@@ -425,8 +405,9 @@ class SupabaseSync {
     };
 
     // Use memory module to save the artifact
-    if (window.memory?.saveArtifact) {
-      window.memory.saveArtifact(artifact);
+    if (window.memory?.saveArtifacts) {
+      const artifacts = window.artifactsModule?.getArtifacts() || [];
+      window.memory.saveArtifacts(artifacts);
     }
   }
 
@@ -437,23 +418,15 @@ class SupabaseSync {
     const localChats = (window.chat?.getChats() || []).filter(
       (c) => c.id !== chatId
     );
-    const messagesByChat = { ...window.chat?.getMessagesByChat() };
-    delete messagesByChat[chatId];
 
-    // Update chats and messagesByChat directly in chat module
+    // Update chats directly in chat module
     const chatsArray = window.chat?.getChats();
-    const msgsByChat = window.chat?.getMessagesByChat();
     if (chatsArray) {
       chatsArray.length = 0;
       chatsArray.push(...localChats);
     }
-    if (msgsByChat) {
-      Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]);
-      Object.assign(msgsByChat, messagesByChat);
-    }
-    if (window.memory?.saveAll) {
-      window.memory.saveAll();
-    }
+    // Save using bulk operation
+    window.memory?.saveChats(window.chat?.getChats() || []);
   }
 
   removeMessageFromLocalState(messageId) {
@@ -603,11 +576,8 @@ class SupabaseSync {
     try {
   
 
-      // Sync chats
+      // Sync chats (now includes embedded messages)
       await this.syncChats();
-
-      // Sync messages
-      await this.syncMessages();
 
       // Sync artifacts
       await this.syncArtifacts();
@@ -628,29 +598,72 @@ class SupabaseSync {
       return;
     }
 
-    const { data: serverChats, error } = await this.supabase
+    // Sync chat metadata
+    const { data: serverChats, error: chatsError } = await this.supabase
       .from("chats")
       .select("*")
       .eq("user_id", this.userId)
       .order("timestamp", { ascending: false });
 
-    if (error) throw error;
+    if (chatsError) throw chatsError;
 
-    // Merge server chats with local chats
+    // Sync messages
+    const { data: serverMessages, error: messagesError } = await this.supabase
+      .from("messages")
+      .select("*")
+      .eq("user_id", this.userId)
+      .order("created_at", { ascending: true });
+
+    if (messagesError) throw messagesError;
+
+    // Group messages by chat_id
+    const messagesByChat = {};
+    serverMessages.forEach((msg) => {
+      if (!messagesByChat[msg.chat_id]) {
+        messagesByChat[msg.chat_id] = [];
+      }
+      messagesByChat[msg.chat_id].push({
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        message_id: msg.message_id,
+        metadata: msg.metadata || {},
+      });
+    });
+
+    // Merge server chats with local chats, including embedded messages
     const localChats = [...(window.chat?.getChats() || [])];
     const mergedChats = new Map();
 
-    // Add local chats
-    localChats.forEach((chat) => mergedChats.set(chat.id, chat));
+    // Add local chats with their embedded messages
+    localChats.forEach((chat) => mergedChats.set(chat.id, { ...chat }));
 
-    // Add/update with server chats
+    // Add/update with server chats and their messages
     serverChats.forEach((serverChat) => {
+      const existingChat = mergedChats.get(serverChat.id);
+      const serverMessages = messagesByChat[serverChat.id] || [];
+      const localMessages = existingChat?.messages || [];
+      
+      // Simple merge - combine local and server messages, removing duplicates
+      const allMessages = [...localMessages];
+      serverMessages.forEach((serverMsg) => {
+        const exists = localMessages.some(
+          (localMsg) =>
+            localMsg.role === serverMsg.role &&
+            localMsg.content === serverMsg.content
+        );
+        if (!exists) {
+          allMessages.push(serverMsg);
+        }
+      });
+
       mergedChats.set(serverChat.id, {
         id: serverChat.id,
         title: serverChat.title,
         description: serverChat.description || "",
         timestamp: serverChat.timestamp,
         endTime: serverChat.endTime,
+        messages: allMessages
       });
     });
 
@@ -675,7 +688,7 @@ class SupabaseSync {
       window.chat?.switchChat(finalChats[0].id);
     }
 
-    // Upload any local-only chats to server
+    // Upload any local-only chats and messages to server
     const serverChatIds = new Set(serverChats.map((c) => c.id));
     const localOnlyChats = localChats.filter(
       (chat) => !serverChatIds.has(chat.id)
@@ -683,79 +696,27 @@ class SupabaseSync {
 
     for (const chat of localOnlyChats) {
       await this.uploadChat(chat);
-    }
-  }
-
-  async syncMessages() {
-    if (!this.supabase || !this.userId) {
-      console.warn("[SYNC] syncMessages: Missing supabase client or userId");
-      return;
-    }
-
-    const { data: serverMessages, error } = await this.supabase
-      .from("messages")
-      .select("*")
-      .eq("user_id", this.userId)
-      .order("created_at", { ascending: true });
-
-    if (error) throw error;
-
-    // Group by chat_id
-    const serverMessagesByChat = {};
-    serverMessages.forEach((msg) => {
-      if (!serverMessagesByChat[msg.chat_id]) {
-        serverMessagesByChat[msg.chat_id] = [];
+      // Upload messages for this chat
+      if (chat.messages?.length > 0) {
+        for (const message of chat.messages) {
+          await this.uploadMessage(chat.id, message);
+        }
       }
-      serverMessagesByChat[msg.chat_id].push({
-        role: msg.role,
-        content: msg.content,
-        metadata: msg.metadata || {},
-      });
+    }
+
+    // Upload local-only messages for existing chats
+    const localMessagesByChat = {};
+    localChats.forEach(chat => {
+      if (chat.messages) {
+        localMessagesByChat[chat.id] = chat.messages;
+      }
     });
 
-    // Merge with local messages
-    const localMessagesByChat = {
-      ...(window.chat?.getMessagesByChat() || {}),
-    };
-    const mergedMessagesByChat = {};
-
-    // Get all chat IDs
-    const allChatIds = new Set([
-      ...Object.keys(localMessagesByChat),
-      ...Object.keys(serverMessagesByChat),
-    ]);
-
-    for (const chatId of allChatIds) {
-      const localMessages = localMessagesByChat[chatId] || [];
-      const serverMessages = serverMessagesByChat[chatId] || [];
-
-      // Simple merge - in production you'd want more sophisticated conflict resolution
-      mergedMessagesByChat[chatId] = [...localMessages];
-
-      // Add server messages that don't exist locally
-      serverMessages.forEach((serverMsg) => {
-        const exists = localMessages.some(
-          (localMsg) =>
-            localMsg.role === serverMsg.role &&
-            localMsg.content === serverMsg.content
-        );
-        if (!exists) {
-          mergedMessagesByChat[chatId].push(serverMsg);
-        }
-      });
-    }
-
-    // Update messagesByChat directly in chat module
-    const msgsByChat = window.chat?.getMessagesByChat();
-    if (msgsByChat) {
-      Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]);
-      Object.assign(msgsByChat, mergedMessagesByChat);
-    }
-
-    // Upload local-only messages
-    for (const [chatId, messages] of Object.entries(localMessagesByChat)) {
-      const serverMessages = serverMessagesByChat[chatId] || [];
-      const localOnlyMessages = messages.filter(
+    for (const [chatId, localMessages] of Object.entries(localMessagesByChat)) {
+      if (!serverChatIds.has(chatId)) continue; // Already handled above
+      
+      const serverMessages = messagesByChat[chatId] || [];
+      const localOnlyMessages = localMessages.filter(
         (localMsg) =>
           !serverMessages.some(
             (serverMsg) =>
@@ -769,6 +730,8 @@ class SupabaseSync {
       }
     }
   }
+
+
 
   async syncArtifacts() {
     if (!this.supabase || !this.userId) {
@@ -914,10 +877,8 @@ class SupabaseSync {
   queueOperation(operation, data) {
     this.syncQueue.push({ operation, data, timestamp: Date.now() });
 
-    // Persist queue using memory module
-    if (window.memory?.saveSyncQueue) {
-      window.memory.saveSyncQueue(this.syncQueue);
-    }
+    // Persist queue
+    saveSyncQueue(this.syncQueue);
   }
 
   async processQueue() {
@@ -950,10 +911,8 @@ class SupabaseSync {
       }
     }
 
-    // Update persisted queue using memory module
-    if (window.memory?.saveSyncQueue) {
-      window.memory.saveSyncQueue(this.syncQueue);
-    }
+    // Update persisted queue
+    saveSyncQueue(this.syncQueue);
   }
 
   // =================== Online/Offline Handling ===================
@@ -1018,12 +977,9 @@ class SupabaseSync {
 // =================== Global Instance ===================
 const syncManager = new SupabaseSync();
 
-// Auto-initialize when DOM is ready
-if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => syncManager.init());
-} else {
-  syncManager.init();
-}
-
 // Export for global access
 window.syncManager = syncManager;
+
+// =================== Auto-Initialization ===================
+// Sync initializes itself when user auth state changes (via user.js integration)
+// No need for manual initialization since sync is reactive to auth events

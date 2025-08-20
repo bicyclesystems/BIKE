@@ -176,7 +176,7 @@ async function checkSession(logMessage) {
 
 function toggleUI(show) {
   const action = show ? "render" : "remove";
-  window.messages[`${action}MessagesUI`]();
+  window.chat[`${action}MessagesUI`]();
   window.views[`${action}ViewUI`]();
 }
 
@@ -211,15 +211,15 @@ async function logout() {
     userSession = null;
 
     // Purge all user data from localStorage
-    if (window.memory?.clear) {
-      window.memory.clear();
-    }
+    localStorage.removeItem('chats'); // Now contains embedded messages
+    localStorage.removeItem('artifacts');
+    // activeChatId and activeView no longer stored in localStorage
+    localStorage.removeItem('userPreferences');
+    localStorage.removeItem('syncQueue');
 
     // Clear all application state by resetting modules
     if (window.chat) {
-      window.chat.getChats().length = 0; // Clear chats array
-      const msgsByChat = window.chat.getMessagesByChat();
-      Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]); // Clear messages
+      window.chat.getChats().length = 0; // Clear chats array (messages are embedded)
     }
     if (window.artifactsModule) {
       window.artifactsModule.getArtifacts().length = 0; // Clear artifacts array
@@ -342,15 +342,27 @@ function initializeMainApp() {
 async function handleAuthenticatedState() {
   removeIntroScreen();
   toggleUI(true);
-  // Sync initialization moved to background in index.html - don't block UI
 
   // Start smart session monitoring for authenticated users
   startSessionMonitoring();
 
-  // Let the view system handle the default view (chat) when no active view is set
-  // This allows the natural chat view to be shown instead of forcing memory view
+  // Initialize chat state for authenticated users
+  if (window.chat?.initChatState) {
+    window.chat.initChatState();
+  }
+  
+  // Initialize artifacts state
+  if (window.artifactsModule?.initArtifactsState) {
+    window.artifactsModule.initArtifactsState();
+  }
 
   initializeMainApp();
+  
+  // Initialize sync in background
+  const session = getActiveSession();
+  if (window.syncManager?.initializeBackground) {
+    window.syncManager.initializeBackground(session);
+  }
   
   // Trigger contextual guidance for fresh logins only (not page refreshes)
   await window.sessionManager.handleFreshLogin();
@@ -387,19 +399,22 @@ function handleUnauthenticatedState() {
 
   // Clear all application state by resetting modules
   if (window.chat) {
-    window.chat.getChats().length = 0; // Clear chats array
-    const msgsByChat = window.chat.getMessagesByChat();
-    Object.keys(msgsByChat).forEach(key => delete msgsByChat[key]); // Clear messages
+    window.chat.getChats().length = 0; // Clear chats array (messages are embedded)
   }
   if (window.artifactsModule) {
     window.artifactsModule.getArtifacts().length = 0; // Clear artifacts array
   }
 
-  // Keep intro screen visible for unauthenticated users
-  toggleUI(true); // Enable UI so users can interact
+  // Enable UI for guest interaction
+  toggleUI(true);
+  
+  // Create fresh chat for guest
+  if (window.chat?.create) {
+    window.chat.create();
+  }
   
   // Show memory view if no active view is set (mirror authenticated behavior)
-  const currentView = window.views.getActiveView();
+  const currentView = window.views?.getActiveView();
   if (window.views?.switchView && !currentView) {
     window.views.switchView("memory", {}, { withTransition: false });
   }
@@ -517,24 +532,15 @@ function updatePreferences(preferences) {
     throw new Error('Preferences must be an object');
   }
   
-  // Update preferences using memory module directly
-  if (window.memory?.setUserPreferences) {
-    window.memory.setUserPreferences(preferences);
-    
-    // Sync to database if available
-    if (window.syncManager?.syncUserPreferences) {
-      window.syncManager.syncUserPreferences(preferences);
-    }
-    
-    return {
-      success: true,
-      message: `Updated preferences: ${Object.keys(preferences).join(', ')}`,
-      updatedFields: Object.keys(preferences),
-      preferences
-    };
-  } else {
-    throw new Error('Memory module not available');
-  }
+  // Use the new setUserPreferences function for consistency
+  setUserPreferences(preferences);
+  
+  return {
+    success: true,
+    message: `Updated preferences: ${Object.keys(preferences).join(', ')}`,
+    updatedFields: Object.keys(preferences),
+    preferences
+  };
 }
 
 // Delete user account and all data
@@ -584,12 +590,11 @@ async function deleteAccount(confirmationCode = null) {
     }
     
     // Clear local data - account deletion should clear everything
-    window.memory.clear();
-    
-    // Clear sync queue
-    if (window.memory.clearSyncQueue) {
-      window.memory.clearSyncQueue();
-    }
+    localStorage.removeItem('chats'); // Now contains embedded messages
+    localStorage.removeItem('artifacts');
+    // activeChatId and activeView no longer stored in localStorage
+    localStorage.removeItem('userPreferences');
+    localStorage.removeItem('syncQueue');
     
     // Clear any cached user session
     if (window.user && window.user.updateAuthState) {
@@ -611,6 +616,32 @@ async function deleteAccount(confirmationCode = null) {
   }
 }
 
+// =================== User Preferences Management ===================
+function getUserPreferences() {
+  // Read directly from localStorage since memory module no longer exposes this
+  try {
+    return JSON.parse(localStorage.getItem('userPreferences') || '{}');
+  } catch (e) {
+    console.warn('[USER] Failed to parse user preferences:', e);
+    return {};
+  }
+}
+
+function setUserPreferences(preferences) {
+  const currentPrefs = getUserPreferences();
+  const updatedPrefs = { ...currentPrefs, ...preferences };
+  
+  // Update preferences using memory module directly
+  if (window.memory?.saveUserPreferences) {
+    window.memory.saveUserPreferences(updatedPrefs);
+    
+    // Sync to database if available
+    if (window.syncManager?.syncUserPreferences) {
+      window.syncManager.syncUserPreferences(updatedPrefs);
+    }
+  }
+}
+
 // =================== Public API ===================
 window.user = {
   login,
@@ -628,4 +659,15 @@ window.user = {
   getUserArtifacts,
   getUserChats,
   getUserMessages,
+
+  // user preferences management
+  getUserPreferences,
+  setUserPreferences,
 };
+
+// =================== Auto-Initialization ===================
+document.addEventListener('DOMContentLoaded', async function() {
+  console.log('[USER] Initializing authentication...');
+  const session = await window.user.initializeAuth();
+  console.log('[USER] Authentication initialized, session:', !!session);
+});

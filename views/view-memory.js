@@ -65,18 +65,17 @@ function renderMemoryView() {
     `;
   }
 
-  const contextData = window.memory.getContextData() || {};
+  const contextData = window.context.getContext() || {};
   const {
     userPreferences = {},
     chats = [],
     artifacts = [],
-    messagesByChat = {},
     storageStatus = {},
   } = contextData;
 
   // Calculate some useful stats
-  const totalMessages = Object.values(messagesByChat).reduce(
-    (sum, messages) => sum + messages.length,
+  const totalMessages = chats.reduce(
+    (sum, chat) => sum + (chat.messages?.length || 0),
     0
   );
   const totalArtifacts = artifacts.length;
@@ -238,12 +237,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       window.user.getUserMessages(),
     ]);
 
+    // Group messages by chat and embed them in chats
     const messagesByChat = messages.reduce((acc, message) => {
       const chatId = message.chat_id;
       acc[chatId] = acc[chatId] || [];
       acc[chatId].push(message);
       return acc;
     }, {});
+
+    // Embed messages in chats
+    const chatsWithMessages = chats.map(chat => ({
+      ...chat,
+      messages: messagesByChat[chat.id] || []
+    }));
 
     //data stored to the local
     localStorage.setItem("bike_user_data", JSON.stringify({ user }));
@@ -255,13 +261,12 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     localStorage.setItem("userId", user?.id || "");
     localStorage.setItem("artifacts", JSON.stringify(artifacts));
-    localStorage.setItem("chats", JSON.stringify(chats));
-    localStorage.setItem("messagesByChat", JSON.stringify(messagesByChat));
+    localStorage.setItem("chats", JSON.stringify(chatsWithMessages));
 
     //the last chat from the db will be the active chat
     const lastChat = chats[chats.length - 1];
-    if (lastChat?.id) {
-      localStorage.setItem("activeChatId", lastChat.id.toString());
+    if (lastChat?.id && window.chat?.switchChat) {
+      window.chat.switchChat(lastChat.id.toString());
     }
 
     

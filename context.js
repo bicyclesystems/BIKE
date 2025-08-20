@@ -203,4 +203,23 @@ function highlightViewContent() {
   });
 }
 
-window.contextHighlight = { highlightContextWords, extractContextReferences, highlightViewContent }; 
+const getContext = () => {
+  const session = window.user?.getActiveSession();
+  
+  return {
+    authStatus: { isLoggedIn: !!session, currentUser: session?.user?.email || null },
+    userPreferences: window.user?.getUserPreferences() || {},
+    chats: window.chat?.getChats() || [], // Now contains embedded messages
+    artifacts: window.artifactsModule?.getCurrentChatArtifacts() || [],
+    activeView: window.views?.getActiveView(),
+    activeChatId: window.chat?.getActiveChatId(),
+    messages: window.chat?.getMessages() || [], // Current chat's messages (derived from chats)
+  };
+};
+
+window.context = {
+  // ONLY collect current state for AI/debugging context
+  getContext
+};
+
+window.contextHighlight = { highlightContextWords, extractContextReferences, highlightViewContent };
