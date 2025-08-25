@@ -347,7 +347,7 @@ async function orchestrateAIResponse(response, utilities) {
       if (index !== -1) {
         artifactsArray[index] = artifact;
       }
-      saveArtifacts();
+      window.artifactsModule.saveArtifacts();
       
       artifactIds[title] = artifact.id;
     }

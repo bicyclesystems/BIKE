@@ -1,10 +1,14 @@
 # BIKE-0.1
 
-Bike is a minimal computing environment where conversation drives creation.
+Bike is a minimal computing environment where chat drives creation.
 
 It's not an app. It's not a tool. It's a loop. Chat is the engine. Artifacts are the result.
 
 It's a thinking machine. A "bicycle" for the mind.
+
+**Philosophy**: No apps. No modes. Just flow.
+
+The system disappears. The conversation remains. The artifacts persist.
 
 **Example**: Say "Create a todo list for my project." Bike generates a structured artifact and displays it. Later, say "Add deployment tasks" and it updates seamlessly.
 
@@ -14,50 +18,24 @@ Chat create artifacts. Artifacts are memory. Views are display. Chat drives ever
 
 **Core Loop:**
 
-user + context ───► chat (input) ───► process ───► orchestrate
-          ▲                                      │
-          │                                      ▼
-          │ ◄─────────────────────────────────  chat ←→ view
-          │                                      │
-          │                                      ▼
-          │ ◄─────────────────────────────────  actions ←→ view
-          │                                      │
-          │                                      ▼
-          │ ◄─────────────────────────────────  artifacts ←→ view
-          │                                      │
-          │                                      ▼
-          │ ◄─────────────────────────────────  memory ←→ view
-                                                 │
-                                                 ▼
-                                                sync ←→ integrations
-                                                 │                              external services
-                                                 ├── APIs
-                                                 └── webhooks
-
-
-**Always Active:**
-- Chat Interface
-- Context State  
-- Background Sync
+chat → process → artifacts → view → memory → chat
 
 Core components:
-* **User** — owns data, initiates interactions. Supports organizations and roles.
-* **Context** — active conversation state. Tracks history, artifacts, and participants.
-* **Input** — visual interface for capturing messages. Handles UI/UX, context highlighting, and user input processing.
-* **System** — prompt builder. Converts state into AI instructions using modular prompt sections.
-* **Process** — AI communication. Handles API calls, message flow, and response coordination.
-* **Orchestrate** — response coordinator. Orchestrates AI responses into system changes and operations.
-* **Actions** — system commands: create artifacts, switch views, manage chats.
+* **User** — owns data, initiates interactions
+* **Context** — active state of chat. reflects chat and artifacts
+* **Input** — visual interface for user input
+* **System** — prompt builder, converts state to AI instructions
+* **Process** — AI communication, handles API calls
+* **Orchestrate** — AI response coordinator
 * **Chat** — chat interface (always available)
-* **Artifacts** — persistent content units created/modified by messages.
-* **View** — current display renderer. Shows artifacts fullscreen with transitions.
-* **Memory** — data persistence for artifacts, chats, preferences, and state.
-* **Sync** — real-time synchronization between local storage and cloud with offline support.
-* **Integrations** — bridges to external services, APIs, and automation workflows.
+* **Artifacts** — persistent content units
+* **View** — display renderer, shows artifacts fullscreen
+* **Memory** — data persistence with cloud
+* **Integrations** — bridges to external services
 
 ## Artifacts
 
-Artifacts are persistent conversation memory.
+Artifacts are persistent memory.
 
 ### Types
 
@@ -123,7 +101,7 @@ Extensible bridges connecting BIKE to external services and automation workflows
 
 ### Operations
 * Connect/disconnect services through chat commands
-* Automatic data synchronization with conflict resolution
+* Automatic data synchronization with conflict resolution through memory layer
 * Cross-platform artifact sharing and collaboration
 * Real-time notifications and webhook processing
 * Custom automation workflows and triggers
@@ -149,7 +127,7 @@ Extensible bridges connecting BIKE to external services and automation workflows
 * **Response time**: < 2s for most operations
 * **View transitions**: 300-500ms animations
 * **Memory usage**: < 500MB base, scales with artifacts
-* **Storage**: Local-first with cloud sync
+* **Storage**: Local-first with cloud synchronization through memory layer
 
 ### Error Handling
 * Graceful degradation with simpler alternatives
@@ -164,12 +142,6 @@ Extensible bridges connecting BIKE to external services and automation workflows
 3. Processed input + system prompt → Process engine (AI communication, content generation & logic)
 4. AI response → Orchestrate coordinator (response handling)
 5. Actions triggered → Create/Modify artifacts
-6. Artifacts saved → Memory layer
+6. Artifacts saved → Memory layer (with automatic synchronization)
 7. View updated → View engine
 8. Display rendered → User sees result
-
----
-
-**Philosophy**: No apps. No modes. Just flow.
-
-The system disappears. The conversation remains. The artifacts persist.

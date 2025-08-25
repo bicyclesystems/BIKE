@@ -21,7 +21,7 @@
   function waitForAppReady() {
     return new Promise((resolve) => {
       const checkReady = () => {
-        if (window.chat && window.chat.getActiveChatId && window.memory && window.artifactsModule) {
+        if (window.chat && window.chat.getActiveChatId && window.artifactsModule) {
           resolve();
         } else {
           setTimeout(checkReady, 100);
@@ -143,13 +143,12 @@
       }
     }
     
-    // Save all template chats to memory using specific bulk operations
-    if (window.memory) {
-      const chats = window.chat?.getChats() || [];
-      const artifacts = window.artifactsModule?.getArtifacts() || [];
-      
-      window.memory.saveChats(chats); // Now contains embedded messages
-      window.memory.saveArtifacts(artifacts);
+    // Save all template chats using appropriate modules
+    if (window.chat?.saveChats) {
+      window.chat.saveChats();
+    }
+    if (window.artifactsModule?.saveArtifacts) {
+      window.artifactsModule.saveArtifacts();
     }
   }
   

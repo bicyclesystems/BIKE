@@ -358,10 +358,10 @@ async function handleAuthenticatedState() {
 
   initializeMainApp();
   
-  // Initialize sync in background
+  // Initialize memory system in background
   const session = getActiveSession();
-  if (window.syncManager?.initializeBackground) {
-    window.syncManager.initializeBackground(session);
+  if (window.memoryManager?.initializeBackground) {
+    window.memoryManager.initializeBackground(session);
   }
   
   // Trigger contextual guidance for fresh logins only (not page refreshes)
@@ -369,19 +369,19 @@ async function handleAuthenticatedState() {
   console.log('[AUTH] Authentication complete');
 }
 
-// =================== Sync Integration ===================
-async function initializeSync() {
-  if (!window.syncManager || !userSession) {
-    console.warn("[AUTH] Sync unavailable");
+// =================== Memory Integration ===================
+async function initializeMemory() {
+  if (!window.memoryManager || !userSession) {
+    console.warn("[AUTH] Memory system unavailable");
     return;
   }
 
   try {
-    console.log('[AUTH] Initializing sync');
-    await window.syncManager.initializeWithAuth(supabase, userSession);
-    console.log('[AUTH] Sync complete');
+    console.log('[AUTH] Initializing memory system');
+    await window.memoryManager.initializeWithAuth(supabase, userSession);
+    console.log('[AUTH] Memory system complete');
   } catch (error) {
-    console.error("[AUTH] Sync failed:", error);
+    console.error("[AUTH] Memory system failed:", error);
   }
 }
 
@@ -393,9 +393,9 @@ function handleUnauthenticatedState() {
   stopSessionMonitoring();
 
   // Clear all user data to ensure clean slate for guest mode
-  if (window.memory?.purgeAllData) {
-    window.memory.purgeAllData();
-  }
+  localStorage.removeItem('chats');
+  localStorage.removeItem('artifacts'); 
+  localStorage.removeItem('userPreferences');
 
   // Clear all application state by resetting modules
   if (window.chat) {
@@ -545,27 +545,23 @@ function updatePreferences(preferences) {
 
 // Delete user account and all data
 async function deleteAccount(confirmationCode = null) {
-  // Check if memory and sync systems are available
-  if (!window.memory) {
+  // Check if memory system is available
+  if (!window.memoryManager) {
     throw new Error('Memory system is not loaded');
-  }
-
-  if (!window.syncManager) {
-    throw new Error('Sync system is not loaded');
   }
 
   const session = getActiveSession();
   const userEmail = session?.user?.email || 'unknown user';
-  const userId = session?.user?.id || window.syncManager?.userId;
+  const userId = session?.user?.id || window.memoryManager?.userId;
   
   // First, delete all user data and then the user account
   try {
     let userDeleted = false;
     
-    if (userId && window.syncManager?.supabase) {
+    if (userId && window.memoryManager?.supabase) {
       try {
         // Delete all user tables/data from remote
-        const { error: dataError } = await window.syncManager.supabase
+        const { error: dataError } = await window.memoryManager.supabase
           .from('user_data')
           .delete()
           .eq('user_id', userId);
@@ -576,7 +572,7 @@ async function deleteAccount(confirmationCode = null) {
         }
         
         // Delete the auth user account (this signs them out)
-        const { error: authError } = await window.syncManager.supabase.auth.admin.deleteUser(userId);
+        const { error: authError } = await window.memoryManager.supabase.auth.admin.deleteUser(userId);
         if (authError && !authError.message.includes('User not found')) {
           console.error('[USER] Failed to delete auth user:', authError);
           // Continue anyway since data is deleted
@@ -627,18 +623,38 @@ function getUserPreferences() {
   }
 }
 
+function initUserPreferences() {
+  const saved = getUserPreferences();
+  
+  // Migrate aiTraits from string to array if needed
+  if (saved.aiTraits && typeof saved.aiTraits === 'string') {
+    const traits = saved.aiTraits.split(',').map(trait => trait.trim().toLowerCase()).filter(Boolean);
+    saved.aiTraits = traits;
+    saveUserPreferences(saved);
+  }
+  
+  return saved;
+}
+
+function saveUserPreferences(preferences) {
+  localStorage.setItem('userPreferences', JSON.stringify(preferences || {}));
+  
+  if (window.memory?.events) {
+    window.memory.events.dispatchEvent(new CustomEvent('dataChanged', { 
+      detail: { type: 'userPreferences', data: preferences } 
+    }));
+  }
+}
+
 function setUserPreferences(preferences) {
   const currentPrefs = getUserPreferences();
   const updatedPrefs = { ...currentPrefs, ...preferences };
   
-  // Update preferences using memory module directly
-  if (window.memory?.saveUserPreferences) {
-    window.memory.saveUserPreferences(updatedPrefs);
-    
-    // Sync to database if available
-    if (window.syncManager?.syncUserPreferences) {
-      window.syncManager.syncUserPreferences(updatedPrefs);
-    }
+  saveUserPreferences(updatedPrefs);
+  
+  // Sync to database if available
+  if (window.memoryManager?.syncUserPreferences) {
+    window.memoryManager.syncUserPreferences(updatedPrefs);
   }
 }
 
@@ -663,6 +679,8 @@ window.user = {
   // user preferences management
   getUserPreferences,
   setUserPreferences,
+  saveUserPreferences,
+  initUserPreferences,
 };
 
 // =================== Auto-Initialization ===================
@@ -670,4 +688,8 @@ document.addEventListener('DOMContentLoaded', async function() {
   console.log('[USER] Initializing authentication...');
   const session = await window.user.initializeAuth();
   console.log('[USER] Authentication initialized, session:', !!session);
+  
+  // Initialize user preferences
+  window.user.initUserPreferences();
+  console.log('[USER] User preferences initialized');
 });

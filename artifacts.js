@@ -10,11 +10,27 @@ let activeVersionIdxByArtifact = {};
 // Internal artifacts array
 let artifacts = [];
 
-// Initialize artifacts state from memory
-function initArtifactsState() {
-  const contextData = window.context?.getContext();
-  if (contextData?.artifacts) {
-    artifacts = contextData.artifacts;
+// Initialize artifacts state from IndexedDB or localStorage
+async function initArtifactsState() {
+  await initIndexedDB();
+  
+  let loadedArtifacts = [];
+  if (indexedDB_instance) {
+    loadedArtifacts = await loadArtifactsFromIndexedDB();
+    if (loadedArtifacts.length === 0) {
+      const localArtifacts = JSON.parse(localStorage.getItem('artifacts') || '[]');
+      if (localArtifacts.length > 0) {
+        console.log('[ARTIFACTS] Migrating artifacts from localStorage to IndexedDB');
+        artifacts = localArtifacts;
+        saveArtifactsToIndexedDB();
+        loadedArtifacts = localArtifacts;
+      }
+    } else {
+      artifacts = loadedArtifacts;
+    }
+  } else {
+    const localArtifacts = JSON.parse(localStorage.getItem('artifacts') || '[]');
+    artifacts = localArtifacts;
   }
 }
 
@@ -73,6 +89,65 @@ const ARTIFACT_CONFIG = {
     structuralMatch: 0.6
   }
 };
+
+// =================== IndexedDB Configuration ===================
+const DB_NAME = 'BikeDB';
+const DB_VERSION = 1;
+const STORE_NAMES = {
+  artifacts: 'artifacts'
+};
+
+let indexedDB_instance = null;
+
+// =================== IndexedDB Setup ===================
+async function initIndexedDB() {
+  if (!window.indexedDB) return null;
+  
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAMES.artifacts)) {
+        db.createObjectStore(STORE_NAMES.artifacts, { keyPath: 'id' });
+      }
+    };
+    
+    request.onsuccess = (event) => {
+      indexedDB_instance = event.target.result;
+      resolve(indexedDB_instance);
+    };
+    
+    request.onerror = () => {
+      indexedDB_instance = null;
+      resolve(null);
+    };
+  });
+}
+
+// =================== IndexedDB Artifact Operations ===================
+function saveArtifactsToIndexedDB() {
+  if (!indexedDB_instance) return;
+  
+  const transaction = indexedDB_instance.transaction([STORE_NAMES.artifacts], 'readwrite');
+  const store = transaction.objectStore(STORE_NAMES.artifacts);
+  
+  store.clear();
+  artifacts.forEach(artifact => store.add(artifact));
+}
+
+async function loadArtifactsFromIndexedDB() {
+  if (!indexedDB_instance) return [];
+  
+  return new Promise((resolve) => {
+    const transaction = indexedDB_instance.transaction([STORE_NAMES.artifacts], 'readonly');
+    const store = transaction.objectStore(STORE_NAMES.artifacts);
+    const request = store.getAll();
+    
+    request.onsuccess = () => resolve(request.result || []);
+    request.onerror = () => resolve([]);
+  });
+}
 
 // =================== Core Utility Functions ===================
 
@@ -186,7 +261,7 @@ function create(content, messageId, type = null, shouldSetActive = false) {
   
   const currentArtifacts = getArtifacts();
   artifacts = [...currentArtifacts, artifact];
-  window.memory?.saveArtifacts();
+  saveArtifacts();
   
   // shouldSetActive parameter no longer needed since context doesn't manage artifact state
   
@@ -206,7 +281,7 @@ function update(id, content) {
   // Update internal state instead of context
   // artifacts already updated in place above
   activeVersionIdxByArtifact[id] = artifact.versions.length - 1;
-  window.memory?.saveArtifacts();
+  saveArtifacts();
   
   return artifact;
 }
@@ -304,7 +379,7 @@ function deleteArtifactVersion(artifactId, versionIdx) {
   
   // artifacts already updated in the artifacts array above
   activeVersionIdxByArtifact[artifactId] = newActiveIdx;
-  window.memory?.saveArtifacts();
+  saveArtifacts();
   
   // Re-render if this artifact is currently active
   refreshActiveArtifactView(artifactId);
@@ -322,31 +397,19 @@ async function init() {
   await loadArtifactsIntoModule();
 }
 
-// Load artifacts from storage and update module state
-async function loadArtifactsIntoModule() {
-  try {
-    // Try IndexedDB first
-    let artifactsData = null;
-    if (window.indexedDB) {
-      // Could add IndexedDB logic here if needed
-    }
-    
-    // Fallback to localStorage
-    if (!artifactsData) {
-      const saved = localStorage.getItem('artifacts');
-      artifactsData = saved ? JSON.parse(saved) : [];
-    }
-    
-    if (artifactsData) {
-      artifacts.length = 0;
-      artifacts.push(...artifactsData);
-    }
-  } catch (error) {
-    console.error('[ARTIFACTS] Failed to load artifacts:', error);
+// waitForInit function removed - no longer needed with self-initialization
+
+// =================== PERSISTENCE ===================
+function saveArtifacts() {
+  localStorage.setItem('artifacts', JSON.stringify(artifacts || []));
+  saveArtifactsToIndexedDB();
+  
+  if (window.memory?.events) {
+    window.memory.events.dispatchEvent(new CustomEvent('dataChanged', { 
+      detail: { type: 'artifacts', data: artifacts } 
+    }));
   }
 }
-
-// waitForInit function removed - no longer needed with self-initialization
 
 // =================== Module Exports ===================
 
@@ -359,6 +422,9 @@ function initializeArtifactsModule() {
     get,
     generateArtifactPath,
     init,
+    
+    // Persistence
+    saveArtifacts,
     
     // Lookup functions
     getArtifact,

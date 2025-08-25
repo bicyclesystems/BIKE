@@ -182,7 +182,7 @@ function getAvailableViews() {
 
 // Constants for DRY code
 const PREF_FIELDS = ['name', 'role', 'usingFor', 'collaboration'];
-const MODULES = ['chat', 'user', 'memory', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
+const MODULES = ['chat', 'user', 'memoryManager', 'artifactsModule', 'context', 'views', 'utils', 'messages', 'inputModule', 'processModule', 'systemModule', 'themeManager'];
 
 const formatTraits = (traits) => Array.isArray(traits) ? traits.join(', ') : traits;
 const getFieldValue = (obj, field) => obj?.[field] || 'NOT_SET';

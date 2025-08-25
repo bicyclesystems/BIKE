@@ -38,7 +38,7 @@ function create(options = {}) {
   chats = [...currentChats, chat];
   
   // Save and switch to new chat
-  window.memory?.saveChats(chats);
+  saveChats();
   switchChat(id);
   
   return chat;
@@ -99,7 +99,7 @@ function rename(title, chatId = null) {
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], title: trimmedTitle };
   
   chats = updatedChats;
-  window.memory?.saveChats(chats);
+  saveChats();
   
   return { 
     success: true, 
@@ -139,7 +139,7 @@ function setDescription(description, chatId = null) {
   updatedChats[chatIndex] = { ...updatedChats[chatIndex], description: trimmedDescription };
   
   chats = updatedChats;
-  window.memory?.saveChats(chats);
+  saveChats();
   
   return {
     success: true,
@@ -201,15 +201,16 @@ function deleteChat(chatId, confirmDelete = false) {
       switchChat(newActiveChatId);
     } else {
       // Just save the data since we're not switching chats
-      window.memory?.saveChats(updatedChats);
-      window.memory?.saveArtifacts(updatedArtifacts);
+      chats = updatedChats;
+      saveChats();
+      window.artifactsModule?.saveArtifacts();
     }
     
     // 6. No need to clear activeChatId since we don't store it in localStorage
     
     // 7. Delete from database if sync is available
-    if (window.syncManager?.deleteChatFromDatabase) {
-      window.syncManager.deleteChatFromDatabase(chatId).catch(error => {
+    if (window.memoryManager?.deleteChatFromDatabase) {
+      window.memoryManager.deleteChatFromDatabase(chatId).catch(error => {
         console.warn('[CHAT] Failed to delete chat from database:', error);
       });
     }
@@ -538,9 +539,26 @@ const ACTIVE_CHAT_ID_KEY = 'activeChatId';
 
 
 
+// Load chats from localStorage
+function loadChatsFromStorage() {
+  try {
+    const saved = localStorage.getItem('chats');
+    return saved ? JSON.parse(saved) : [];
+  } catch (e) {
+    console.warn('[CHAT] Failed to parse chats from localStorage:', e);
+    return [];
+  }
+}
+
 // Initialize chat state from memory
 function initChatState() {
-  // Load chats from memory (already loaded in memory.js initMemory)
+  // Load chats from localStorage first
+  const chatsFromStorage = loadChatsFromStorage();
+  if (chatsFromStorage.length > 0) {
+    chats.length = 0;
+    chats.push(...chatsFromStorage);
+  }
+  
   const chatsFromMemory = window.chat?.getChats() || [];
   
   // Get saved active chat ID from localStorage
@@ -1181,7 +1199,7 @@ function addMessage(role, content, options = {}) {
     if (chatIndex !== -1) {
       chats[chatIndex] = { ...chats[chatIndex], messages: chatMessages };
       messages = chatMessages;
-      window.memory?.saveChats(chats);
+      saveChats();
     }
   }
   activeMessageIndex = chatMessages.length - 1;
@@ -1338,6 +1356,17 @@ function renderSingleMessageMode() {
   window.inputModule.unblurViews();
 }
 
+// =================== PERSISTENCE ===================
+function saveChats() {
+  localStorage.setItem('chats', JSON.stringify(chats || []));
+  
+  if (window.memory?.events) {
+    window.memory.events.dispatchEvent(new CustomEvent('dataChanged', { 
+      detail: { type: 'chat', data: chats } 
+    }));
+  }
+}
+
 // =================== PUBLIC API ===================
 
 // Export combined chat and messages functions
@@ -1350,6 +1379,8 @@ window.chat = {
   deleteChat,
   // State management
   initChatState,
+  loadChatsFromStorage,
+  saveChats,
   // State getters
   getChats: () => chats,
   getActiveChatId: () => activeChatId,
@@ -1370,4 +1401,8 @@ window.chat = {
 // This ensures proper order: auth → memory → chat
 window.addEventListener('load', function() {
   console.log('[CHAT] Chat system ready');
+  // Load chats from storage when module is ready
+  if (window.chat?.loadChatsFromStorage) {
+    window.chat.loadChatsFromStorage();
+  }
 });
